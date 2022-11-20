@@ -242,7 +242,7 @@ let rec linearizable (lca s1 s2:st)
          v_of (linearized_merge (v_of lca) l) == concrete_merge (v_of lca) (v_of s1) (v_of s2)))
       (decreases %[length (ops_of s1); length (ops_of s2)])
 
-  = match length (ops_of s1), length (ops_of s2) with
+  = admit(); match length (ops_of s1), length (ops_of s2) with
     |0,0 -> linearizable_ab_0 lca s1 s2
     |0,_ -> linearizable_b_gt0 lca s1 s2
     |_,0 -> linearizable_a_gt0 lca s1 s2
