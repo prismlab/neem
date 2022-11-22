@@ -204,8 +204,8 @@ let rec linearizable (lca s1 s2:st)
         and ()
       end
       else begin
-        let prefix1, hd1 = un_snoc (ops_of s1) in
-        let prefix2, hd2 = un_snoc (ops_of s2) in
+        let prefix1, last1 = un_snoc (ops_of s1) in
+        let prefix2, last2 = un_snoc (ops_of s2) in
   
         let inv1 = inverse_st s1 in
         let inv2 = inverse_st s2 in
@@ -217,7 +217,7 @@ let rec linearizable (lca s1 s2:st)
         eliminate exists l'. interleaving_predicate l' lca inv1 inv2
         returns exists l. interleaving_predicate l lca s1 s2
         with _. begin
-          let l = Seq.append l' (resolve_conflict hd1 hd2) in
+          let l = Seq.append l' (resolve_conflict last1 last2) in
           introduce exists l. interleaving_predicate l lca s1 s2
           with l
           and begin
