@@ -101,8 +101,6 @@ irreducible let pat (l:log) : unit = ()
 let rec is_interleaving (l l1 l2:log)
   : Tot Type0 (decreases %[Seq.length l1; Seq.length l2]) =
 
-  (Seq.length l = Seq.length l1 + Seq.length l2) /\
-
   // if l1 is empty, then l == l2
   (Seq.length l1 == 0 ==> l == l2)
 
@@ -195,7 +193,7 @@ let interleaving_predicate (l:log) (lca s1:st)
   v_of (linearized_merge (v_of lca) l) ==
   concrete_merge (v_of lca) (v_of s1) (v_of s2)
 
-#set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
+#set-options "--z3rlimit 70 --fuel 1 --ifuel 1"
 let rec linearizable (lca s1 s2:st)
   : Lemma 
       (requires 
@@ -243,6 +241,7 @@ let rec linearizable (lca s1 s2:st)
           with l
           and begin
             linearized_merge_spec (v_of lca) l; 
+            linearized_merge_spec (v_of lca) l'; 
             linearized_merge_spec (v_of lca) (ops_of s1); 
             linearized_merge_spec (v_of lca) (ops_of s2)
           end
