@@ -1,16 +1,16 @@
-module Generic
+module Ictr
 
 open FStar.Seq
 open FStar.Ghost
 
 // the concrete state type
 // e.g. for the increment only counter (icounter), concrete_st = nat
-assume val concrete_st : Type u#a
+val concrete_st : eqtype
 
 // operation type
 // e.g. for icounter, op_t = unit
 //   (the only operation is increment, so unit is fine, in general could be an inductive like Enable/Disable)
-assume val op_t : Type u#a
+val op_t : eqtype
 
 type timestamp_t = nat
 
@@ -37,7 +37,7 @@ let init_of (s:st0) : GTot concrete_st = fst (snd s)
 let ops_of (s:st0) : GTot log = snd (snd s)
 
 // apply an operation to a state
-assume val do (s:concrete_st) (_:log_entry) : concrete_st
+val do (s:concrete_st) (_:log_entry) : concrete_st
 
 let rec seq_foldl (f:concrete_st -> log_entry -> concrete_st) (x:concrete_st) (s:log)
   : Tot concrete_st (decreases Seq.length s) =
@@ -55,9 +55,9 @@ type st = s:st0{valid_st s}
 let linearized_merge (s:concrete_st) (l:log) : st = seq_foldl do s l, hide (s,l)
 
 //conflict resolution
-assume val resolve_conflict (x y:log_entry) : log
+val resolve_conflict (x y:log_entry) : log
 
-assume val resolve_conflict_len (x y:log_entry)
+val resolve_conflict_len (x y:log_entry)
     : Lemma (Seq.length (resolve_conflict x y) <= 2)
 
 let is_x_or_y (#a:Type) (s:seq a{Seq.length s == 1}) (x y : a) =
@@ -67,7 +67,7 @@ let is_x_and_y (#a:Type) (s:seq a{Seq.length s == 2}) (x y : a) =
   (Seq.index s 0 == x /\ Seq.index s 1 == y) \/
   (Seq.index s 0 == y /\ Seq.index s 1 == x)
 
-assume val resolve_conflict_mem (x y:log_entry)
+val resolve_conflict_mem (x y:log_entry)
     : Lemma (resolve_conflict_len x y;
             let s = resolve_conflict x y in
             (Seq.length s == 1 ==> is_x_or_y s x y) /\
@@ -133,11 +133,10 @@ let rec is_interleaving (l l1 l2:log)
 //     and ()
 
 // concrete merge pre-condition
-assume val concrete_merge_pre (lca a b:concrete_st) : prop
+val concrete_merge_pre (lca a b:concrete_st) : prop
 
 // concrete merge operation
-assume val concrete_merge (lca:concrete_st) (cst1:concrete_st) (cst2:concrete_st{concrete_merge_pre lca cst1 cst2}) 
-  : concrete_st
+val concrete_merge (lca:concrete_st) (cst1:concrete_st) (cst2:concrete_st{concrete_merge_pre lca cst1 cst2}) : concrete_st
 
 (*)let inverse (s:st{length (ops_of s) > 0}) : GTot concrete_st =
   let p, l = un_snoc (ops_of s) in
@@ -168,18 +167,18 @@ let interleaving_predicate (l:log) (lca s1:st)
   v_of (linearized_merge (v_of lca) l) ==
   concrete_merge (v_of lca) (v_of s1) (v_of s2)
 
-assume val merge_prop (lca s1 s2:st)
+val merge_prop (lca s1 s2:st)
   : Lemma (requires v_of lca == init_of s1 /\
                     init_of s1 == init_of s2) 
           (ensures concrete_merge_pre (v_of lca) (v_of s1) (v_of s2))
 
-assume val merge_inv_prop (lca s1 s2:st)
+val merge_inv_prop (lca s1 s2:st)
   : Lemma (requires length (ops_of s1) > 0 /\ length (ops_of s2) > 0 /\
                     v_of lca == init_of s1 /\
                     init_of s1 == init_of s2)
           (ensures concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of (inverse_st s2)))
 
-assume val linearizable_s1_0 (lca s1 s2:st)
+val linearizable_s1_0 (lca s1 s2:st)
   : Lemma (requires 
              v_of lca == init_of s1 /\
              init_of s1 == init_of s2 /\
@@ -189,7 +188,7 @@ assume val linearizable_s1_0 (lca s1 s2:st)
              concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
              seq_foldl do (v_of lca) (ops_of s2))
 
-assume val linearizable_s2_0 (lca s1 s2:st)
+val linearizable_s2_0 (lca s1 s2:st)
   : Lemma (requires 
              v_of lca == init_of s1 /\
              init_of s1 == init_of s2 /\
@@ -199,7 +198,7 @@ assume val linearizable_s2_0 (lca s1 s2:st)
              concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
              seq_foldl do (v_of lca) (ops_of s1))
 
-assume val linearizable_s1s2_gt0 (lca s1 s2:st) (l':log)
+val linearizable_s1s2_gt0 (lca s1 s2:st) (l':log)
   : Lemma (requires 
              v_of lca == init_of s1 /\
              init_of s1 == init_of s2 /\
