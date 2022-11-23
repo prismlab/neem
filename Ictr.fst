@@ -81,6 +81,7 @@ let linearizable_s2_0 (lca s1 s2:st)
              seq_foldl do (v_of lca) (ops_of s1)) =
   ()
 
+#set-options "--z3rlimit 20"
 let linearizable_s1s2_gt0 (lca s1 s2:st) (l':log)
   : Lemma (requires 
              v_of lca == init_of s1 /\
