@@ -5,12 +5,12 @@ open FStar.Ghost
 
 // the concrete state type
 // e.g. for the increment only counter (icounter), concrete_st = nat
-val concrete_st : eqtype
+val concrete_st : Type0
 
 // operation type
 // e.g. for icounter, op_t = unit
 //   (the only operation is increment, so unit is fine, in general could be an inductive like Enable/Disable)
-val op_t : eqtype
+val op_t : Type0
 
 type timestamp_t = nat
 
