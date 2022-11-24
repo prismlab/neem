@@ -25,7 +25,7 @@ let rec lem_foldl (s:concrete_st) (l:log)
 let resolve_conflict (x y:log_entry) : log =
   cons x (cons y empty)
 
-let resolve_conflict_len (x y:log_entry)
+(*)let resolve_conflict_len (x y:log_entry)
   : Lemma (Seq.length (resolve_conflict x y) = 2)
   = ()
 
@@ -34,7 +34,7 @@ let resolve_conflict_mem (x y:log_entry)
            let s = resolve_conflict x y in
            (Seq.length s == 1 ==> is_x_or_y s x y) /\
            (Seq.length s == 2 ==> is_x_and_y s x y))
-  = ()
+  = ()*)
 
 // concrete merge pre-condition
 let concrete_merge_pre lca a b : prop
@@ -81,7 +81,6 @@ let linearizable_s2_0 (lca s1 s2:st)
              seq_foldl do (v_of lca) (ops_of s1)) =
   ()
 
-#set-options "--z3rlimit 20"
 let linearizable_s1s2_gt0 (lca s1 s2:st) (l':log)
   : Lemma (requires 
              v_of lca == init_of s1 /\
@@ -99,12 +98,12 @@ let linearizable_s1s2_gt0 (lca s1 s2:st) (l':log)
                concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                v_of (linearized_merge (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of (inverse_st s2))) 
                     (resolve_conflict (last (ops_of s1)) (last (ops_of s2)))))) =
-    lem_foldl (init_of s1) (ops_of s1);
-    lem_foldl (init_of s2) (ops_of s2);
-    lem_foldl (init_of s1) (ops_of (inverse_st s1));
-    lem_foldl (init_of s2) (ops_of (inverse_st s2));
-    let l = Seq.append l' (resolve_conflict (last (ops_of s1)) (last (ops_of s2))) in
-    lem_foldl (v_of lca) l;
-    lem_foldl (v_of (linearized_merge (v_of lca) l')) (resolve_conflict (last (ops_of s1)) (last (ops_of s2)));
-    lem_foldl (v_of lca) l'
+  inverse_st_props s1; inverse_st_props s2;
+  lem_foldl (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of (inverse_st s2))) 
+            (resolve_conflict (last (ops_of s1)) (last (ops_of s2)));
+  let l = Seq.append l' (resolve_conflict (last (ops_of s1)) (last (ops_of s2))) in
+  lem_foldl (v_of lca) l;
+  lem_foldl (v_of lca) l';
+  lem_foldl (v_of (linearized_merge (v_of lca) l')) (resolve_conflict (last (ops_of s1)) (last (ops_of s2)));
+  Seq.lemma_append_count l' (resolve_conflict (last (ops_of s1)) (last (ops_of s2)))
 
