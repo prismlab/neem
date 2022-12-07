@@ -1,4 +1,4 @@
-module Ictr_working_opt_m3
+module Ictr_inv_b2
 
 open FStar.Seq
 open FStar.Ghost
