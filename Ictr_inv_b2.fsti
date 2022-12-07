@@ -225,6 +225,22 @@ let interleaving_helper (lca s1 s2 l':log)
     with l'
     and ()
 
+#push-options "--z3rlimit 50"
+let interleaving_s2_inv (lca s1 s2:st) (l':log)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    Seq.length (diff (ops_of s2) (ops_of lca)) > 0 /\
+                    is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)) /\
+                    interleaving_predicate l' lca s1 (inverse_st s2))
+          (ensures (let l = Seq.snoc l' (last (ops_of s2)) in
+                    interleaving_predicate l lca s1 s2 /\
+                    (exists l. interleaving_predicate l lca s1 s2))) =
+  interleaving_helper (ops_of lca) (ops_of s1) (ops_of s2) l'; 
+  linearizable_s2_gt0 lca s1 s2 l'
+#pop-options
+
 let lem_diff (s1:log) (l:log{is_prefix l s1})
   : Lemma (requires distinct_ops s1)
           (ensures distinct_ops (diff s1 l) /\ (forall id. mem_id id (diff s1 l) <==> mem_id id s1 /\ not (mem_id id l)))
@@ -232,7 +248,31 @@ let lem_diff (s1:log) (l:log{is_prefix l s1})
     lemma_split s1 (length l);
     lemma_append_count_id l s
 
-#set-options "--z3rlimit 600 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 100"
+let linearizable_s2_gt0_pre (lca s1 s2:st)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> le id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> le id id1) /\
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+                    Seq.length (diff (ops_of s2) (ops_of lca)) > 0 /\ Seq.length (ops_of s2) > 0 /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2))
+          (ensures (let prefix2, last2 = un_snoc (ops_of s2) in
+                    let inv2 = inverse_st s2 in 
+                    is_prefix (ops_of lca) (ops_of inv2) /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> le id id1) /\
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca)))))) =
+  let prefix2, last2 = un_snoc (ops_of s2) in
+  let inv2 = inverse_st s2 in 
+  lem_inverse lca s2;
+  merge_inv_s2_prop lca s1 s2; 
+  lemma_split (ops_of inv2) (length (ops_of lca));
+  lem_diff (ops_of inv2) (ops_of lca); 
+  lem_diff (ops_of s2) (ops_of lca)
+#pop-options
+
+#set-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 let rec linearizable (lca s1 s2:st)
   : Lemma 
       (requires 
@@ -253,17 +293,10 @@ let rec linearizable (lca s1 s2:st)
         linearizable_s2_01 lca s1 s2
     end
     else begin
-        assert (Seq.length (diff (ops_of s2) (ops_of lca)) > 0 /\ Seq.length (ops_of s2) > 0); 
         let prefix2, last2 = un_snoc (ops_of s2) in
         let inv2 = inverse_st s2 in 
 
-        lem_inverse lca s2;
-        merge_inv_s2_prop lca s1 s2; 
-        lemma_split (ops_of inv2) (length (ops_of lca));
-        lemma_split (ops_of s1) (length (ops_of lca));
-        lem_diff (ops_of inv2) (ops_of lca); 
-        lem_diff (ops_of s2) (ops_of lca);
-        lem_diff (ops_of s1) (ops_of lca);
+        linearizable_s2_gt0_pre lca s1 s2;
 
         linearizable lca s1 inv2;
 
@@ -274,8 +307,7 @@ let rec linearizable (lca s1 s2:st)
           introduce exists l. interleaving_predicate l lca s1 s2
           with l
           and begin
-           interleaving_helper (ops_of lca) (ops_of s1) (ops_of s2) l'; 
-           linearizable_s2_gt0 lca s1 s2 l'
+            interleaving_s2_inv lca s1 s2 l'
           end
         end
       end
