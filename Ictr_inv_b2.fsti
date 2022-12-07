@@ -31,7 +31,7 @@ let rec count_id (id:nat) (l:log) : Tot nat (decreases length l) =
 
 let mem_id (id:nat) (l:log) : bool = count_id id l > 0
   
-let distinct_ops (l:log) : prop = forall (id:nat). count_id id l <= 1
+let distinct_ops (l:log) : prop = (forall (id:nat). count_id id l <= 1) /\ (forall (id:nat). mem_id id l ==> id <> 0)
 
 let le (a b:timestamp_t) : bool = a < b
   
