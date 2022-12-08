@@ -33,7 +33,7 @@ let mem_id (id:nat) (l:log) : bool = count_id id l > 0
   
 let distinct_ops (l:log) : prop = (forall (id:nat). count_id id l <= 1) /\ (forall (id:nat). mem_id id l ==> id <> 0)
 
-let le (a b:timestamp_t) : bool = a < b
+let lt (a b:timestamp_t) : bool = a < b
   
 #push-options "--z3rlimit 50"
 let rec lemma_append_count_id (lo:log) (hi:log)
@@ -252,8 +252,8 @@ let lem_diff (s1:log) (l:log{is_prefix l s1})
 let linearizable_s2_gt0_pre (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> le id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> le id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                     (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                     Seq.length (diff (ops_of s2) (ops_of lca)) > 0 /\ Seq.length (ops_of s2) > 0 /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2))
@@ -261,7 +261,7 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
                     let inv2 = inverse_st s2 in 
                     is_prefix (ops_of lca) (ops_of inv2) /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> le id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1) /\
                     (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca)))))) =
   let prefix2, last2 = un_snoc (ops_of s2) in
   let inv2 = inverse_st s2 in 
@@ -273,13 +273,13 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
 #pop-options
 
 #set-options "--z3rlimit 200 --fuel 1 --ifuel 1"
-let rec linearizable (lca s1 s2:st)
+let rec linearizablt (lca s1 s2:st)
   : Lemma 
       (requires 
          is_prefix (ops_of lca) (ops_of s1) /\
          is_prefix (ops_of lca) (ops_of s2) /\
-         (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> le id id1) /\
-         (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> le id id1) /\
+         (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+         (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
          (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
       (ensures 
          concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
@@ -298,7 +298,7 @@ let rec linearizable (lca s1 s2:st)
 
         linearizable_s2_gt0_pre lca s1 s2;
 
-        linearizable lca s1 inv2;
+        linearizablt lca s1 inv2;
 
         eliminate exists l'. interleaving_predicate l' lca s1 inv2
         returns exists l. interleaving_predicate l lca s1 s2
