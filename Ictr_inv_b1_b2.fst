@@ -104,20 +104,12 @@ let linearizable_s2_gt0 (lca s1 s2:st) (l':log)
                 linearized_merge (v_of lca) l == 
                 concrete_merge (v_of lca) (v_of s1) (v_of s2))) =
   let l = Seq.snoc l' (last (ops_of s2)) in
-  assert (length l = length l' + 1);
-  assert (linearized_merge (v_of lca) l' == concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2)));
+  Seq.lemma_mem_snoc l' (last (ops_of s2));
+  split_prefix init_st (ops_of lca) (ops_of s1);
+  split_prefix init_st (ops_of lca) (ops_of s2);
   lem_foldl (v_of lca) l'; 
-  assert (v_of lca + length l' == concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2)));
-  assert (v_of lca + length l' == (v_of s1) + (v_of (inverse_st s2)) - (v_of lca));
-  assert (v_of lca + length l' == (v_of s1) + (v_of s2 - 1) - (v_of lca));
-  assert (v_of lca + length l' + 1 == (v_of s1) + (v_of s2) - (v_of lca));
-  lem_foldl (v_of lca) l;
-  assert (linearized_merge (v_of lca) l == v_of lca + length l); 
-  assert (linearized_merge (v_of lca) l == v_of lca + length l' + 1);
-  ()
-#pop-options
+  lem_foldl (v_of lca) l
 
-#push-options "--z3rlimit 300"
 let linearizable_s1_gt0 (lca s1 s2:st) (l':log)
   : Lemma 
       (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -131,17 +123,11 @@ let linearizable_s1_gt0 (lca s1 s2:st) (l':log)
                 linearized_merge (v_of lca) l == 
                 concrete_merge (v_of lca) (v_of s1) (v_of s2))) =
   let l = Seq.snoc l' (last (ops_of s1)) in
-  assert (length l = length l' + 1);
-  assert (linearized_merge (v_of lca) l' == concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)); 
+  Seq.lemma_mem_snoc l' (last (ops_of s1));
+  split_prefix init_st (ops_of lca) (ops_of s1);
+  split_prefix init_st (ops_of lca) (ops_of s2);
   lem_foldl (v_of lca) l'; 
-  assert (v_of lca + length l' == concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2));
-  assert (v_of lca + length l' == (v_of (inverse_st s1)) + (v_of s2) - (v_of lca));
-  assert (v_of lca + length l' == (v_of s1 - 1) + (v_of s2) - (v_of lca));
-  assert (v_of lca + length l' + 1 == (v_of s1) + (v_of s2) - (v_of lca));
-  lem_foldl (v_of lca) l;
-  assert (linearized_merge (v_of lca) l == v_of lca + length l); 
-  assert (linearized_merge (v_of lca) l == v_of lca + length l' + 1);
-  ()
+  lem_foldl (v_of lca) l
 #pop-options
 
 
