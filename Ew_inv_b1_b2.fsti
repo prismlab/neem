@@ -1,4 +1,4 @@
-module Ictr_inv_b1_b2
+module Ew_inv_b1_b2
 
 open FStar.Seq
 open FStar.Ghost

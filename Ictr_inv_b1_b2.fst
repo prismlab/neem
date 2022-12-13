@@ -37,6 +37,7 @@ let concrete_merge_pre lca a b : prop
 let concrete_merge (lca:concrete_st) (cst1:concrete_st) (cst2:concrete_st{concrete_merge_pre lca cst1 cst2}) 
   : concrete_st = cst1 + cst2 - lca
 
+#set-options "--z3rlimit 50"
 let merge_prop (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\ 
                     is_prefix (ops_of lca) (ops_of s2))
@@ -115,3 +116,27 @@ let linearizable_s2_gt0 (lca s1 s2:st) (l':log)
   ()
 #pop-options
 
+////////////////////////////////////////////////////////////////
+//// Sequential implementation //////
+
+// the concrete state 
+type concrete_st_s = nat
+
+// init state 
+let init_st_s = 0
+
+// apply an operation to a state 
+let do_s (s:concrete_st_s) (_:log_entry) : concrete_st_s = s + 1
+
+//equivalence relation between the concrete states of sequential type and MRDT
+let eq (st_s:concrete_st_s) (st:concrete_st) = st_s = st
+
+//initial states are equivalent
+let initial_eq _
+  : Lemma (ensures eq init_st_s init_st) = ()
+
+//equivalence between states of sequential type and MRDT at every operation
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
+  : Lemma (requires eq st_s st)
+          (ensures eq (do_s st_s op) (do st op)) 
+  = ()

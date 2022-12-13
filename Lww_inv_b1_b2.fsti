@@ -529,3 +529,26 @@ let rec linearizable (lca s1 s2:st)
         end
       end
 
+////////////////////////////////////////////////////////////////
+//// Sequential implementation //////
+
+// the concrete state 
+val concrete_st_s : Type0
+
+// init state 
+val init_st_s : concrete_st_s
+
+// apply an operation to a state 
+val do_s (st_s:concrete_st_s) (_:log_entry) : concrete_st_s
+
+//equivalence relation between the concrete states of sequential type and MRDT
+val eq (st_s:concrete_st_s) (st:concrete_st) : bool
+
+//initial states are equivalent
+val initial_eq (_:unit)
+  : Lemma (ensures eq init_st_s init_st)
+
+//equivalence between states of sequential type and MRDT at every operation
+val do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
+  : Lemma (requires eq st_s st)
+          (ensures eq (do_s st_s op) (do st op))
