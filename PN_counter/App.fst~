@@ -122,6 +122,7 @@ let lem_add (lca s1 s2:nat)
                    s1 + (s2 - 1) - lca + 1 = s1 + s2 - lca)
   = ()
   
+#push-options "--z3rlimit 100"
 let linearizable_s1_gt0 (lca s1 s2:st)
   : Lemma 
       (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -132,7 +133,16 @@ let linearizable_s1_gt0 (lca s1 s2:st)
                 concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of s2))
       (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) (Seq.last (ops_of s1))) =
-  lem_add (v_of lca) (v_of s1) (v_of s2)
+  let p1, last1 = un_snoc (ops_of s1) in
+  inverse_helper init_st p1 last1;
+  assert (v_of (inverse_st s1) + v_of s2 - v_of lca =
+          v_of s1 - 1 + v_of s2 - v_of lca);
+  lem_add (v_of lca) (v_of s1) (v_of s2);
+  assert (v_of s1 - 1 + v_of s2 - v_of lca + 1 =
+          v_of s1 + v_of s2 - v_of lca);
+  assert (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2) + 1 =
+          concrete_merge (v_of lca) (v_of s1) (v_of s2));
+  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))
 
 let linearizable_s2_gt0 (lca s1 s2:st)
   : Lemma 
@@ -144,4 +154,14 @@ let linearizable_s2_gt0 (lca s1 s2:st)
                 concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)))
       (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) (Seq.last (ops_of s2))) =
- lem_add (v_of lca) (v_of s1) (v_of s2)
+  let p2, last2 = un_snoc (ops_of s2) in
+  inverse_helper init_st p2 last2;
+  assert (v_of s1 + v_of (inverse_st s2) - v_of lca =
+          v_of s1 + (v_of s2 - 1) - v_of lca);
+  lem_add (v_of lca) (v_of s1) (v_of s2);
+  assert (v_of s1 + (v_of s2 - 1) - v_of lca + 1 =
+          v_of s1 + v_of s2 - v_of lca);
+  assert (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2)) + 1 =
+          concrete_merge (v_of lca) (v_of s1) (v_of s2));
+  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
+#pop-options
