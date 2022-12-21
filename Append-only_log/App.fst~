@@ -2,23 +2,64 @@ module App
 
 open FStar.Seq
 open FStar.Ghost
+module L = FStar.List.Tot
+
+val mem_id_s : id:nat
+             -> l:list (nat * string) 
+             -> Tot (b:bool {b = true <==> (exists m. L.mem (id,m) l) /\ (exists e. L.mem e l ==> fst e = id)})
+let rec mem_id_s id l =
+  match l with
+  |[] -> false
+  |(id1,m)::xs -> id = id1 || mem_id_s id xs
+
+val unique_s : l:list (nat * string) -> Tot bool
+let rec unique_s l =
+  match l with
+  |[] -> true
+  |(id,m)::xs -> not (mem_id_s id xs) && unique_s xs
+
+val pos : id:(nat * string) 
+        -> l:list (nat * string) {L.mem id l /\ unique_s l} 
+        -> Tot nat
+let rec pos id l =
+  match l with
+  |id1::xs -> if id = id1 then 0 else 1 + pos id xs
+
+val forallb : #a:eqtype
+            -> f:(a -> bool)
+            -> l:list a
+            -> Tot (b:bool{(forall e. L.mem e l ==> f e) <==> b = true})
+let rec forallb #a f l =
+  match l with
+  |[] -> true
+  |hd::tl -> if f hd then forallb f tl else false
+  
+val total_order : l:list (nat * string) {unique_s l} -> Tot bool
+let rec total_order l =
+  match l with
+  |[] -> true
+  |[x] -> true
+  |x::xs ->  forallb (fun e -> lt (fst e) (fst x)) xs && total_order xs
+
+val ord : id:(nat * string)
+        -> id1:(nat * string) {fst id <> fst id1}
+        -> l:list (nat * string) {L.mem id l /\ L.mem id1 l /\ unique_s l /\ total_order l}
+        -> Tot (b:bool {b = true <==> pos id l < pos id1 l})
+let ord id id1 l = pos id l < pos id1 l 
 
 // the concrete state type
-// It is a pair of timestamp and value
-type concrete_st = nat & nat
+// It is a list of pairs of timestamp and message
+type concrete_st = l:list (nat (*timestamp*) * string (*message*)) {unique_s l /\ total_order l}
 
 //initial state
-let init_st = (0, 0)
+let init_st = []
 
 // operation type
-// (the only operation is Write value, so nat is fine)
-type op_t = nat
-
-// concrete do pre-condition
-let concrete_do_pre _ _ = true
+// (the only operation is append value, so string is fine)
+type op_t = string
 
 // apply an operation to a state
-let do (s:concrete_st) (op:log_entry) : (r:concrete_st{r = op}) = op
+let do (s:concrete_st) (op:log_entry) : (r:concrete_st) = s
 
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
@@ -48,8 +89,7 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
 ////////////////////////////////////////////////////////////////
 
 let rec lem_foldl (s:concrete_st) (l:log)
-  : Lemma (requires foldl_prop s l)
-          (ensures (length l > 0 ==> (let _, last = un_snoc l in seq_foldl s l = last) /\
+  : Lemma (ensures (length l > 0 ==> (let _, last = un_snoc l in seq_foldl s l = last) /\
                                      mem_id (fst (seq_foldl s l)) l) /\
                    (length l = 0 ==> (seq_foldl s l = s)) /\
                    (length l > 0 /\ (forall id. mem_id id l ==> lt (fst s) id) ==> (lt (fst s) (fst (seq_foldl s l)))))
@@ -106,12 +146,10 @@ let linearizable_s1_0 (lca s1 s2:st)
                 ops_of s1 = ops_of lca /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
+                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
       (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) == 
                seq_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))) =
   lem_foldl init_st (ops_of lca);
-  lem_foldl init_st (ops_of s2);
   lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
   
 let linearizable_s2_0 (lca s1 s2:st)
@@ -123,12 +161,10 @@ let linearizable_s2_0 (lca s1 s2:st)
                 ops_of s2 = ops_of lca /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
+                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
       (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) == 
                seq_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))) =
   lem_foldl init_st (ops_of lca);
-  lem_foldl init_st (ops_of s1);
   lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))
 
 #push-options "--z3rlimit 100"
@@ -147,14 +183,10 @@ let linearizable_s1_gt0 (lca s1 s2:st)
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) = last1))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
-                   concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)) =
   let _, last1 = un_snoc (ops_of s1) in
   let _, last2 = un_snoc (ops_of s2) in
-  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1);
-  lem_seq_foldl init_st (ops_of s1);
-  lem_seq_foldl init_st (ops_of s2);
   lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
   assert (fst last1 <> fst last2);
   resolve_conflict_prop last1 last2;
@@ -175,14 +207,10 @@ let linearizable_s2_gt0 (lca s1 s2:st)
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) <> last1))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
-                   concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)) =
   let _, last1 = un_snoc (ops_of s1) in
   let _, last2 = un_snoc (ops_of s2) in
-  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2);
-  lem_seq_foldl init_st (ops_of s1);
-  lem_seq_foldl init_st (ops_of s2);
   lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
   assert (fst last1 <> fst last2); 
   resolve_conflict_prop last1 last2;

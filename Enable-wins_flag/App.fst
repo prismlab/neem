@@ -15,9 +15,12 @@ type op_t:eqtype =
   |Enable
   |Disable
 
+// concrete do pre-condition
+let concrete_do_pre _ _ = true
+
 // apply an operation to a state
-let do (s:concrete_st) (o:log_entry) : concrete_st = 
-  match snd o with
+let do (s:concrete_st) (op:log_entry{concrete_do_pre s op}) : concrete_st = 
+  match snd op with
   |Enable -> (fst s + 1, true)
   |Disable -> (fst s, false)
 
@@ -57,16 +60,20 @@ let rec count_en (l:log) : Tot nat (decreases length l) =
        |_ -> count_en (tail l)
 
 let rec lem_foldl (s:concrete_st) (l:log)
-  : Lemma (ensures (fst (seq_foldl s l) = fst s + count_en l) /\
+  : Lemma (requires foldl_prop s l)
+          (ensures (fst (seq_foldl s l) = fst s + count_en l) /\
                    ((length l > 0 /\ (exists e. mem e l /\ snd e = Enable)) <==> fst (seq_foldl s l) > fst s) /\
                    ((length l = 0 \/ (length l > 0 /\ (forall e. mem e l ==> snd e <> Enable))) <==> fst (seq_foldl s l) = fst s) /\
                    (((length l > 0 /\ (let _, last = un_snoc l in snd last = Disable)) \/
                    (length l = 0 /\ snd s = false)) <==> snd (seq_foldl s l) = false) /\
                    (((length l > 0 /\ (let _, last = un_snoc l in snd last = Enable)) \/
-                   (length l = 0 /\ snd s = true)) <==> snd (seq_foldl s l) = true))
+                   (length l = 0 /\ snd s = true)) <==> snd (seq_foldl s l) = true) /\
+                   (length l > 0 ==> foldl_prop s (fst (un_snoc l)) /\
+                                    seq_foldl s l  == do (seq_foldl s (fst (un_snoc l))) (last l)))
           (decreases length l)
   = match length l with
     |0 -> ()
+    |1 -> ()
     |_ -> lem_foldl (do s (head l)) (tail l)
 
 //conflict resolution
@@ -168,7 +175,8 @@ let linearizable_s1_0 (lca s1 s2:st)
                 ops_of s1 = ops_of lca /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+                foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
       (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) == 
                seq_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))) =
   lem_foldl init_st (ops_of lca);
@@ -186,7 +194,8 @@ let linearizable_s2_0 (lca s1 s2:st)
                 ops_of s2 = ops_of lca /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+                (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+                foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
       (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) == 
                seq_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))) =
   lem_foldl init_st (ops_of lca);
@@ -216,14 +225,25 @@ let linearizable_s1_gt0 (lca s1 s2:st)
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) = last1))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)) =
   let p1, last1 = un_snoc (ops_of s1) in
   let _, last2 = un_snoc (ops_of s2) in
   lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
-  resolve_conflict_prop last1 last2;
+  resolve_conflict_prop last1 last2; 
   assert (snd last1 = Enable /\ snd last2 = Disable);
+  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1);
+  inverse_helper init_st p1 last1;
+  assert (fst (v_of (inverse_st s1)) + fst (v_of s2) - fst (v_of lca) =
+          fst (v_of s1) - 1 + fst (v_of s2) - fst (v_of lca));
   lem_add (fst (v_of lca)) (fst (v_of s1)) (fst (v_of s2));
+  assert ((fst (v_of s1) - 1 + fst (v_of s2) - fst (v_of lca) + 1) =
+          (fst (v_of s1) + fst (v_of s2) - fst (v_of lca)));
+  assert (fst (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) + 1 =
+          fst (concrete_merge (v_of lca) (v_of s1) (v_of s2)));
+  split_prefix init_st (ops_of lca) (ops_of s1);
+  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
   assert (fst (v_of s1) > fst (v_of lca));
   assert (merge_flag (v_of lca) (v_of s1) (v_of s2) = true);
   ()
@@ -244,8 +264,24 @@ let linearizable_s2_gt01 (lca s1 s2:st)
                      last (resolve_conflict last1 last2) <> last1 /\
                      snd last1 = Disable /\ snd last2 = Disable))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)) = 
+  let _, last1 = un_snoc (ops_of s1) in
+  let p2, last2 = un_snoc (ops_of s2) in
+  lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
+  resolve_conflict_prop last1 last2; 
+  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2);
+  inverse_helper init_st p2 last2;
+  assert (fst (v_of s1) + fst (v_of (inverse_st s2)) - fst (v_of lca) =
+          fst (v_of s1) + fst (v_of s2) - fst (v_of lca));
+  assert (fst (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) =
+          fst (concrete_merge (v_of lca) (v_of s1) (v_of s2)));
+  split_prefix init_st (ops_of lca) (ops_of s2);
+  lem_foldl init_st (ops_of s1);
+  lem_foldl init_st (ops_of s2);
+  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
+  assert (merge_flag (v_of lca) (v_of s1) (v_of s2) = false);
   ()
 #pop-options
 
@@ -266,14 +302,27 @@ let linearizable_s2_gt02 (lca s1 s2:st)
                      last (resolve_conflict last1 last2) <> last1 /\
                      snd last1 = Enable /\ snd last2 = Enable))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)) = 
   let _, last1 = un_snoc (ops_of s1) in
   let p2, last2 = un_snoc (ops_of s2) in
   lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
-  resolve_conflict_prop last1 last2;
+  resolve_conflict_prop last1 last2; 
+  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2);
+  inverse_helper init_st p2 last2;
+  assert (fst (v_of s1) + fst (v_of (inverse_st s2)) - fst (v_of lca) =
+          fst (v_of s1) + (fst (v_of s2) - 1) - fst (v_of lca));
   lem_add (fst (v_of lca)) (fst (v_of s1)) (fst (v_of s2));
-  lem_foldl init_st (ops_of s2)
+  assert ((fst (v_of s1) + (fst (v_of s2) - 1) - fst (v_of lca) + 1) =
+          (fst (v_of s1) + fst (v_of s2) - fst (v_of lca)));
+  assert (fst (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) + 1 =
+          fst (concrete_merge (v_of lca) (v_of s1) (v_of s2)));
+  split_prefix init_st (ops_of lca) (ops_of s2);
+  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
+  assert (fst (v_of s2) > fst (v_of lca));
+  assert (merge_flag (v_of lca) (v_of s1) (v_of s2) = true);
+  ()
 
 let linearizable_s2_gt03 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -291,18 +340,27 @@ let linearizable_s2_gt03 (lca s1 s2:st)
                      last (resolve_conflict last1 last2) <> last1 /\
                      snd last1 = Disable /\ snd last2 = Enable))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)) = 
   let _, last1 = un_snoc (ops_of s1) in
   let p2, last2 = un_snoc (ops_of s2) in
   lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
-  resolve_conflict_prop last1 last2;
+  resolve_conflict_prop last1 last2; 
+  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2);
+  inverse_helper init_st p2 last2;
+  assert (fst (v_of s1) + fst (v_of (inverse_st s2)) - fst (v_of lca) =
+          fst (v_of s1) + (fst (v_of s2) - 1) - fst (v_of lca)); 
   lem_add (fst (v_of lca)) (fst (v_of s1)) (fst (v_of s2));
-  lem_foldl init_st (ops_of s2);
+  assert ((fst (v_of s1) + (fst (v_of s2) - 1) - fst (v_of lca) + 1) =
+          (fst (v_of s1) + fst (v_of s2) - fst (v_of lca))); 
+  assert (fst (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) + 1 =
+          fst (concrete_merge (v_of lca) (v_of s1) (v_of s2)));
+  split_prefix init_st (ops_of lca) (ops_of s2);
+  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
   assert (fst (v_of s2) > fst (v_of lca));
   assert (merge_flag (v_of lca) (v_of s1) (v_of s2) = true);
   ()
-#pop-options
 
 let linearizable_s2_gt0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -319,6 +377,7 @@ let linearizable_s2_gt0 (lca s1 s2:st)
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) <> last1))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)) =
   let _, last1 = un_snoc (ops_of s1) in
@@ -329,3 +388,4 @@ let linearizable_s2_gt0 (lca s1 s2:st)
   |Disable, Disable -> linearizable_s2_gt01 lca s1 s2
   |Disable, Enable -> linearizable_s2_gt03 lca s1 s2
   |Enable, Enable -> linearizable_s2_gt02 lca s1 s2
+#pop-options

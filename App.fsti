@@ -5,6 +5,8 @@ open FStar.Ghost
 
 #set-options "--query_stats"
 
+let lt (a b:nat) : bool = a < b
+
 // the concrete state type
 val concrete_st : Type0
 
@@ -33,14 +35,12 @@ let mem_id (id:nat) (l:log) : bool = count_id id l > 0
   
 let distinct_ops (l:log) : prop = (forall (id:nat). count_id id l <= 1) /\ (forall (id:nat). mem_id id l ==> id <> 0)
 
-let lt (a b:timestamp_t) : bool = a < b
-
 #push-options "--z3rlimit 50"
 let rec lemma_append_count_id (lo:log) (hi:log)
   : Lemma
       (ensures (forall x. count_id x (lo ++ hi) = (count_id x lo + count_id x hi)))
       (decreases (length lo))
-  = if length lo = 0
+  = admit(); if length lo = 0
        then cut (equal (lo ++ hi) hi)
        else (cut (equal (cons (head lo) ((tail lo) ++ hi)) (lo ++ hi));
            lemma_append_count_id (tail lo) hi;
@@ -54,15 +54,18 @@ let distinct_invert_append (a b:log)
       (requires distinct_ops (a ++ b))
       (ensures distinct_ops a /\ distinct_ops b /\ (forall id. mem_id id a ==> not (mem_id id b)))
       [SMTPat (distinct_ops (a ++ b))]
-= lemma_append_count_id a b
+= admit();lemma_append_count_id a b
 
 type st0 = concrete_st & erased log
   
 let v_of (s:st0) : concrete_st = fst s
 let ops_of (s:st0) : GTot log = snd s
 
+// concrete do pre-condition
+val concrete_do_pre (_:concrete_st) (_:log_entry) : prop
+
 // apply an operation to a state
-val do (s:concrete_st) (_:log_entry) : concrete_st
+val do (s:concrete_st) (o:log_entry{concrete_do_pre s o}) : concrete_st
 
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
@@ -85,29 +88,37 @@ val initial_eq (_:unit)
 
 //equivalence between states of sequential type and MRDT at every operation
 val do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
-  : Lemma (requires eq st_s st)
+  : Lemma (requires eq st_s st /\ concrete_do_pre st op)
           (ensures eq (do_s st_s op) (do st op))
 
 ////////////////////////////////////////////////////////////////
 
-let rec seq_foldl1 (f:concrete_st -> log_entry -> concrete_st) (x:concrete_st) (s:log)
-  : Tot concrete_st (decreases Seq.length s) =
+let rec foldl_prop (x:concrete_st) (l:log) : Tot prop (decreases length l) =
+  match length l with
+  |0 -> True
+  |1 -> concrete_do_pre x (head l)
+  |_ -> concrete_do_pre x (head l) /\ foldl_prop (do x (head l)) (tail l)
 
-  if Seq.length s = 0
-  then x
-  else let hd, tl = Seq.head s, Seq.tail s in
-    seq_foldl1 f (f x hd) tl
-
-let rec seq_foldl (x:concrete_st) (l:log) 
-  : Tot (r:concrete_st{(length l > 0 ==> r == do (seq_foldl1 do x (fst (un_snoc l))) (last l)) /\
-                       (r == seq_foldl1 do x l)}) (decreases length l) = 
+let rec seq_foldl (x:concrete_st) (l:log{foldl_prop x l}) : Tot concrete_st (decreases length l) =
   match length l with
   |0 -> x
   |1 -> do x (head l)
-  |_ -> seq_foldl (do x (head l)) (tail l)
+  |_ -> seq_foldl (do x (head l)) (tail l)                   
+
+let rec lem_seq_foldl (x:concrete_st) (l:log)
+  : Lemma (requires foldl_prop x l)
+          (ensures (length l > 0 ==> foldl_prop x (fst (un_snoc l)) /\
+                   concrete_do_pre (seq_foldl x (fst (un_snoc l))) (last l) /\
+                   seq_foldl x l  == do (seq_foldl x (fst (un_snoc l))) (last l)))
+          (decreases length l) = admit();
+  match length l with
+  |0 -> ()
+  |1 -> ()
+  |_ -> lem_seq_foldl (do x (head l)) (tail l)
 
 let valid_st (s:st0) : prop =
   distinct_ops (ops_of s) /\
+  foldl_prop init_st (ops_of s) /\
   v_of s == seq_foldl init_st (ops_of s)
 
 type st = s:st0{valid_st s}
@@ -156,7 +167,7 @@ let rec is_interleaving (l l1 l2:log)
 val concrete_merge_pre (lca a b:concrete_st) : prop
 
 // concrete merge operation
-val concrete_merge (lca:concrete_st) (cst1:concrete_st) (cst2:concrete_st{concrete_merge_pre lca cst1 cst2}) : concrete_st
+val concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_merge_pre lca s1 s2}) : concrete_st
 
 let is_prefix (p:log) (l:log) : Tot prop =
   Seq.length l >= Seq.length p /\ Seq.equal p (Seq.slice l 0 (Seq.length p))
@@ -171,28 +182,31 @@ let lem_diff (s1:log) (l:log{is_prefix l s1})
   : Lemma (requires distinct_ops s1)
           (ensures distinct_ops (diff s1 l) /\ (forall id. mem_id id (diff s1 l) <==> mem_id id s1 /\ not (mem_id id l)) /\
                    (Seq.length s1 > Seq.length l ==> last s1 = last (diff s1 l) /\ Seq.length (diff s1 l) > 0))
-  = let s = snd (split s1 (length l)) in
+  = admit(); let s = snd (split s1 (length l)) in
     lemma_split s1 (length l);
     lemma_append_count_id l s
 
 let rec split_prefix (s:concrete_st) (l:log) (a:log)
-  : Lemma (requires is_prefix l a)
-          (ensures (seq_foldl s a == seq_foldl (seq_foldl s l) (diff a l)) /\
+  : Lemma (requires is_prefix l a /\ foldl_prop s a)
+          (ensures foldl_prop s l /\ foldl_prop (seq_foldl s l) (diff a l) /\
+                   (seq_foldl s a == seq_foldl (seq_foldl s l) (diff a l)) /\
                    (forall e. mem e l ==> mem e a) /\
                    (Seq.length a > Seq.length l ==> (last a) = (last (diff a l))))
           (decreases Seq.length l)
-  = match Seq.length l with
+  = admit();match Seq.length l with
     |0 -> ()
     |1 -> ()
     |_ -> split_prefix (do s (head l)) (tail l) (tail a)
 
 #push-options "--z3rlimit 100"
 let inverse_st (s:st{Seq.length (ops_of s) > 0}) 
-  : GTot (i:st{(v_of s == do (v_of i) (last (ops_of s))) /\
+  : GTot (i:st{(concrete_do_pre (v_of i) (last (ops_of s))) /\
+               (v_of s == do (v_of i) (last (ops_of s))) /\
                (ops_of i = fst (un_snoc (ops_of s))) /\
                (ops_of s = snoc (ops_of i) (last (ops_of s))) /\
                is_prefix (ops_of i) (ops_of s) /\
-               (forall id. mem_id id (ops_of i) <==> mem_id id (ops_of s) /\ id <> fst (last (ops_of s)))}) =
+               (forall id. mem_id id (ops_of i) <==> mem_id id (ops_of s) /\ id <> fst (last (ops_of s)))}) = admit();
+  lem_seq_foldl init_st (ops_of s);
   let p, l = un_snoc (ops_of s) in
   let r = seq_foldl init_st p in
   lemma_split (ops_of s) (length (ops_of s) - 1);
@@ -204,14 +218,14 @@ let lem_inverse (lca s1:log)
   : Lemma (requires is_prefix lca s1 /\
                     Seq.length s1 > Seq.length lca)
           (ensures (is_prefix lca (fst (un_snoc s1)))) 
-  = lemma_split (fst (un_snoc s1)) (length lca)
+  = admit(); lemma_split (fst (un_snoc s1)) (length lca)
 
 let un_snoc_prop (a:log)
   : Lemma (requires distinct_ops a /\ length a > 0)
           (ensures (forall id. mem_id id a <==> mem_id id (fst (un_snoc a)) \/ id = fst (last a)) /\
                    (forall id. mem_id id a /\ id <> fst (last a) <==> mem_id id (fst (un_snoc a))) /\
                    (let _, l = un_snoc a in 
-                    mem_id (fst l) a)) =
+                    mem_id (fst l) a)) =admit();
   let p, l = un_snoc a in
   lemma_split a (length a - 1);
   lemma_append_count_id p (snd (split a (length a - 1)));
@@ -224,7 +238,7 @@ let lastop_diff (l a:log)
           (ensures (length (diff a l) > 0) /\
                    (let _, last = un_snoc a in
                    mem_id (fst last) a /\ mem_id (fst last) (diff a l)))
-  = un_snoc_prop a;
+  =admit(); un_snoc_prop a;
     lem_diff a l;
     un_snoc_prop (diff a l)
 
@@ -237,7 +251,7 @@ let lastop_neq (l a b:log)
                     (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
           (ensures (let _, la = un_snoc a in
                     let _, lb = un_snoc b in
-                    fst la <> fst lb)) =
+                    fst la <> fst lb)) =admit();
   lastop_diff l a;
   lastop_diff l b
 #pop-options
@@ -247,6 +261,7 @@ let interleaving_predicate (l:log) (lca s1:st)
          is_prefix (ops_of lca) (ops_of s1) /\
          is_prefix (ops_of lca) (ops_of s2)}) =
   is_interleaving l (diff (ops_of s1) (ops_of lca)) (diff (ops_of s2) (ops_of lca)) /\
+  foldl_prop (v_of lca) l /\
   seq_foldl (v_of lca) l ==
   concrete_merge (v_of lca) (v_of s1) (v_of s2)
 
@@ -273,7 +288,8 @@ val linearizable_s1_0 (lca s1 s2:st)
                     ops_of s1 = ops_of lca /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1))
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                    foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
           (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) == 
                    seq_foldl (v_of lca) (diff (ops_of s2) (ops_of lca)))
 
@@ -284,7 +300,8 @@ val linearizable_s2_0 (lca s1 s2:st)
                     ops_of s2 = ops_of lca /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1))
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                    foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
           (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) == 
                    seq_foldl (v_of lca) (diff (ops_of s1) (ops_of lca)))
 
@@ -295,7 +312,8 @@ let linearizable_s1_01 (lca s1 s2:st)
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1)) 
-          (ensures (exists l. interleaving_predicate l lca s1 s2)) =
+          (ensures (exists l. interleaving_predicate l lca s1 s2)) =admit();
+  split_prefix init_st (ops_of lca) (ops_of s2);
   linearizable_s1_0 lca s1 s2
 
 let linearizable_s2_01 (lca s1 s2:st)
@@ -306,13 +324,21 @@ let linearizable_s2_01 (lca s1 s2:st)
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1)) 
-          (ensures (exists l. interleaving_predicate l lca s1 s2)) =
+          (ensures (exists l. interleaving_predicate l lca s1 s2)) =admit();
+  split_prefix init_st (ops_of lca) (ops_of s1);
   linearizable_s2_0 lca s1 s2
 
-let inverse_helper (s:concrete_st) (l':log) (op:log_entry)
-  : Lemma (ensures (let l = Seq.snoc l' op in 
-                    seq_foldl s l == do (seq_foldl s l') op))
-  = Seq.un_snoc_snoc l' op
+let rec inverse_helper (s:concrete_st) (l':log) (op:log_entry)
+  : Lemma 
+    (requires (foldl_prop s l' /\ concrete_do_pre (seq_foldl s l') op))
+    (ensures (let l = Seq.snoc l' op in 
+              foldl_prop s l /\
+              seq_foldl s l == do (seq_foldl s l') op)) (decreases length l')
+  =admit(); Seq.un_snoc_snoc l' op;
+    match length l' with
+    |0 -> ()
+    |1 -> ()
+    |_ -> inverse_helper (do s (head l')) (tail l') op
 
 val linearizable_s1_gt0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -329,6 +355,7 @@ val linearizable_s1_gt0 (lca s1 s2:st)
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) = last1))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1))
 
@@ -347,6 +374,7 @@ val linearizable_s2_gt0 (lca s1 s2:st)
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) <> last1))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
                    concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
                    do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2))
 
@@ -357,7 +385,7 @@ let interleaving_helper_inv1 (lca s1 s2 l':log)
                 is_interleaving l' (diff (fst (Seq.un_snoc s1)) lca) (diff s2 lca))
       (ensures (let _, last1 = un_snoc s1 in
                 is_interleaving (Seq.snoc l' last1) (diff s1 lca) (diff s2 lca)))
-  = assert (is_interleaving l' (fst (Seq.un_snoc (diff s1 lca))) (diff s2 lca));
+  = admit();assert (is_interleaving l' (fst (Seq.un_snoc (diff s1 lca))) (diff s2 lca));
     let prefix1, last1 = Seq.un_snoc (diff s1 lca) in
     let l = Seq.snoc l' last1 in
     introduce exists l'. is_interleaving l' prefix1 (diff s2 lca) /\
@@ -372,7 +400,7 @@ let interleaving_helper_inv2 (lca s1 s2 l':log)
                 is_interleaving l' (diff s1 lca) (diff (fst (Seq.un_snoc s2)) lca))
       (ensures (let _, last2 = un_snoc s2 in
                 is_interleaving (Seq.snoc l' last2) (diff s1 lca) (diff s2 lca)))
-  = assert (is_interleaving l' (diff s1 lca) (fst (Seq.un_snoc (diff s2 lca))));
+  = admit();assert (is_interleaving l' (diff s1 lca) (fst (Seq.un_snoc (diff s2 lca))));
     let prefix2, last2 = Seq.un_snoc (diff s2 lca) in
     let l = Seq.snoc l' last2 in
     introduce exists l'. is_interleaving l' (diff s1 lca) prefix2 /\
@@ -399,11 +427,11 @@ let interleaving_s1_inv (lca s1 s2:st) (l':log)
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let l = Seq.snoc l' last1 in
                     interleaving_predicate l lca s1 s2 /\
-                    (exists l. interleaving_predicate l lca s1 s2))) =
+                    (exists l. interleaving_predicate l lca s1 s2))) =admit();
   let _, last1 = un_snoc (ops_of s1) in
   interleaving_helper_inv1 (ops_of lca) (ops_of s1) (ops_of s2) l'; 
-  inverse_helper (v_of lca) l' last1;
-  linearizable_s1_gt0 lca s1 s2
+  linearizable_s1_gt0 lca s1 s2;
+  inverse_helper (v_of lca) l' last1
 
 let interleaving_s2_inv (lca s1 s2:st) (l':log)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -423,11 +451,11 @@ let interleaving_s2_inv (lca s1 s2:st) (l':log)
           (ensures (let _, last2 = un_snoc (ops_of s2) in
                     let l = Seq.snoc l' last2 in
                     interleaving_predicate l lca s1 s2 /\
-                    (exists l. interleaving_predicate l lca s1 s2))) =
+                    (exists l. interleaving_predicate l lca s1 s2))) =admit();
   let _, last2 = un_snoc (ops_of s2) in
   interleaving_helper_inv2 (ops_of lca) (ops_of s1) (ops_of s2) l';
-  inverse_helper (v_of lca) l' last2; 
-  linearizable_s2_gt0 lca s1 s2
+  linearizable_s2_gt0 lca s1 s2;
+  inverse_helper (v_of lca) l' last2
 #pop-options
 
 #push-options "--z3rlimit 100"
@@ -447,7 +475,7 @@ let linearizable_s1_gt0_pre (lca s1 s2:st)
                     is_prefix (ops_of lca) (ops_of inv1) /\
                     concrete_merge_pre (v_of lca) (v_of inv1) (v_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of inv1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))) =
+                    (forall id. mem_id id (diff (ops_of inv1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))) =admit();
   let inv1 = inverse_st s1 in 
   lem_inverse (ops_of lca) (ops_of s1);
   merge_inv_s1_prop lca s1 s2; 
@@ -471,7 +499,7 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
                     is_prefix (ops_of lca) (ops_of inv2) /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca)))))) =
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca)))))) =admit();
   let inv2 = inverse_st s2 in 
   lem_inverse (ops_of lca) (ops_of s2);
   merge_inv_s2_prop lca s1 s2; 
