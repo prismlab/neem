@@ -80,7 +80,7 @@ val init_st_s : concrete_st_s
 val do_s (st_s:concrete_st_s) (_:log_entry) : concrete_st_s
 
 //equivalence relation between the concrete states of sequential type and MRDT
-val eq (st_s:concrete_st_s) (st:concrete_st) : bool
+val eq (st_s:concrete_st_s) (st:concrete_st) : prop
 
 //initial states are equivalent
 val initial_eq (_:unit)
@@ -109,7 +109,7 @@ let rec lem_seq_foldl (x:concrete_st) (l:log)
   : Lemma (requires foldl_prop x l)
           (ensures (length l > 0 ==> foldl_prop x (fst (un_snoc l)) /\
                    concrete_do_pre (seq_foldl x (fst (un_snoc l))) (last l) /\
-                   seq_foldl x l  == do (seq_foldl x (fst (un_snoc l))) (last l)))
+                   (seq_foldl x l  == do (seq_foldl x (fst (un_snoc l))) (last l))))
           (decreases length l) = 
   match length l with
   |0 -> ()
@@ -119,7 +119,7 @@ let rec lem_seq_foldl (x:concrete_st) (l:log)
 let valid_st (s:st0) : prop =
   distinct_ops (ops_of s) /\
   foldl_prop init_st (ops_of s) /\
-  v_of s == seq_foldl init_st (ops_of s)
+  (v_of s == seq_foldl init_st (ops_of s))
 
 type st = s:st0{valid_st s}
 
@@ -333,7 +333,7 @@ let rec inverse_helper (s:concrete_st) (l':log) (op:log_entry)
     (requires (foldl_prop s l' /\ concrete_do_pre (seq_foldl s l') op))
     (ensures (let l = Seq.snoc l' op in 
               foldl_prop s l /\
-              seq_foldl s l == do (seq_foldl s l') op)) (decreases length l')
+              (seq_foldl s l == do (seq_foldl s l') op))) (decreases length l')
   = Seq.un_snoc_snoc l' op;
     match length l' with
     |0 -> ()
@@ -356,8 +356,8 @@ val linearizable_s1_gt0 (lca s1 s2:st)
                      last (resolve_conflict last1 last2) = last1))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                    concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1 /\
-                   concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
-                   do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1))
+                   (concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
+                   do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)))
 
 val linearizable_s2_gt0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -375,8 +375,8 @@ val linearizable_s2_gt0 (lca s1 s2:st)
                      last (resolve_conflict last1 last2) <> last1))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
-                   concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
-                   do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2))
+                   (concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
+                   do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)))
 
 let interleaving_helper_inv1 (lca s1 s2 l':log)
   : Lemma

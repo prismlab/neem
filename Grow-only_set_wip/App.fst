@@ -170,7 +170,7 @@ let rec inverse_helper1 (s:concrete_st) (l':log) (op:log_entry)
   : Lemma (requires foldl_prop s l' /\ concrete_do_pre (seq_foldl s l') op)
           (ensures (let l = Seq.snoc l' op in
                     foldl_prop s l /\
-                    seq_foldl s l == do (seq_foldl s l') op /\
+                    (seq_foldl s l == do (seq_foldl s l') op) /\
                     (forall e. L.mem e (seq_foldl s l) <==> L.mem e (seq_foldl s l') \/ e = snd op)))
           (decreases length l')
   = Seq.un_snoc_snoc l' op;
@@ -250,3 +250,5 @@ let linearizable_s2_gt01 (lca s1 s2:st)
                L.mem e (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2));
   ()
 #pop-options
+
+
