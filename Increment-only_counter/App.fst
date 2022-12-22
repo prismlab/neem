@@ -35,7 +35,7 @@ let init_st_s = 0
 let do_s (s:concrete_st_s) (_:log_entry) : concrete_st_s = s + 1
 
 //equivalence relation between the concrete states of sequential type and MRDT
-let eq (st_s:concrete_st_s) (st:concrete_st) = st_s = st
+let eq (st_s:concrete_st_s) (st:concrete_st) = st_s == st
 
 //initial states are equivalent
 let initial_eq _
