@@ -41,7 +41,11 @@ let concrete_do_pre _ _ = true
 // apply an operation to a state
 let do (s:concrete_st) (op:log_entry) : (r:concrete_st{(forall e. L.mem e r <==> L.mem e s \/ e = snd op)}) = 
   if (L.mem (snd op) s) then s else (snd op)::s
-  
+
+let lem_do (a b:concrete_st) (op:log_entry)
+   : Lemma (requires concrete_do_pre a op /\ (a == b))
+           (ensures concrete_do_pre b op /\ do a op == do b op) = ()
+           
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
 
@@ -242,14 +246,6 @@ let linearizable_gt0 (lca s1 s2:st)
   resolve_conflict_prop last1 last2;
   linearizable_s2_gt0 lca s1 s2
 
-let lem_concrete_do_pre (a b:concrete_st) (op:log_entry)
-  : Lemma (requires concrete_do_pre a op /\ (a == b))
-          (ensures concrete_do_pre b op) = ()
-
-let lem_do (s a b:concrete_st) (op:log_entry)
-  : Lemma (requires (concrete_do_pre a op /\ s == do a op /\ a == b /\ concrete_do_pre b op))
-          (ensures s == do b op) = ()
-          
 let convergence (lca s1 s2 s1':concrete_st)
   : Lemma (requires concrete_merge_pre lca s1 s2 /\
                     concrete_merge_pre lca s1' s2 /\

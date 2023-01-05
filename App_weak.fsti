@@ -16,7 +16,7 @@ val init_st : concrete_st
 // equivalence between 2 concrete states
 val (==) (a b:concrete_st) : prop
 
-val commutative (a b:concrete_st) 
+val symmetric (a b:concrete_st) 
   : Lemma (requires a == b)
           (ensures b == a)
           [SMTPat (a == b)]
@@ -82,6 +82,10 @@ val concrete_do_pre (_:concrete_st) (_:log_entry) : prop
 
 // apply an operation to a state
 val do (s:concrete_st) (o:log_entry{concrete_do_pre s o}) : concrete_st
+
+val lem_do (a b:concrete_st) (op:log_entry)
+   : Lemma (requires concrete_do_pre a op /\ (a == b))
+           (ensures concrete_do_pre b op /\ do a op == do b op)
 
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
@@ -436,14 +440,6 @@ let interleaving_helper_inv2 (lca s1 s2 l':log)
     with l'
     and ()
 
-val lem_concrete_do_pre (a b:concrete_st) (op:log_entry)
-  : Lemma (requires concrete_do_pre a op /\ (a == b))
-          (ensures concrete_do_pre b op)
-
-val lem_do (s a b:concrete_st) (op:log_entry)
-  : Lemma (requires (concrete_do_pre a op /\ s == do a op /\ a == b /\ concrete_do_pre b op))
-          (ensures s == do b op)
-          
 #push-options "--z3rlimit 200"
 let interleaving_s1_inv (lca s1 s2:st) (l':log)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -468,10 +464,9 @@ let interleaving_s1_inv (lca s1 s2:st) (l':log)
   let l = Seq.snoc l' last1 in
   interleaving_helper_inv1 (ops_of lca) (ops_of s1) (ops_of s2) l';
   linearizable_gt0 lca s1 s2;
-  lem_concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) (seq_foldl (v_of lca) l') last1;
+  lem_do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) (seq_foldl (v_of lca) l') last1;
   inverse_helper (v_of lca) l' last1;
   eq_is_equiv (seq_foldl (v_of lca) l) (do (seq_foldl (v_of lca) l') last1);
-  lem_do (seq_foldl (v_of lca) l) (seq_foldl (v_of lca) l') (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1;
   transitive (seq_foldl (v_of lca) l) (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
              (concrete_merge (v_of lca) (v_of s1) (v_of s2))
 
@@ -498,10 +493,9 @@ let interleaving_s2_inv (lca s1 s2:st) (l':log)
   let l = Seq.snoc l' last2 in
   interleaving_helper_inv2 (ops_of lca) (ops_of s1) (ops_of s2) l'; 
   linearizable_gt0 lca s1 s2;
-  lem_concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) (seq_foldl (v_of lca) l') last2;
+  lem_do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) (seq_foldl (v_of lca) l') last2;
   inverse_helper (v_of lca) l' last2;
   eq_is_equiv (seq_foldl (v_of lca) l) (do (seq_foldl (v_of lca) l') last2);
-  lem_do (seq_foldl (v_of lca) l) (seq_foldl (v_of lca) l') (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2; 
   transitive (seq_foldl (v_of lca) l) (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
              (concrete_merge (v_of lca) (v_of s1) (v_of s2))
 #pop-options
