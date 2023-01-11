@@ -1,0 +1,363 @@
+module App_weak
+
+open FStar.Seq
+open FStar.Ghost
+module L = FStar.List.Tot
+
+let rec unique_s (l:list nat) =
+  match l with
+  |[] -> true
+  |id::xs -> not (L.mem id xs) && unique_s xs
+
+type gset_st = l:list nat{unique_s l}
+
+let rec mem_k (k:nat) (l:list (nat * gset_st)) : (b:bool{(*exists s. L.mem (k,s) l) /\*) (exists e. L.mem e l /\ fst e = k) <==> b = true}) =
+  match l with
+  |[] -> false
+  |x::xs -> fst x = k || mem_k k xs
+
+let rec unique_k (l:list (nat * gset_st)) =
+  match l with
+  |[] -> true
+  |(x,s)::xs -> not (mem_k x xs) && unique_k xs
+
+let rec get_set (k:nat) (st:(list (nat * gset_st))) : gset_st =
+  match st with
+  |[] -> []
+  |(x,s)::xs -> if x = k then s else get_set k xs
+
+// the concrete state type
+// It is a list of unique elements
+type concrete_st = l:list (nat * gset_st){unique_k l /\ (forall e. L.mem e l ==> (snd e) <> [])}
+
+let rec mem_kv (k v:nat) (l:concrete_st) 
+  : (b:bool{b = true <==> ((exists e. L.mem e l /\ fst e = k /\ L.mem v (snd e)) /\ mem_k k l /\
+                         (exists s. L.mem (k,s) l))}) =
+  match l with
+  |[] -> false
+  |x::xs -> (k = fst x && L.mem v (snd x)) || mem_kv k v xs
+  
+//initial state
+let init_st = []
+
+let (==) (a b:concrete_st) =
+  (forall k v. mem_kv k v a <==> mem_kv k v b)
+
+let symmetric (a b:concrete_st) 
+  : Lemma (requires a == b)
+          (ensures b == a) = ()
+
+let transitive (a b c:concrete_st)
+  : Lemma (requires (a == b) /\ (b == c))
+          (ensures (a == c)) = ()
+
+let eq_is_equiv (a b:concrete_st)
+  : Lemma (requires a = b)
+          (ensures a == b) = ()
+          
+// operation type
+// (the only operation is Add, so nat * nat is fine)
+type op_t = nat * nat
+
+let key (op:log_entry) = fst (snd op)
+
+let value (op:log_entry) = snd (snd op)
+
+// concrete do pre-condition
+let concrete_do_pre _ _ = true
+
+#push-options "--z3rlimit 100"
+let rec add_v (k v:nat) (s:concrete_st)
+  : Pure concrete_st 
+    (requires mem_k k s)
+    (ensures (fun r -> (forall k1. mem_k k1 r <==> mem_k k1 s) /\
+                    (forall e. L.mem e r /\ fst e <> k <==> L.mem e s /\ fst e <> k) /\
+                    (forall (e1 e2:nat * gset_st). L.mem e1 s /\ L.mem e2 r /\ fst e1 = k /\ fst e2 = k ==> 
+                               (forall e3. L.mem e3 (snd e1) \/ e3 = v <==> L.mem e3 (snd e2))) /\
+                    (forall k1 v1. mem_kv k1 v1 r <==> mem_kv k1 v1 s \/ (k1 = k /\ v1 = v)))) =
+  match s with
+  |x::xs -> if k = fst x && L.mem v (snd x) then s
+             else if k = fst x then ((k, (v::(snd x)))::xs)
+               else (x::add_v k v xs)
+
+let do (s:concrete_st) (op:log_entry) 
+  : (r:concrete_st{(forall k. mem_k k r <==> mem_k k s \/ k = key op) /\
+                   (forall k v. mem_kv k v r <==> mem_kv k v s \/ (k = key op /\ v = value op)) /\
+                   (forall e. L.mem e r /\ fst e <> key op <==> L.mem e s /\ fst e <> key op)}) = 
+  match s with
+  |[] -> [key op, [value op]]
+  |x::xs -> if mem_k (key op) s then add_v (key op) (value op) s 
+             else  ((key op, [value op])::s)
+
+let lem_do (a b:concrete_st) (op:log_entry)
+   : Lemma (requires concrete_do_pre a op /\ (a == b))
+           (ensures concrete_do_pre b op /\ do a op == do b op) = 
+   assert (forall k v. mem_kv k v (do b op) <==> mem_kv k v a \/ (k = key op /\ v = value op)); ()
+
+////////////////////////////////////////////////////////////////
+//// Sequential implementation //////
+
+// the concrete state 
+type concrete_st_s = concrete_st
+
+// init state 
+let init_st_s = []
+
+// apply an operation to a state 
+let do_s (s:concrete_st_s) (op:log_entry) : concrete_st_s = 
+  do s op
+
+//equivalence relation between the concrete states of sequential type and MRDT
+let eq (st_s:concrete_st_s) (st:concrete_st) = st_s == st
+
+//initial states are equivalent
+let initial_eq _
+  : Lemma (ensures eq init_st_s init_st) = ()
+
+//equivalence between states of sequential type and MRDT at every operation
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
+  : Lemma (requires eq st_s st)
+          (ensures eq (do_s st_s op) (do st op)) 
+  = assert (forall k v. mem_kv k v (do_s st_s op) <==> mem_kv k v st \/ (k = key op /\ v = value op)); ()
+
+////////////////////////////////////////////////////////////////
+
+let rec mem_kv_l (k v:nat) (l:log) 
+  : Tot (b:bool{b = true <==> (exists e. mem e l /\ key e = k /\ value e = v)}) (decreases length l) =
+  match length l with
+  |0 -> false
+  |_ -> (k = key (head l) && v = value (head l)) || mem_kv_l k v (tail l)
+
+let rec mem_k_l (k:nat) (l:log) : Tot (b:bool{(exists e. mem e l /\ key e = k) <==> b = true}) (decreases length l) =
+  match length l with
+  |0 -> false
+  |_ -> key (head l) = k || mem_k_l k (tail l)
+
+#push-options "--z3rlimit 100"
+let rec lem_foldl (s:concrete_st) (l:log)
+  : Lemma (requires foldl_prop s l)
+          (ensures (length l = 0 ==> s = seq_foldl s l) /\
+                   (forall k. mem_k k (seq_foldl s l) <==> mem_k k s \/ mem_k_l k l) /\
+                   (forall k v. mem_kv k v (seq_foldl s l) <==> mem_kv k v s \/ mem_kv_l k v l))
+          (decreases length l)
+  = match length l with
+    |0 -> ()
+    |_ -> lem_foldl (do s (head l)) (tail l)
+
+//conflict resolution
+let resolve_conflict (x y:log_entry) : log =
+  cons x (cons y empty)
+
+let resolve_conflict_prop (x y:log_entry)
+  : Lemma (requires fst x <> fst y)
+          (ensures last (resolve_conflict x y) <> x)
+  = ()
+  
+let rec lem_key (lca s1:concrete_st) 
+  : Lemma (requires (forall k v. mem_kv k v lca ==> mem_kv k v s1))
+          (ensures (forall k v. mem_kv k v lca ==> mem_k k lca) /\
+                   (forall k. mem_k k lca ==> (exists v. mem_kv k v lca))) =  
+  match lca,s1 with
+  |[],[] -> ()
+  |(k,s)::xs, _ -> lem_key xs s1
+  |[],_ -> ()
+
+let rec rem_k (k:nat) (l:concrete_st{mem_k k l})
+    : Tot (r:concrete_st{(forall e. L.mem e r <==> L.mem e l /\ fst e <> k) /\
+                         (forall k1 v1. mem_kv k1 v1 r <==> mem_kv k1 v1 l /\ k1 <> k)}) = 
+  match l with
+  |[] -> []
+  |(x,s)::xs -> if k = x then xs else (x,s)::rem_k k xs
+
+let concrete_merge_pre_g (lca a b:gset_st) : prop = 
+  (forall e. L.mem e lca ==> L.mem e a /\ L.mem e b)
+
+// concrete merge operation
+let rec concrete_merge1_g (lca:gset_st) (s1:gset_st) (s2:gset_st) 
+  : Pure gset_st (requires concrete_merge_pre_g lca s1 s2)
+                     (ensures (fun r -> (forall e. L.mem e r <==> L.mem e s1 \/ L.mem e s2))) 
+                     (decreases %[lca;s1;s2]) =
+  match lca, s1, s2 with
+  |[],[],[] -> []
+  |x::xs,_,_ -> concrete_merge1_g xs s1 s2
+  |[],x::xs,_ -> if L.mem x s2 then concrete_merge1_g [] xs s2 else x::(concrete_merge1_g [] xs s2)
+  |[],[],x::xs -> x::concrete_merge1_g [] [] xs
+
+let concrete_merge_g (lca:gset_st) (s1:gset_st) (s2:gset_st{concrete_merge_pre_g lca s1 s2})
+  : (r:gset_st{(forall e. L.mem e r <==> L.mem e lca \/ L.mem e s1 \/ L.mem e s2)})=
+  concrete_merge1_g lca s1 s2
+
+// concrete merge pre-condition
+let concrete_merge_pre lca a b : prop = 
+  (forall k v. mem_kv k v lca ==> mem_kv k v a /\ mem_kv k v b) /\
+  (forall k. mem_k k lca ==> (forall e. L.mem e (get_set e lca) ==> L.mem e (get_set e a) /\ get_set s b))
+
+//#push-options "--z3rlimit 200"
+// concrete merge operation
+let rec concrete_merge1 (lca:concrete_st) (s1:concrete_st) (s2:concrete_st) 
+  : Pure concrete_st (requires concrete_merge_pre lca s1 s2)
+                     (ensures (fun r -> (forall k. mem_k k r <==> mem_k k s1 \/ mem_k k s2) /\
+                                     (forall k v. mem_kv k v r <==> mem_kv k v s1 \/ mem_kv k v s2)))
+                     (decreases %[lca;s1;s2]) =
+  match lca, s1, s2 with
+  |[],[],[] -> []
+  |(k,x)::xs,_,_ -> (*lem_key lca s1; lem_key lca s2;*) 
+                  (k, (concrete_merge_g x (get_set k s1) (get_set k s2)))::concrete_merge1 xs (rem_k k s1) (rem_k k s2)
+  |[],(k,x)::xs,_ -> if mem_k k s2 then (k, concrete_merge_g [] x (get_set k s2))::concrete_merge1 [] xs (rem_k k s2)
+                      else (k,x)::concrete_merge1 [] xs s2
+  |[],[],_ -> s2
+
+let concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_merge_pre lca s1 s2})
+  : (r:concrete_st{(forall k v. mem_kv k v r <==> mem_kv k v lca \/ mem_kv k v s1 \/ mem_kv k v s2)})=
+  concrete_merge1 lca s1 s2
+                    
+let merge_prop1 (lca s1 s2:st)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\ 
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+          (ensures concrete_merge_pre (v_of lca) (v_of s1) (v_of s2)) =
+  lem_foldl init_st (ops_of s1); 
+  lem_foldl init_st (ops_of s2);
+  split_prefix init_st (ops_of lca) (ops_of s1);
+  split_prefix init_st (ops_of lca) (ops_of s2);
+  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
+  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
+
+let merge_prop (lca s1 s2:st)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\ 
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+          (ensures concrete_merge_pre (v_of lca) (v_of s1) (v_of s2)) =
+  lem_foldl init_st (ops_of s1); 
+  lem_foldl init_st (ops_of s2);
+  split_prefix init_st (ops_of lca) (ops_of s1);
+  split_prefix init_st (ops_of lca) (ops_of s2);
+  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
+  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
+
+let merge_inv_prop (lca s1 s2:st)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+          (ensures (let _, last1 = un_snoc (ops_of s1) in
+                    let _, last2 = un_snoc (ops_of s2) in
+                    (last (resolve_conflict last1 last2) = last1 ==>
+                      concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of s2)) /\
+                    (last (resolve_conflict last1 last2) <> last1 ==>
+                      concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2))))) =
+  let _, last1 = un_snoc (ops_of s1) in
+  let _, last2 = un_snoc (ops_of s2) in
+  lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
+  resolve_conflict_prop last1 last2;
+  lem_foldl init_st (ops_of s1);
+  lem_foldl init_st (ops_of (inverse_st s2));
+  lem_inverse (ops_of lca) (ops_of s2);
+  split_prefix init_st (ops_of lca) (ops_of (inverse_st s2));
+  split_prefix init_st (ops_of lca) (ops_of s1);
+  lem_foldl (v_of lca) (diff (ops_of (inverse_st s2)) (ops_of lca));
+  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))
+
+let linearizable_s1_0 (lca s1 s2:st)
+  : Lemma 
+      (requires is_prefix (ops_of lca) (ops_of s1) /\
+                is_prefix (ops_of lca) (ops_of s2) /\
+                ops_of s1 = ops_of lca /\
+                concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+                (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
+      (ensures v_of s2 == concrete_merge (v_of lca) (v_of s1) (v_of s2)) =
+  ()
+  
+let linearizable_s2_0 (lca s1 s2:st)
+  : Lemma 
+      (requires is_prefix (ops_of lca) (ops_of s1) /\
+                is_prefix (ops_of lca) (ops_of s2) /\
+                Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+                ops_of s2 = ops_of lca /\
+                concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+                (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
+      (ensures v_of s1 == concrete_merge (v_of lca) (v_of s1) (v_of s2)) =
+  ()
+
+let linearizable_s2_gt0 (lca s1 s2:st)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
+                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
+                    is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+                    (let _, last1 = un_snoc (ops_of s1) in
+                     let _, last2 = un_snoc (ops_of s2) in
+                     last (resolve_conflict last1 last2) <> last1))
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                   concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
+                   (concrete_merge (v_of lca) (v_of s1) (v_of s2) ==
+                   (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)))) =
+  let _, last1 = un_snoc (ops_of s1) in
+  let p2, last2 = un_snoc (ops_of s2) in
+  inverse_helper init_st p2 last2;
+  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2); 
+  assert (forall k v. mem_kv k v (concrete_merge (v_of lca) (v_of s1) (v_of s2)) <==>
+                 mem_kv k v (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) \/ (k = key last2 /\ v = value last2));
+  assert (forall k v. mem_kv k v (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2) <==>
+                 mem_kv k v (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) \/ (k = key last2 /\ v = value last2));
+  assert (forall k v. mem_kv k v (concrete_merge (v_of lca) (v_of s1) (v_of s2)) <==>
+                 mem_kv k v (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2));
+  ()
+
+let linearizable_gt0 (lca s1 s2:st)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
+                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\ 
+                    (let _, last1 = un_snoc (ops_of s1) in
+                     let _, last2 = un_snoc (ops_of s2) in
+                     (last (resolve_conflict last1 last2) = last1 ==>
+                           is_prefix (ops_of lca) (ops_of (inverse_st s1)) /\
+                           concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of s2)) /\
+                     (last (resolve_conflict last1 last2) <> last1 ==>
+                           is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
+                           concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)))) /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+          (ensures (let _, last1 = un_snoc (ops_of s1) in
+                    let _, last2 = un_snoc (ops_of s2) in
+                    (last (resolve_conflict last1 last2) = last1 ==>
+                      concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1 /\
+                      (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1) ==
+                       concrete_merge (v_of lca) (v_of s1) (v_of s2)) /\
+                    (last (resolve_conflict last1 last2) <> last1 ==>
+                      concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
+                      (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2) ==
+                       concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = 
+  let _,last1 = un_snoc (ops_of s1) in
+  let p2,last2 = un_snoc (ops_of s2) in
+  lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
+  resolve_conflict_prop last1 last2;
+  linearizable_s2_gt0 lca s1 s2
+
+let convergence (lca s1 s2 s1':concrete_st)
+  : Lemma (requires concrete_merge_pre lca s1 s2 /\
+                    concrete_merge_pre lca s1' s2 /\
+                    concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
+          (ensures concrete_merge lca s1' s2 == concrete_merge s1 (concrete_merge lca s1 s2) s1') = ()
+#pop-options 
+
