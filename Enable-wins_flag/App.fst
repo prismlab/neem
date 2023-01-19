@@ -38,16 +38,16 @@ let do_s (s:concrete_st_s) (op:log_entry) : concrete_st_s =
   if snd op = Enable then true else false
 
 //equivalence relation between the concrete states of sequential type and MRDT
-let eq (st_s:concrete_st_s) (st:concrete_st) = st_s == snd st
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) = st_s == snd st
 
 //initial states are equivalent
 let initial_eq _
-  : Lemma (ensures eq init_st_s init_st) = ()
+  : Lemma (ensures eq_sm init_st_s init_st) = ()
 
 //equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
-  : Lemma (requires eq st_s st)
-          (ensures eq (do_s st_s op) (do st op)) 
+  : Lemma (requires eq_sm st_s st)
+          (ensures eq_sm (do_s st_s op) (do st op)) 
   = ()
 
 ////////////////////////////////////////////////////////////////
@@ -455,10 +455,11 @@ let linearizable_gt0 (lca s1 s2:st)
     linearizable_s1_gt0 lca s1 s2 else
       linearizable_s2_gt0 lca s1 s2
       
-let convergence (lca s1 s2 s1':concrete_st)
+let convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
   : Lemma (requires concrete_merge_pre lca s1 s2 /\
                     concrete_merge_pre lca s1' s2 /\
+                    concrete_do_pre s1 o /\ s1' == do s1 o /\
                     concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
-          (ensures concrete_merge lca s1' s2 == concrete_merge s1 (concrete_merge lca s1 s2) s1')
+          (ensures concrete_merge lca s1' s2 == concrete_merge s1 (concrete_merge lca s1 s2) s1') 
   = admit () //cannot be proven. concrete_merge is not convergent
   

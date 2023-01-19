@@ -13,15 +13,13 @@ let rec linearizable (lca s1 s2:st)
          is_prefix (ops_of lca) (ops_of s2) /\
          (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
          (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-         (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+         (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+         concrete_merge_pre (v_of lca) (v_of s1) (v_of s2))
       (ensures 
-         concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
          (exists l. interleaving_predicate l lca s1 s2))
       (decreases %[Seq.length (ops_of s1); Seq.length (ops_of s2)])
 
-  = merge_prop lca s1 s2;
-
-    if ops_of s1 = ops_of lca 
+  = if ops_of s1 = ops_of lca 
     then begin
       linearizable_s1_01 lca s1 s2
     end

@@ -35,16 +35,16 @@ let init_st_s = 0
 let do_s (s:concrete_st_s) (op:log_entry) : concrete_st_s = s + 1
 
 //equivalence relation between the concrete states of sequential type and MRDT
-let eq (st_s:concrete_st_s) (st:concrete_st) = st_s == st
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) = st_s == st
 
 //initial states are equivalent
 let initial_eq _
-  : Lemma (ensures eq init_st_s init_st) = ()
+  : Lemma (ensures eq_sm init_st_s init_st) = ()
 
 //equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
-  : Lemma (requires eq st_s st)
-          (ensures eq (do_s st_s op) (do st op)) 
+  : Lemma (requires eq_sm st_s st)
+          (ensures eq_sm (do_s st_s op) (do st op)) 
   = ()
 
 ////////////////////////////////////////////////////////////////
@@ -77,21 +77,6 @@ let concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_m
   : concrete_st = s1 + s2 - lca
 
 #push-options "--z3rlimit 100"
-let merge_prop (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\ 
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
-          (ensures concrete_merge_pre (v_of lca) (v_of s1) (v_of s2)) =
-  lem_foldl init_st (ops_of lca);
-  lem_foldl init_st (ops_of s1); 
-  lem_foldl init_st (ops_of s2);
-  split_prefix init_st (ops_of lca) (ops_of s1);
-  split_prefix init_st (ops_of lca) (ops_of s2);
-  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
-  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
-
 let merge_inv_prop (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -176,10 +161,11 @@ let linearizable_gt0 (lca s1 s2:st)
   assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2);
   lem_add (v_of lca) (v_of s1) (v_of s2)
 
-let convergence (lca s1 s2 s1':concrete_st)
+let convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
   : Lemma (requires concrete_merge_pre lca s1 s2 /\
                     concrete_merge_pre lca s1' s2 /\
+                    concrete_do_pre s1 o /\ s1' == do s1 o /\
                     concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
-          (ensures concrete_merge lca s1' s2 == concrete_merge s1 (concrete_merge lca s1 s2) s1')
+          (ensures concrete_merge lca s1' s2 == concrete_merge s1 (concrete_merge lca s1 s2) s1') 
   = ()
 #pop-options

@@ -67,17 +67,16 @@ let init_st_s = []
 let do_s (s:concrete_st_s) (op:log_entry) : concrete_st_s = op::s
 
 //equivalence relation between the concrete states of sequential type and MRDT
-let eq (st_s:concrete_st_s) (st:concrete_st) =
-  st_s == st
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) = st_s == st
 
 //initial states are equivalent
 let initial_eq _
-  : Lemma (ensures eq init_st_s init_st) = ()
+  : Lemma (ensures eq_sm init_st_s init_st) = ()
 
 //equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
-  : Lemma (requires eq st_s st /\ concrete_do_pre st op)
-          (ensures eq (do_s st_s op) (do st op)) 
+  : Lemma (requires eq_sm st_s st /\ concrete_do_pre st op)
+          (ensures eq_sm (do_s st_s op) (do st op)) 
   = ()
 
 ////////////////////////////////////////////////////////////////
@@ -313,7 +312,7 @@ let linearizable_s1_0 (lca s1 s2:st)
   = linearizable_s1_0' lca s1 s2;
     lem_length (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2));
     lem_equal (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2))
-      
+  
 let linearizable_s2_0' (lca s1 s2:st)
   : Lemma 
       (requires concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
@@ -388,7 +387,7 @@ let linearizable_s1_gt02 (lca s1 s2:st)
                      last (resolve_conflict last1 last2) = last1))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                    (forall id. mem_id_s id (v_of s2) ==> lt id (fst last1)))) =
-  let _, last1 = un_snoc (ops_of s1) in
+  let _, last1 = un_snoc (ops_of s1) in 
   let _, last2 = un_snoc (ops_of s2) in
   lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
   resolve_conflict_prop last1 last2; 
@@ -631,19 +630,21 @@ let linearizable_gt0 (lca s1 s2:st)
     linearizable_s1_gt0 lca s1 s2 else
       linearizable_s2_gt0 lca s1 s2
 
-let lem_mem (lca s1 s2 s1':concrete_st)
+let lem_mem (lca s1 s2 s1':concrete_st) (o:log_entry)
   : Lemma (requires concrete_merge_pre lca s1 s2 /\
                     concrete_merge_pre lca s1' s2 /\
+                    concrete_do_pre s1 o /\ s1' == do s1 o /\
                     concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
           (ensures (forall e. L.mem e (concrete_merge lca s1' s2) <==> L.mem e (concrete_merge s1 (concrete_merge lca s1 s2) s1'))) 
   = ()
 
-let convergence (lca s1 s2 s1':concrete_st)
+let convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
   : Lemma (requires concrete_merge_pre lca s1 s2 /\
                     concrete_merge_pre lca s1' s2 /\
+                    concrete_do_pre s1 o /\ s1' == do s1 o /\
                     concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
-          (ensures concrete_merge lca s1' s2 == concrete_merge s1 (concrete_merge lca s1 s2) s1') = 
-  lem_mem lca s1 s2 s1';
+          (ensures concrete_merge lca s1' s2 == concrete_merge s1 (concrete_merge lca s1 s2) s1') =
+  lem_mem lca s1 s2 s1' o;
   lem_length (concrete_merge lca s1' s2) (concrete_merge s1 (concrete_merge lca s1 s2) s1');
   lem_equal (concrete_merge lca s1' s2) (concrete_merge s1 (concrete_merge lca s1 s2) s1')
 #pop-options
