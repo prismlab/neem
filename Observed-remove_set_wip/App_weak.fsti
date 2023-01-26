@@ -175,6 +175,13 @@ let rec existsb (#a:eqtype) (f:a -> bool) (l:seq a)
   |0 -> false
   |_ -> if f (head l) then true else existsb f (tail l)
 
+// returns position of op in a log of operations
+let rec pos (op:log_entry) (l:log{mem op l}) : Tot (n:nat{n >= 0 /\ n < length l})
+    (decreases length l) =
+  match length l with
+  |1 -> 0
+  |_ -> if head l = op then 0 else 1 + pos op (tail l)
+
 // p is a prefix of l
 let is_prefix (p:log) (l:log) : Tot prop =
   Seq.length l >= Seq.length p /\ Seq.equal p (Seq.slice l 0 (Seq.length p))
@@ -182,13 +189,6 @@ let is_prefix (p:log) (l:log) : Tot prop =
 // s is a suffix of l
 let is_suffix (s:log) (l:log) : Tot prop =
   Seq.length l >= Seq.length s /\ Seq.equal s (Seq.slice l (Seq.length l - Seq.length s) (Seq.length l))
-
-// returns position of op in a log of operations
-let rec pos (op:log_entry) (l:log{mem op l}) : Tot (n:nat{n >= 0 /\ n < length l})
-    (decreases length l) =
-  match length l with
-  |1 -> 0
-  |_ -> if head l = op then 0 else 1 + pos op (tail l)
 
 // l = (snoc (fst ps) op) ++ snd ps
 #push-options "--z3rlimit 30"
@@ -569,45 +569,17 @@ let lem_equal_distinct (a b:log)
   : Lemma (requires distinct_ops a /\ a = b)
           (ensures distinct_ops b) = ()
 
-let rec lem_distinct_count_le1 (a:log)
-  : Lemma (requires distinct_ops a)
-          (ensures (forall e. count e a <= 1)) (decreases length a) = admit();
-  match length a with
-  |0 -> ()
-  |1 -> ()
-  |_ -> lem_distinct_count_le1 (tail a)
-
 let lem_mem_count_gt0 (a:log) (op:log_entry)
   : Lemma (requires distinct_ops a /\ mem op a)
           (ensures count op a = 1) (decreases length a) =
   lem_distinct_count_le1 a
-
-let lem_cons_append (a a1 b b1:log) (op:log_entry)
-  : Lemma (requires ((snoc a op) ++ a1 = (snoc b op) ++ b1) /\
-                      count op (snoc a op ++ a1) = 1 /\
-                      count op (snoc b op ++ b1) = 1)
-          (ensures a1 = b1) = admit()
 
 let lem_suf_equal (lca s1:log) (op:log_entry)
   : Lemma (requires is_prefix lca s1 /\ mem op (diff s1 lca) /\ distinct_ops s1)
           (ensures (let _, suf = pre_suf s1 op in
                     let _, sufd = pre_suf (diff s1 lca) op in
                     suf = sufd))
-  = lem_diff s1 lca;
-    let pre, suf = pre_suf s1 op in 
-    let pred, sufd = pre_suf (diff s1 lca) op in
-    assert ((snoc pre op) ++ suf = lca ++ ((snoc pred op) ++ sufd));
-    append_assoc lca pred sufd;
-    append_assoc lca (snoc pred op) sufd;
-    assert ((snoc pre op) ++ suf = (lca ++ snoc pred op) ++ sufd);
-    append_assoc lca pred (create 1 op);
-    assert (snoc pre op ++ suf = snoc (lca ++ pred) op ++ sufd); 
-    lem_equal_distinct s1 (snoc pre op ++ suf);
-    assert (distinct_ops (snoc pre op ++ suf));
-    lem_mem_count_gt0 (snoc pre op ++ suf) op;
-    assert (count op (snoc pre op ++ suf) = 1);
-    lem_mem_count_gt0 (snoc (lca ++ pred) op ++ sufd) op;
-    lem_cons_append pre suf (lca ++ pred) sufd op
+  = admit()
                      
 let un_snoc_prop (a:log)
   : Lemma (requires distinct_ops a /\ length a > 0)
@@ -669,18 +641,21 @@ let interleaving_predicate (l:log) (lca s1:st)
   foldl_prop (v_of lca) l /\
   eq (seq_foldl (v_of lca) l)
      (concrete_merge (v_of lca) (v_of s1) (v_of s2))
-     
+
+type common_pre (lca s1 s2:st) =
+  is_prefix (ops_of lca) (ops_of s1) /\
+  is_prefix (ops_of lca) (ops_of s2) /\
+  Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+  Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
+  concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+  (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))
+  
 // concrete_merge_pre is true after performing inverse
 #push-options "--z3rlimit 100"
 val merge_inv_prop (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+  : Lemma (requires common_pre lca s1 s2)
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let _, last2 = un_snoc (ops_of s2) in
                     (exists_triple last1 (diff (ops_of s2) (ops_of lca)) ==> 
@@ -752,10 +727,7 @@ let linearizable_s2_01 (lca s1 s2:st)
 // taking inverse on any one branch and applying the operation again is equivalent to
 // concrete merge
 val linearizable_gt0 (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\ 
+  : Lemma (requires common_pre lca s1 s2 /\ 
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      
@@ -780,12 +752,7 @@ val linearizable_gt0 (lca s1 s2:st)
                            
                      (last (resolve_conflict last1 last2) <> last1 ==>
                            is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
-                           concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2))))) /\
-                           
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+                           concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2))))))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let _, last2 = un_snoc (ops_of s2) in
                     
@@ -878,19 +845,12 @@ let interleaving_helper_inv2 (lca s1 s2 l':log)
   
 #push-options "--z3rlimit 500"
 let interleaving_s1_inv (lca s1 s2:st) (l':log)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\ 
+  : Lemma (requires common_pre lca s1 s2 /\ 
                     not (exists_triple (snd (un_snoc (ops_of s1))) (diff (ops_of s2) (ops_of lca))) /\
                     not (exists_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca))) /\
                     is_prefix (ops_of lca) (ops_of (inverse_st s1)) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of s2) /\
                     interleaving_predicate l' lca (inverse_st s1) s2 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) = last1))
@@ -911,19 +871,12 @@ let interleaving_s1_inv (lca s1 s2:st) (l':log)
   assert (interleaving_predicate l lca s1 s2); ()
 
 let interleaving_s2_inv (lca s1 s2:st) (l':log)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
+  : Lemma (requires common_pre lca s1 s2 /\
                     is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
                     not (exists_triple (snd (un_snoc (ops_of s1))) (diff (ops_of s2) (ops_of lca))) /\
                     not (exists_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca))) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)) /\
                     interleaving_predicate l' lca s1 (inverse_st s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      last (resolve_conflict last1 last2) <> last1))
@@ -953,12 +906,7 @@ let rec lem_app (l a b:log)
        lem_app (tail l) a b
  
 let interleaving_s2_inv_comm (lca s1 s2:st) (l':log)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+  : Lemma (requires common_pre lca s1 s2 /\
                     (let _, last1 = un_snoc (ops_of s1) in
                     exists_triple last1 (diff (ops_of s2) (ops_of lca)) /\
                     (let (pre2, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
@@ -967,10 +915,7 @@ let interleaving_s2_inv_comm (lca s1 s2:st) (l':log)
                     (let inv2 = inverse_st_op s2 op2 in
                     is_prefix (ops_of lca) (ops_of inv2) /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2) /\
-                    interleaving_predicate l' lca s1 inv2))) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+                    interleaving_predicate l' lca s1 inv2))))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let (_, op2, _) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
                     let l = Seq.snoc l' op2 in
@@ -981,28 +926,24 @@ let interleaving_s2_inv_comm (lca s1 s2:st) (l':log)
   lem_suf_equal (ops_of lca) (ops_of s2) op2;
   lem_inverse_op (ops_of lca) (ops_of s2) op2; 
   let inv2 = inverse_st_op s2 op2 in
-  //assert (ops_of inv2 = ops_of lca ++ (pre2 ++ suf2));
+  //assert (ops_of inv2 = ops_of lca ++ (pre2 ++ suf2)); 
   lem_diff (ops_of inv2) (ops_of lca);
   lem_app (ops_of lca) (pre2 ++ suf2) (diff (ops_of inv2) (ops_of lca));
-  //assert (diff (ops_of inv2) (ops_of lca) = (pre2 ++ suf2));
+  //assert (diff (ops_of inv2) (ops_of lca) = (pre2 ++ suf2)); 
   let l = Seq.snoc l' op2 in 
   assert (is_interleaving l' (diff (ops_of s1) (ops_of lca)) (pre2 ++ suf2)); 
-  interleaving_helper_inv2_comm (ops_of lca) (ops_of s1) (ops_of s2) l'; 
+  interleaving_helper_inv2_comm (ops_of lca) (ops_of s1) (ops_of s2) l';
   linearizable_gt0 lca s1 s2;
   lem_do (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) (seq_foldl (v_of lca) l') op2;
-  inverse_helper (v_of lca) l' op2;
+  inverse_helper (v_of lca) l' op2; 
+  assert (foldl_prop (v_of lca) l); 
   eq_is_equiv (seq_foldl (v_of lca) l) (do (seq_foldl (v_of lca) l') op2);
   transitive (seq_foldl (v_of lca) l) (do (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2)
              (concrete_merge (v_of lca) (v_of s1) (v_of s2));
   assert (interleaving_predicate l lca s1 s2); ()           
 
 let interleaving_s1_inv_comm (lca s1 s2:st) (l':log)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    is_prefix (ops_of lca) (ops_of (inverse_st s1)) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+  : Lemma (requires common_pre lca s1 s2 /\
                     not (exists_triple (snd (un_snoc (ops_of s1))) (diff (ops_of s2) (ops_of lca))) /\
                     exists_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca)) /\
                     (let (pre1, op1, suf1) = find_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca)) in
@@ -1011,10 +952,7 @@ let interleaving_s1_inv_comm (lca s1 s2:st) (l':log)
                     (let inv1 = inverse_st_op s1 op1 in
                     is_prefix (ops_of lca) (ops_of inv1) /\
                     concrete_merge_pre (v_of lca) (v_of inv1) (v_of s2) /\
-                    interleaving_predicate l' lca inv1 s2)) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+                    interleaving_predicate l' lca inv1 s2)))
           (ensures (let (_, op1, _) = find_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca)) in
                     let l = Seq.snoc l' op1 in
                     interleaving_predicate l lca s1 s2 /\
@@ -1042,14 +980,7 @@ let interleaving_s1_inv_comm (lca s1 s2:st) (l':log)
 
 #push-options "--z3rlimit 500"
 let linearizable_s1_gt0_pre (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                   (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+  : Lemma (requires common_pre lca s1 s2 /\
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
@@ -1071,14 +1002,7 @@ let linearizable_s1_gt0_pre (lca s1 s2:st)
   ()
 
 let linearizable_s2_gt0_pre (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\ 
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                   (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+  : Lemma (requires common_pre lca s1 s2 /\
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      not (exists_triple (snd (un_snoc (ops_of s1))) (diff (ops_of s2) (ops_of lca))) /\
@@ -1100,14 +1024,7 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
   ()
 
 let linearizable_s2_gt0_pre_comm (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                   (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+  : Lemma (requires common_pre lca s1 s2 /\
                     (let _, last1 = un_snoc (ops_of s1) in
                     exists_triple last1 (diff (ops_of s2) (ops_of lca))))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
@@ -1132,14 +1049,7 @@ let linearizable_s2_gt0_pre_comm (lca s1 s2:st)
     ()
 
 let linearizable_s1_gt0_pre_comm (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                   (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+  : Lemma (requires common_pre lca s1 s2 /\
                     not (exists_triple (snd (un_snoc (ops_of s1))) (diff (ops_of s2) (ops_of lca))) /\
                     exists_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca)))
           (ensures (let (_, op1, suf1) = find_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca)) in 
