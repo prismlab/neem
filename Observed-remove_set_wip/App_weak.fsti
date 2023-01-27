@@ -70,8 +70,8 @@ let rec lemma_append_count_id (lo:log) (hi:log)
 let distinct_invert_append (a b:log)
   : Lemma
       (requires distinct_ops (a ++ b))
-      (ensures distinct_ops a /\ distinct_ops b /\ (forall id. mem_id id a ==> not (mem_id id b)) /\
-               (forall id. mem_id id (a ++ b) <==> (mem_id id a \/ mem_id id b)))
+      (ensures distinct_ops a /\ distinct_ops b /\ 
+               (forall id. mem_id id a ==> not (mem_id id b)))
       [SMTPat (distinct_ops (a ++ b))]
   = lemma_append_count_id a b
 
@@ -211,10 +211,21 @@ let rec pre_suf_prop1 (l:log) (op:log_entry)
   : Lemma (requires mem op l)
           (ensures (let ps = pre_suf1 l op in
                     Seq.equal l (Seq.snoc (fst ps) op ++ (snd ps)))) (decreases length l) =
+    
     match length l with
     |1 -> ()
     |_ -> if head l = op then () 
             else pre_suf_prop1 (tail l) op
+
+let pre_suf_prop2 (l:log) (op:log_entry)
+  : Lemma (requires mem op l)
+          (ensures (let ps = pre_suf1 l op in
+                    (forall e. mem e l <==> mem e (fst ps) \/ e = op \/ mem e (snd ps)))) =
+  let ps = pre_suf1 l op in
+  pre_suf_prop1 l op;
+  lemma_mem_snoc (fst ps) op;
+  lemma_mem_append (snoc (fst ps) op) (snd ps)
+
 #pop-options
 
 let distinct_append (a b:log)
@@ -224,6 +235,13 @@ let distinct_append (a b:log)
                    (forall id. mem_id id (a ++ b) <==> mem_id id a \/ mem_id id b)) =
   lemma_append_count_id a b
 
+let rec not_id_not_ele (op:log_entry) (l:log)
+  : Lemma (requires not (mem_id (fst op) l))
+          (ensures not (mem op l)) (decreases length l) =
+  if length l = 0 then ()
+    else if head l = op then ()
+      else not_id_not_ele op (tail l)
+      
 #push-options "--z3rlimit 30"
 let lemma_mem_snoc_id (l:log) (op:log_entry)
   : Lemma (requires distinct_ops l /\ not (mem_id (fst op) l))
@@ -238,9 +256,11 @@ let pre_suf (l:log) (op:log_entry{mem op l})
                     is_prefix (fst ps) l /\ is_suffix (snd ps) l /\ 
                     length l = length (fst ps) + 1 + length (snd ps) /\
                     Seq.equal l (Seq.snoc (fst ps) op ++ (snd ps)) /\
-                    l = (Seq.snoc (fst ps) op ++ (snd ps))}) =
+                    l = (Seq.snoc (fst ps) op ++ (snd ps)) /\
+                    (forall e. mem e l <==> mem e (fst ps) \/ e = op \/ mem e (snd ps))}) =
     let r =  pre_suf1 l op in
     pre_suf_prop1 l op;
+    pre_suf_prop2 l op;
     r
 
 let lem_id (l p s :log) (o_id:nat)
@@ -251,7 +271,7 @@ let lem_id (l p s :log) (o_id:nat)
           (ensures (forall id. mem_id id (p ++ s) <==> mem_id id l /\ id <> o_id))
    = ()
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 200"
 let pre_suf_prop (l:log) (op:log_entry)
   : Lemma (requires distinct_ops l /\ mem op l)
           (ensures (let ps = pre_suf l op in
@@ -334,9 +354,6 @@ let find_triple (last_op:log_entry) (l:log{(exists_triple last_op l)})
                                 commutative_seq (snd_t t) (thr_t t)}) =
   let op = find_op last_op l l in
   let pre, suf = pre_suf l op in
-  assert (not (commutative last_op op) /\
-          last (resolve_conflict last_op op) = op /\
-          commutative_seq op suf);
   (pre, op, suf)
 
 // l is interleaving of l1 and l2
@@ -400,8 +417,9 @@ val concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_m
 // s1 - lca
 let diff (s1:log) (lca:log{is_prefix lca s1}) 
   : Tot (l:log{(length s1 = length lca + length l) /\ (s1 = lca ++ l) /\
-                (forall e. mem e l ==> mem e s1) /\
-                (forall op. mem op l ==> length s1 > length lca)}) =
+                (forall e. mem e s1 <==> (mem e lca \/ mem e l)) /\
+                (forall op. mem op l ==> length s1 > length lca) /\
+                is_suffix l s1}) =
   let s = snd (split s1 (length lca)) in
   lemma_split s1 (length lca);
   lemma_mem_append lca s;
@@ -414,7 +432,7 @@ let lem_diff (s1 l:log)
   = let s = snd (split s1 (length l)) in
     lemma_split s1 (length l);
     lemma_append_count_id l s
-
+    
 let rec split_prefix (s:concrete_st) (l:log) (a:log)
   : Lemma (requires is_prefix l a /\ foldl_prop s a)
           (ensures foldl_prop s l /\ foldl_prop (seq_foldl s l) (diff a l) /\
@@ -515,17 +533,125 @@ let lem_equal_distinct (a b:log)
   : Lemma (requires distinct_ops a /\ a = b)
           (ensures distinct_ops b) = ()
 
-let lem_mem_count_gt0 (a:log) (op:log_entry)
-  : Lemma (requires distinct_ops a /\ mem op a)
-          (ensures count op a = 1) (decreases length a) =
-  lem_distinct_count_le1 a
+let rec mem_ele_id (op:log_entry) (l:log)
+  : Lemma (requires mem op l)
+          (ensures mem_id (fst op) l) (decreases length l) =
+  if head l = op then ()
+    else mem_ele_id op (tail l)
+
+(*let rec not_id_not_ele (op:log_entry) (l:log)
+  : Lemma (requires not (mem_id (fst op) l))
+          (ensures not (mem op l)) (decreases length l) =
+  if length l = 0 then ()
+    else if head l = op then ()
+      else not_id_not_ele op (tail l)*)
+
+let rec lem_count_1 (a a1 b b1:log) (op:log_entry)
+  : Lemma (requires (snoc a op ++ a1 = snoc b op ++ b1) /\ 
+                     not (mem_id (fst op) a) /\ not (mem_id (fst op) a1) /\
+                     not (mem_id (fst op) b) /\ not (mem_id (fst op) b1) /\
+                     count_id (fst op) (snoc a op ++ a1) = 1)
+          (ensures length a1 = length b1) (decreases length a) =
+  match length a with
+  |0 -> lemma_empty a;
+       append_assoc a (create 1 op) a1;
+       append_empty_l (cons op a1);
+       lemma_append_inj (snoc a op) a1 (snoc b op) b1
+  |_ -> lemma_eq_intro (tail (snoc a op ++ a1)) (snoc (tail a) op ++ a1); 
+       lemma_eq_intro (tail (snoc b op ++ b1)) (snoc (tail b) op ++ b1); 
+       lem_count_1 (tail a) a1 (tail b) b1 op
+
+let append_cons_snoc1 (u: log) (x:log_entry) (v:log)
+    : Lemma (equal (u ++ (snoc v x)) (snoc (u ++ v) x)) = ()
+
+let rec count_1 (l:log)
+  : Lemma (requires distinct_ops l)
+          (ensures (forall id. mem_id id l ==> count_id id l = 1)) (decreases length l) =
+  match length l with
+  |0 -> ()
+  |_ -> count_1 (tail l)
+
+let not_mem_id (a:log) (op:log_entry)
+  : Lemma (requires (forall id. mem_id id a ==> not (mem_id id (create 1 op))))
+          (ensures not (mem_id (fst op) a)) = ()
+
+let lemma_mem_snoc1 (l:log) (op:log_entry)
+  : Lemma (ensures (forall id. mem_id id (snoc l op) <==> mem_id id l \/ id = fst op)) = 
+  lemma_append_count_id l (Seq.create 1 op)
+
+let not_mem_id1 (a:log) (op:log_entry) (b:log)
+  : Lemma (requires (forall id. mem_id id (snoc a op) ==> not (mem_id id b)))
+          (ensures  not (mem_id (fst op) b)) =
+  lemma_append_count_id a (Seq.create 1 op)
+
+let lem_not_append (a b:log) (id:nat)
+  : Lemma (requires not (mem_id id a) /\ not (mem_id id b) /\ distinct_ops a /\ distinct_ops b)
+          (ensures not (mem_id id (a ++ b))) =
+ lemma_append_count_id a b          
+
+#push-options "--z3rlimit 200"
+let lem_suf_equal1 (lca s1:log) (op:log_entry)
+  : Lemma (requires is_prefix lca s1 /\ mem op (diff s1 lca) /\ distinct_ops s1)
+          (ensures (let pre, suf = pre_suf s1 op in
+                    not (mem_id (fst op) pre) /\
+                    not (mem_id (fst op) suf))) =
+  let pre, suf = pre_suf s1 op in
+  pre_suf_prop s1 op;
+  distinct_invert_append (snoc pre op) suf;
+  distinct_invert_append pre (create 1 op);
+  not_mem_id pre op;
+  lemma_mem_snoc1 pre op
+
+let lem_suf_equal2 (lca s1:log) (op:log_entry)
+  : Lemma (requires is_prefix lca s1 /\ mem op (diff s1 lca) /\ distinct_ops s1)
+          (ensures (let pred, sufd = pre_suf (diff s1 lca) op in
+                    not (mem_id (fst op) pred) /\
+                    not (mem_id (fst op) sufd) /\
+                    not (mem_id (fst op) (lca ++ pred)))) =
+    distinct_invert_append lca (diff s1 lca);
+    mem_ele_id op (diff s1 lca);
+    lem_diff s1 lca;
+    let pred, sufd = pre_suf (diff s1 lca) op in
+    pre_suf_prop (diff s1 lca) op;
+    distinct_invert_append (snoc pred op) sufd;
+    distinct_invert_append pred (create 1 op);
+    not_mem_id pred op;
+    lemma_mem_snoc1 pred op;
+    lem_not_append lca pred (fst op)
+
+let lem_suf_equal3 (lca s1:log) (op:log_entry)
+  : Lemma (requires is_prefix lca s1 /\ mem op (diff s1 lca) /\ distinct_ops s1)
+          (ensures (let pre, suf = pre_suf s1 op in 
+                    let pred, sufd = pre_suf (diff s1 lca) op in
+                   count_id (fst op) (snoc pre op ++ suf) = 1 /\
+                   snoc pre op ++ suf = snoc (lca ++ pred) op ++ sufd)) =
+  count_1 s1;
+  let pre, suf = pre_suf s1 op in
+  let pred, sufd = pre_suf (diff s1 lca) op in
+  pre_suf_prop s1 op;
+  pre_suf_prop (diff s1 lca) op;
+  assert (snoc pre op ++ suf = lca ++ ((snoc pred op) ++ sufd)); 
+  append_assoc lca (snoc pred op) sufd;
+  assert (lca ++ ((snoc pred op) ++ sufd) = (lca ++ snoc pred op) ++ sufd);  
+  append_cons_snoc1 lca op pred; 
+  lemma_eq_elim (lca ++ (snoc pred op)) (snoc (lca ++ pred) op);
+  assert ((lca ++ (snoc pred op)) = (snoc (lca ++ pred) op));
+  assert (lca ++ ((snoc pred op) ++ sufd) = snoc (lca ++ pred) op ++ sufd); 
+  assert (snoc pre op ++ suf = snoc (lca ++ pred) op ++ sufd);
+  ()
 
 let lem_suf_equal (lca s1:log) (op:log_entry)
   : Lemma (requires is_prefix lca s1 /\ mem op (diff s1 lca) /\ distinct_ops s1)
           (ensures (let _, suf = pre_suf s1 op in
                     let _, sufd = pre_suf (diff s1 lca) op in
                     suf = sufd))
-  = admit()
+  = let pre, suf = pre_suf s1 op in
+    let pred, sufd = pre_suf (diff s1 lca) op in
+    lem_suf_equal1 lca s1 op;
+    lem_suf_equal2 lca s1 op;
+    lem_suf_equal3 lca s1 op;
+    lem_count_1 pre suf (lca ++ pred) sufd op;
+    lemma_append_inj (snoc pre op) suf (snoc (lca ++ pred) op) sufd
                      
 let un_snoc_prop (a:log)
   : Lemma (requires distinct_ops a /\ length a > 0)
