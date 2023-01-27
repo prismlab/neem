@@ -291,58 +291,11 @@ let fst_t (f,_,_) = f
 let snd_t (_,s,_) = s
 let thr_t (_,_,t) = t
 
-let lem_gt_one (l:log{length l > 1})
-    : Lemma (ensures length (fst (un_snoc l)) > 0) = ()
-
-let lem_mem_front (l l1:log)
-  : Lemma (requires length l > 1 /\ (forall e. mem e l ==> mem e l1))
-          (ensures (let f = fst (un_snoc l) in (forall e. mem e f ==> mem e l1))) 
-  = let f,t = un_snoc l in
-    lemma_append_cons f (cons t empty);
-    lemma_mem_append f (cons t empty);
-    lemma_split l (length l - 1); 
-    assert (forall e. mem e f ==> mem e l); ()
-
-let lem_mem_last (l l1:log)
-  : Lemma (requires length l > 0 /\ (forall e. mem e l ==> mem e l1))
-          (ensures (let f,t = un_snoc l in mem t l /\ mem t l1)) 
-  = let f,t = un_snoc l in
-    lemma_mem_append f (cons t empty);
-    lemma_split l (length l - 1); 
-    assert (mem t l); ()
-
-let lem_ge_2 (l:log)
-  : Lemma (requires length l > 0 /\ length l <> 1)
-          (ensures length l > 1) = ()
-
-let find_op_len1 (last_op:log_entry) (l l1:log)
-  : Pure log_entry
-         (requires length l = 1 /\
-                   (exists op. mem op l /\ mem op l1 /\ not (commutative last_op op) /\
-                          last (resolve_conflict last_op op) = op /\
-                          (let _, suf = pre_suf l1 op in
-                          commutative_seq op suf)))
-         (ensures (fun op -> (exists pre. (forall e. mem e pre ==> mem e l) /\
-                          mem op pre) /\ mem op l1 /\ not (commutative last_op op) /\
-                          last (resolve_conflict last_op op) = op /\
-                          (let _, suf = pre_suf l1 op in
-                          commutative_seq op suf))) =
-  last l
-  
-let lem_mem_un_snoc (l:log)
-  : Lemma (requires length l > 1)
-          (ensures (let f = fst (un_snoc l) in (forall e. mem e f ==> mem e l))) 
-  = let f,t = un_snoc l in
-    lemma_append_cons f (cons t empty);
-    lemma_mem_append f (cons t empty);
-    lemma_split l (length l - 1); 
-    assert (forall e. mem e f ==> mem e l); ()
-
 // returns an operation op in l such that
 // 1. last_op and op are non-commutative
 // 2. op is commutative with all the operations in the suffix of l
 // 3. op should be applied after last_op according to resolve_conflict
-#push-options "--z3rlimit 500 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200" 
 let rec find_op (last_op:log_entry) (l l1:log)
   : Pure log_entry
          (requires length l > 0 /\ length l1 > 0 /\
@@ -350,28 +303,21 @@ let rec find_op (last_op:log_entry) (l l1:log)
                           last (resolve_conflict last_op op) = op /\
                           (let _, suf = pre_suf l1 op in
                           commutative_seq op suf)))
-         (ensures (fun op -> (exists pre. (forall e. mem e pre ==> mem e l) /\
-                          mem op pre) /\ mem op l1 /\ not (commutative last_op op) /\
+         (ensures (fun op -> mem op l /\ mem op l1 /\ not (commutative last_op op) /\
                           last (resolve_conflict last_op op) = op /\
                           (let _, suf = pre_suf l1 op in
                           commutative_seq op suf))) (decreases length l) =
 
  match length l with
-  |1 -> find_op_len1 last_op l l1
-  |_ -> lem_ge_2 l;
-       let pre, op = un_snoc l in
+  |1 -> last l
+  |_ -> let pre, op = un_snoc l in
        if (mem op l1 && not (commutative last_op op) &&
            last (resolve_conflict last_op op) = op &&
            (let _, suf = pre_suf l1 op in
             commutative_seq op suf)) then op 
-        else (lem_gt_one l;
-              lem_mem_un_snoc l;
-              assume (exists op1. mem op1 pre /\ not (commutative last_op op1) /\
-                      last (resolve_conflict last_op op1) = op1 /\
-                      (let _, suf = pre_suf l1 op1 in
-                      commutative_seq op1 suf));
+        else (lemma_mem_snoc pre op;
               find_op last_op pre l1)
-
+              
 // returns a triple such that 
 // 1. l = (snoc prefix op) ++ suffix
 // 2. last_op and op are non-commutative
@@ -515,7 +461,7 @@ val lem_seq_foldl_op (x:concrete_st) (l:log) (op:log_entry)
                     (let _, suf = pre_suf l op in commutative_seq op suf))
           (ensures (let p,s = pre_suf l op in
                       foldl_prop x (p ++ s) /\ 
-                      concrete_do_pre (seq_foldl x (p ++ s)) op /\
+                      concrete_do_pre (seq_foldl x (p ++ s)) op /\                 
                       eq (seq_foldl x l) (do (seq_foldl x (p ++ s)) op)))
           (decreases length l)
 
@@ -760,6 +706,7 @@ val linearizable_gt0 (lca s1 s2:st)
                       (let (pre2, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
                        (let inv2 = inverse_st_op s2 op2 in
                        concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2 /\
+                       
                        eq (do (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2)
                           (concrete_merge (v_of lca) (v_of s1) (v_of s2))))) /\
 
