@@ -153,6 +153,11 @@ type st = s:st0{valid_st s}
 //operations x and y are commutative
 val commutative (x y:log_entry) :  bool
 
+val comm_symmetric (x y:log_entry) 
+  : Lemma (requires commutative x y)
+          (ensures commutative y x)
+          [SMTPat (commutative x y)]
+          
 // if x and y are commutative ops, applying them in any order should give equivalent results
 val commutative_prop (x y:log_entry) 
   : Lemma (requires commutative x y /\ (forall s. foldl_prop s (cons x (cons y empty)) /\
@@ -164,10 +169,34 @@ let rec forallb (#a:eqtype) (f:a -> bool) (l:seq a)
   match length l with
   |0 -> true
   |_ -> if f (head l) then forallb f (tail l) else false
-  
+
 //commutativity for a sequence of operation
 let commutative_seq (x:log_entry) (l:log) : bool =
   forallb (fun e -> commutative x e) l
+
+let rec foldl_comm_prop (x:log_entry) (l:log{commutative_seq x l}) : Tot prop (decreases length l) =
+  match length l with
+  |0 -> True
+  |1 -> (forall s. foldl_prop s (cons x (cons (head l) empty)) /\
+             foldl_prop s (cons (head l) (cons x empty)))
+  |_ -> commutative_seq (head l) (tail l) /\ foldl_comm_prop (head l) (tail l)
+
+#push-options "--z3rlimit 200"
+let rec lem_seq_foldl_op1 (x:concrete_st) (suf:log) (op:log_entry)
+  : Lemma (requires //distinct_ops suf /\ distinct_ops (cons op suf) /\ distinct_ops (snoc suf op) /\
+                    foldl_prop x (cons op suf) /\ foldl_prop x (snoc suf op) /\
+                    commutative_seq op suf /\
+                    foldl_comm_prop op suf)
+          (ensures (eq (seq_foldl x (cons op suf)) (seq_foldl x (snoc suf op))))
+          (decreases length suf) = admit();
+  match length suf with
+  |0 -> lemma_empty suf; append_empty_r suf; append_empty_l suf;
+       assume (cons op suf = create 1 op);
+       assume (snoc suf op = create 1 op);
+       eq_is_equiv (seq_foldl x (cons op suf)) (seq_foldl x (snoc suf op))
+  |1 -> assume (commutative op (head suf) /\ commutative (head suf) op);
+       commutative_prop op (head suf); admit()
+  |_ -> lem_seq_foldl_op1 x (tail suf) op
 
 let rec existsb (#a:eqtype) (f:a -> bool) (l:seq a)
   : Tot (b:bool{(exists e. mem e l /\ f e) <==> b = true}) (decreases length l) =
@@ -607,6 +636,7 @@ let lem_suf_equal2 (lca s1:log) (op:log_entry)
           (ensures (let pred, sufd = pre_suf (diff s1 lca) op in
                     not (mem_id (fst op) pred) /\
                     not (mem_id (fst op) sufd) /\
+                    not (mem_id (fst op) lca) /\
                     not (mem_id (fst op) (lca ++ pred)))) =
     distinct_invert_append lca (diff s1 lca);
     mem_ele_id op (diff s1 lca);
@@ -618,6 +648,15 @@ let lem_suf_equal2 (lca s1:log) (op:log_entry)
     not_mem_id pred op;
     lemma_mem_snoc1 pred op;
     lem_not_append lca pred (fst op)
+
+let lem_suf_equal2_last (lca s1:log) (op:log_entry)
+  : Lemma (requires is_prefix lca s1 /\ length (diff s1 lca) > 0 /\ distinct_ops s1)
+          (ensures (let _, last = un_snoc s1 in
+                    not (mem_id (fst last) lca))) =
+    distinct_invert_append lca (diff s1 lca); 
+    let pre, lst = un_snoc s1 in
+    lem_diff s1 lca;
+    mem_ele_id lst (diff s1 lca)
 
 let lem_suf_equal3 (lca s1:log) (op:log_entry)
   : Lemma (requires is_prefix lca s1 /\ mem op (diff s1 lca) /\ distinct_ops s1)
@@ -723,7 +762,12 @@ type common_pre (lca s1 s2:st) =
   (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
   (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
   (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))
-  
+
+let id_not_eq (l l1:log) (id id1:nat)
+  : Lemma (requires (forall id. mem_id id l ==> not (mem_id id l1)) /\
+                    mem_id id l /\ mem_id id1 l1)
+          (ensures id <> id1) = ()
+
 // concrete_merge_pre is true after performing inverse
 #push-options "--z3rlimit 100"
 val merge_inv_prop (lca s1 s2:st)
