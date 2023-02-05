@@ -135,6 +135,7 @@ let rec lem_seq_foldl (x:concrete_st) (l:log)
   : Lemma (requires foldl_prop x l)
           (ensures (length l > 0 ==> foldl_prop x (fst (un_snoc l)) /\ 
                    concrete_do_pre (seq_foldl x (fst (un_snoc l))) (last l) /\
+                   foldl_prop (do x (head l)) (tail l) /\
                    (seq_foldl x l = seq_foldl (do x (head l)) (tail l)) /\
                    (seq_foldl x l = do (seq_foldl x (fst (un_snoc l))) (last l))) /\
                    (length l = 0 ==> seq_foldl x l = x))
@@ -162,7 +163,7 @@ let valid_st (s:st0) : prop =
 type st = s:st0{valid_st s}
 
 //operations x and y are commutative
-val commutative (x y:log_entry) :  bool
+val commutative (x y: log_entry) :  bool
 
 val comm_symmetric (x y:log_entry) 
   : Lemma (requires commutative x y)
@@ -171,9 +172,9 @@ val comm_symmetric (x y:log_entry)
           
 // if x and y are commutative ops, applying them in any order should give equivalent results
 val commutative_prop (x y:log_entry) 
-  : Lemma (requires commutative x y /\ (forall s. foldl_prop s (cons x (cons y empty)) /\
-                                            foldl_prop s (cons y (cons x empty))))
-          (ensures (forall s. eq (seq_foldl s (cons x (cons y empty))) (seq_foldl s (cons y (cons x empty)))))
+  : Lemma (requires commutative x y)
+          (ensures (forall s. (foldl_prop s (cons x (cons y empty)) /\ (foldl_prop s (cons y (cons x empty)))) ==>
+                         eq (seq_foldl s (cons x (cons y empty))) (seq_foldl s (cons y (cons x empty)))))
 
 let rec forallb (#a:eqtype) (f:a -> bool) (l:seq a)
   : Tot (b:bool{(forall e. mem e l ==> f e) <==> b = true}) (decreases length l) =
@@ -185,10 +186,13 @@ let rec forallb (#a:eqtype) (f:a -> bool) (l:seq a)
 let commutative_seq (x:log_entry) (l:log) : bool =
   forallb (fun e -> commutative x e) l
 
+let comm_empty_log (x:log_entry) (l:log)
+  : Lemma (ensures length l = 0 ==> commutative_seq x l) = ()
+
 let rec foldl_comm_prop (x:log_entry) (l:log{commutative_seq x l}) : Tot prop (decreases length l) =
   match length l with
   |0 -> True
-  |1 -> (forall s. foldl_prop s (cons x (cons (head l) empty)) /\
+  |1 -> (forall s. foldl_prop s (cons x (cons (head l) empty)) ==>
              foldl_prop s (cons (head l) (cons x empty)))
   |_ -> commutative_seq (head l) (tail l) /\ foldl_comm_prop (head l) (tail l)
 
@@ -286,7 +290,7 @@ let pre_suf (l:log) (op:log_entry{mem op l})
     pre_suf_prop1 l op;
     pre_suf_prop2 l op;
     r
-
+  
 let lem_id (l p s :log) (o_id:nat)
   : Lemma (requires distinct_ops p /\ distinct_ops s /\ distinct_ops (p ++ s) /\ distinct_ops l /\
                     (forall id. mem_id id l <==> mem_id id p \/ id = o_id \/ mem_id id s) /\
@@ -528,7 +532,52 @@ let lem_len_0 (l:log)
   : Lemma (requires length l = 0)
           (ensures (forall x. seq_foldl x l = x)) = ()
 
-val lem_foldl_prop_comm (l:log) (op:log_entry)
+let lem_foldl_prop_comm_2 (l:log) (op:log_entry)
+  : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0)
+          (ensures (let hd = head l in let tl = tail l in
+                   (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+                        foldl_prop x (cons op (create 1 hd)) /\
+                        foldl_prop (seq_foldl x (cons op (create 1 hd))) tl))) = 
+  let hd = head l in let tl = tail l in
+  assert (is_prefix (cons op (create 1 hd)) (cons op l));
+  assert (cons op l = cons op (cons hd tl));
+  assert (cons op (cons hd tl) = cons op (append (create 1 hd) tl)); 
+  append_assoc (create 1 op) (create 1 hd) tl;
+  assert (cons op (append (create 1 hd) tl) = (cons op (create 1 hd)) ++ tl);
+  assert ((cons op (cons hd tl)) = (cons op (create 1 hd)) ++ tl); 
+  assert (cons op l = (cons op (create 1 hd)) ++ tl);  
+  lem_is_diff ((cons op (create 1 hd)) ++ tl) (cons op (create 1 hd)) tl; 
+  assert (tl = diff (cons op l) (cons op (create 1 hd)));
+  split_prefix_forall (cons op (create 1 hd)) (cons op l)
+  
+let lem_foldl_prop_comm_3 (l:log) (op:log_entry)
+  : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0)
+          (ensures (let hd = head l in let tl = tail l in
+                   (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+                        foldl_prop (do x hd) (snoc tl op) /\ 
+                        concrete_do_pre x hd)))
+          (decreases length l) =
+  let tl = tail l in
+  lemma_tail_snoc l op;
+  assert (tail (snoc l op) = snoc tl op);
+  lem_seq_foldl_forall (snoc l op)
+
+val lem_foldl_prop_comm_4 (l:log) (op:log_entry)
+  : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0)
+          (ensures (let hd = head l in let tl = tail l in
+                   (forall x. (foldl_prop x (cons op l) /\ foldl_prop x (snoc l op)) ==>
+                         (foldl_prop x (cons hd (cons op tl)) /\
+                          foldl_prop (do x hd) (cons op tl) /\
+                          foldl_prop (seq_foldl x (cons hd (create 1 op))) tl))))
+
+let lem_foldl_prop_comm_5 (l:log) (op:log_entry)
+  : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0)
+          (ensures (let hd = head l in let tl = tail l in
+                   (forall x. (foldl_prop x (cons op l) /\ foldl_prop x (snoc l op)) ==>
+                         (foldl_prop x (cons hd (create 1 op)))))) =
+  lem_foldl_prop_comm_4 l op
+  
+let lem_foldl_prop_comm (l:log) (op:log_entry)
   : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0)
           (ensures (let hd = head l in let tl = tail l in
                    (forall x. (foldl_prop x (cons op l) /\ foldl_prop x (snoc l op)) ==>
@@ -537,7 +586,13 @@ val lem_foldl_prop_comm (l:log) (op:log_entry)
                           foldl_prop x (cons hd (cons op tl)) /\
                           concrete_do_pre x hd /\
                           foldl_prop (do x hd) (cons op tl) /\
-                          foldl_prop (do x hd) (snoc tl op)))))
+                          foldl_prop (do x hd) (snoc tl op) /\
+                          foldl_prop x (cons hd (create 1 op)) /\
+                          foldl_prop (seq_foldl x (cons hd (create 1 op))) tl)))) =
+  lem_foldl_prop_comm_2 l op;
+  lem_foldl_prop_comm_3 l op;
+  lem_foldl_prop_comm_4 l op;
+  lem_foldl_prop_comm_5 l op
 
 val lem_eq_is_equiv_c1 (l:log) (op:log_entry) 
   : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0 /\
@@ -549,7 +604,7 @@ val lem_eq_is_equiv_c1 (l:log) (op:log_entry)
           (ensures (let hd = head l in let tl = tail l in
                    (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
                          (lem_foldl_prop_comm l op;
-                         eq (seq_foldl x (cons op l)) (seq_foldl x (cons hd (cons op tl)))))))
+                          eq (seq_foldl x (cons op l)) (seq_foldl x (cons hd (cons op tl)))))))
 
 val lem_eq_is_equiv_c2 (l:log) (op:log_entry)
   : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0 /\
@@ -618,7 +673,7 @@ val lem_case1_eq (l:log) (op:log_entry)
                     lem_foldl_prop_comm l op;
                     (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>  
                           eq (seq_foldl x (cons op l)) (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl))))
- 
+
 let lem_case3 (l:log) (op:log_entry)
   : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0)
           (ensures (let hd = head l in let tl = tail l in
@@ -669,8 +724,67 @@ val lem_case4_eq  (l:log) (op:log_entry)
                    (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
                          (lem_foldl_prop_comm l op;
                          eq (seq_foldl (do x hd) (snoc tl op)) (seq_foldl x (snoc l op))))))
-                         
+
+val lem_equiv_st_foldl (a b:log) (l:log)
+  : Lemma (ensures (forall x. (foldl_prop x a /\ foldl_prop x b /\ 
+                         foldl_prop (seq_foldl x a) l /\ foldl_prop (seq_foldl x b) l /\
+                         eq (seq_foldl x a) (seq_foldl x b)) ==>
+                         eq (seq_foldl (seq_foldl x a) l) (seq_foldl (seq_foldl x b) l)))
+
 #push-options "--z3rlimit 400"
+let lem_case2_help (l:log) (op:log_entry)
+  : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0)
+          (ensures (let hd = head l in let tl = tail l in
+                    (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+                          (lem_foldl_prop_comm l op;
+                          eq (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl) 
+                             (seq_foldl (seq_foldl x (cons hd (create 1 op))) tl)))))
+          (decreases length l) = 
+  lem_foldl_prop_comm l op; 
+  let hd = head l in let tl = tail l in
+  commutative_prop op hd;
+  assert (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+               eq (seq_foldl x (cons op (create 1 hd))) (seq_foldl x (cons hd (create 1 op))));
+  assert (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+               foldl_prop x (cons op (create 1 hd)) /\ foldl_prop x (cons hd (create 1 op)));
+  lem_equiv_st_foldl (cons op (create 1 hd)) (cons hd (create 1 op)) tl
+
+let lem_case2_help1 (l:log) (op:log_entry)
+  : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0 /\
+                    (let hd = head l in let tl = tail l in
+                    (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+                          (lem_foldl_prop_comm l op;
+                          eq (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl) 
+                             (seq_foldl (seq_foldl x (cons hd (create 1 op))) tl)))))
+          (ensures (let hd = head l in let tl = tail l in
+                    (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+                          (lem_foldl_prop_comm l op;
+                           seq_foldl (seq_foldl x (cons hd (create 1 op))) tl =
+                           seq_foldl x (cons hd (cons op tl)))))) = 
+  let hd = head l in let tl = tail l in
+  lem_foldl_prop_comm l op;
+  assert (is_prefix (cons hd (create 1 op)) (cons hd (cons op tl)));
+  append_assoc (create 1 hd) (create 1 op) tl;
+  assert (cons hd (cons op tl) = (cons hd (create 1 op) ++ tl));
+  lem_is_diff (cons hd (cons op tl)) (cons hd (create 1 op)) tl;
+  assert (tl = diff (cons hd (cons op tl)) (cons hd (create 1 op)));
+  split_prefix_forall (cons hd (create 1 op)) (cons hd (cons op tl));
+  ()
+
+val lem_case2 (l:log) (op:log_entry)
+  : Lemma (requires commutative_seq op l /\ distinct_ops l /\ length l > 0 /\
+                    (let hd = head l in let tl = tail l in
+                    (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+                          (lem_foldl_prop_comm l op;
+                          eq (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl) 
+                             (seq_foldl (seq_foldl x (cons hd (create 1 op))) tl) /\
+                          seq_foldl (seq_foldl x (cons hd (create 1 op))) tl =
+                          seq_foldl x (cons hd (cons op tl))))))
+          (ensures (let hd = head l in let tl = tail l in
+                    (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
+                          (lem_foldl_prop_comm l op;
+                           eq (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl) (seq_foldl x (cons hd (cons op tl)))))))
+
 let rec lem_foldl_comm (l:log) (op:log_entry)
   : Lemma (requires commutative_seq op l /\ distinct_ops l)
           (ensures (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==>
@@ -685,15 +799,17 @@ let rec lem_foldl_comm (l:log) (op:log_entry)
       
   |_ -> let hd = head l in let tl = tail l in
        assert (commutative_seq op (tail l) /\ distinct_ops (tail l));
-       lem_foldl_comm (tail l) op; 
+       lem_foldl_comm tl op; 
        lem_foldl_prop_comm l op;
 
        lem_case1 l op;
        lem_case1_eq l op;
                     // eq (seq_foldl x (cons op l)) (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl))
-       
-       assume (forall x. foldl_prop x (cons op l) /\ foldl_prop x (snoc l op) ==> 
-                    eq (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl) (seq_foldl x (cons hd (cons op tl))));      
+
+       lem_case2_help l op;
+       lem_case2_help1 l op;
+       lem_case2 l op;
+                    // eq (seq_foldl (seq_foldl x (cons op (create 1 hd))) tl) (seq_foldl x (cons hd (cons op tl))));      
 
        lem_case3 l op;
        lem_case3_eq l op;
@@ -711,18 +827,37 @@ let rec lem_foldl_comm (l:log) (op:log_entry)
        lem_eq_is_equiv_c3 l op;
        lem_eq_is_equiv_c4 l op
 
-#push-options "--z3rlimit 150"
 let lem_seq_foldl_op (x:concrete_st) (l:log) (op:log_entry)
   : Lemma (requires distinct_ops l /\ mem op l /\ foldl_prop x l /\
-                    (let _, suf = pre_suf l op in commutative_seq op suf))
+                    (let _, s = pre_suf l op in commutative_seq op s))
           (ensures (let p,s = pre_suf l op in
                       foldl_prop x (p ++ s) /\ 
                       concrete_do_pre (seq_foldl x (p ++ s)) op /\
                       eq (seq_foldl x l) (do (seq_foldl x (p ++ s)) op)))
           (decreases length l) = 
-  match length l with
-  |0 -> ()
-  |_ -> admit()
+  let pre, suf = pre_suf l op in
+  assert (commutative_seq op suf);
+  //lem_foldl_prop_comm suf op; 
+  lem_foldl_comm suf op;
+  assert (forall x. foldl_prop x (cons op suf) /\ foldl_prop x (snoc suf op) ==>
+               eq (seq_foldl x (cons op suf)) (seq_foldl x (snoc suf op)));
+  split_prefix x pre l;
+  assert (foldl_prop x pre);
+  pre_suf_prop l op;
+  append_assoc pre (create 1 op) suf;
+  assert (l = (snoc pre op) ++ suf /\ l = pre ++ (cons op suf)); 
+  lem_is_diff l pre (cons op suf);
+  assert (foldl_prop (seq_foldl x pre) (cons op suf)); 
+  
+  assume (foldl_prop (seq_foldl x pre) (snoc suf op)); //todo
+  assume (foldl_prop x (pre ++ suf) /\ concrete_do_pre (seq_foldl x (pre ++ suf)) op); //todo
+  assert (seq_foldl x l = seq_foldl (seq_foldl x pre) (cons op suf));
+  assert (eq (seq_foldl x l) (seq_foldl (seq_foldl x pre) (snoc suf op)));
+
+  assume (seq_foldl (seq_foldl x pre) (snoc suf op) = do (seq_foldl x (pre ++ suf)) op); //todo
+  
+  eq_is_equiv (seq_foldl (seq_foldl x pre) (snoc suf op)) (do (seq_foldl x (pre ++ suf)) op);
+  transitive (seq_foldl x l) (seq_foldl (seq_foldl x pre) (snoc suf op)) (do (seq_foldl x (pre ++ suf)) op)
 
 // returns the inverse state by undoing operation op in (ops_of s)
 let inverse_st_op (s:st) (op:log_entry{mem op (ops_of s) /\ 
