@@ -453,6 +453,14 @@ let diff (s1:log) (lca:log{is_prefix lca s1})
   lemma_mem_append lca s;
   s
 
+let lt_is_neq (lca s1:log)
+  : Lemma (requires distinct_ops s1 /\ is_prefix lca s1 /\ 
+                    (forall id id1. mem_id id lca /\ mem_id id1 (diff s1 lca) ==> lt id id1))
+          (ensures (forall id. mem_id id lca ==> not (mem_id id (diff s1 lca)))) (decreases length lca) =
+  let s = snd (split s1 (length lca)) in
+  lemma_split s1 (length lca);
+  lemma_append_count_id lca s
+
 let lem_is_diff (s1 lca d:log)
   : Lemma (requires s1 = lca ++ d)
           (ensures is_prefix lca s1 /\ d = diff s1 lca) =
@@ -1089,6 +1097,137 @@ let inverse_diff_id1 (l a b:log)
     lem_inverse l b;
     lem_diff (fst (un_snoc b)) l
 
+let inverse_diff_id2 (l a b:log)
+  : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
+                    is_prefix l a /\ is_prefix l b /\
+                    length a > length l /\ length b > length l /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
+                    (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
+          (ensures (forall id. mem_id id (diff (fst (un_snoc a)) l) ==> not (mem_id id (diff (fst (un_snoc b)) l))))
+  = un_snoc_prop a;
+    lem_diff a l; 
+    lem_inverse l a;
+    lem_diff (fst (un_snoc a)) l;
+    un_snoc_prop b;
+    lem_diff b l; 
+    lem_inverse l b;
+    lem_diff (fst (un_snoc b)) l
+
+let inverse_diff_id_last2 (l a b:log)
+  : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
+                    is_prefix l a /\ is_prefix l b /\
+                    length a > length l /\ length b > length l /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
+                    (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
+          (ensures (let pre2, last2 = un_snoc b in
+                    let pre1, last1 = un_snoc a in
+                    not (mem_id (fst last2) l) /\
+                    not (mem_id (fst last2) pre1) /\
+                    not (mem_id (fst last2) a) /\
+                    not (mem_id (fst last2) pre2))) =
+  let pre2, last2 = un_snoc b in
+  let pre1, last1 = un_snoc a in
+  lt_is_neq l b; 
+  assert (forall id. mem_id id l ==> not (mem_id id (diff b l))); 
+  lastop_diff l b;
+  assert (not (mem_id (fst last2) l)); 
+  lem_diff a l;
+  assert (not (mem_id (fst last2) (diff a l)));
+  assert (not (mem_id (fst last2) a)); 
+  lemma_split a (length a - 1); 
+  lemma_mem_snoc1 pre1 last1;
+  assert (not (mem_id (fst last2) pre1));
+  lemma_split b (length b - 1); 
+  lemma_append_count_id pre2 (create 1 last2);
+  distinct_invert_append pre2 (create 1 last2);
+  not_mem_id pre2 last2;
+  assert (not (mem_id (fst last2) pre2)); ()
+
+let inverse_diff_id_last1 (l a b:log)
+  : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
+                    is_prefix l a /\ is_prefix l b /\
+                    length a > length l /\ length b > length l /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
+                    (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
+          (ensures (let pre2, last2 = un_snoc b in
+                    let pre1, last1 = un_snoc a in
+                    not (mem_id (fst last1) l) /\
+                    not (mem_id (fst last1) pre2) /\
+                    not (mem_id (fst last1) b) /\
+                    not (mem_id (fst last1) pre1))) =
+  let pre2, last2 = un_snoc b in
+  let pre1, last1 = un_snoc a in
+  lt_is_neq l a; 
+  assert (forall id. mem_id id l ==> not (mem_id id (diff a l))); 
+  lastop_diff l a;
+  assert (not (mem_id (fst last1) l)); 
+  lem_diff b l;
+  assert (not (mem_id (fst last1) (diff b l)));
+  assert (not (mem_id (fst last1) b)); 
+  lemma_split b (length b - 1); 
+  lemma_mem_snoc1 pre2 last2;
+  assert (not (mem_id (fst last1) pre2));
+  lemma_split a (length a - 1); 
+  lemma_append_count_id pre1 (create 1 last1);
+  distinct_invert_append pre1 (create 1 last1);
+  not_mem_id pre1 last1;
+  assert (not (mem_id (fst last1) pre1)); ()
+
+let inverse_diff_id_inv1' (l a b:log)
+  : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
+                    is_prefix l a /\ is_prefix l b /\
+                    length a > length l /\ length b > length l /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
+                    (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))) /\
+                    (let _, last2 = un_snoc b in
+                    exists_triple last2 (diff a l)))
+          (ensures (let _, last2 = un_snoc b in
+                    let (pre1, op1, suf1) = find_triple last2 (diff a l) in
+                    not (mem_id (fst op1) l) /\
+                    not (mem_id (fst op1) (pre1 ++ suf1)) /\
+                    not (mem_id (fst op1) b))) = 
+  let _, last2 = un_snoc b in
+  let (pre1, op1, suf1) = find_triple last2 (diff a l) in
+  pre_suf_prop (diff a l) op1; 
+  assert (not (mem_id (fst op1) (pre1 ++ suf1))); 
+  lem_suf_equal2 l a op1;
+  assert (not (mem_id (fst op1) l));
+  lem_diff b l;
+  mem_ele_id op1 (diff a l);
+  assert (not (mem_id (fst op1) (diff b l)));
+  assert (not (mem_id (fst op1) b));
+  ()
+                    
+let inverse_diff_id_inv2' (l a b:log)
+  : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
+                    is_prefix l a /\ is_prefix l b /\
+                    length a > length l /\ length b > length l /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
+                    (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))) /\
+                    (let _, last1 = un_snoc a in
+                    exists_triple last1 (diff b l)))
+          (ensures (let _, last1 = un_snoc a in
+                    let (pre2, op2, suf2) = find_triple last1 (diff b l) in
+                    not (mem_id (fst op2) l) /\
+                    not (mem_id (fst op2) (pre2 ++ suf2)) /\
+                    not (mem_id (fst op2) a))) = 
+  let _, last1 = un_snoc a in
+  let (pre2, op2, suf2) = find_triple last1 (diff b l) in
+  pre_suf_prop (diff b l) op2; 
+  assert (not (mem_id (fst op2) (pre2 ++ suf2))); 
+  lem_suf_equal2 l b op2;
+  assert (not (mem_id (fst op2) l));
+  lem_diff a l;
+  mem_ele_id op2 (diff b l);
+  assert (not (mem_id (fst op2) (diff a l)));
+  assert (not (mem_id (fst op2) a));
+  ()
+                    
 let lastop_neq (l a b:log)
   : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
                     is_prefix l a /\ is_prefix l b /\
