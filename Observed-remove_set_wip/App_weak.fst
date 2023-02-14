@@ -1932,13 +1932,77 @@ let lem_not_ele_diff1 (lca s1 s2 m:concrete_st) (ele:nat)
                     (forall e. L.mem e lca /\ L.mem e s1 /\ L.mem e s2 ==> snd e <> ele))
           (ensures not (mem_ele ele (diff_s s1 lca))) = ()
 
+#push-options "--z3rlimit 200"
+(*let rec lem_lastop_suf_0_help (l l1 l2:log) (op:log_entry)
+  : Lemma (requires distinct_ops l /\ mem op l /\
+                    l = snoc l1 op ++ l2 /\ 
+                    count op l = 1 /\
+                    length l2 > 0)
+          (ensures (last l <> op)) (decreases %[length l; length l2]) =
+  match length l2 with
+  |1 -> admit ()
+  |_ -> assume (distinct_ops (fst (un_snoc l)) /\ mem op (fst (un_snoc l)) /\
+                    (fst (un_snoc l)) = snoc l1 op ++ (fst (un_snoc l2)) /\ 
+                    count op (fst (un_snoc l)) = 1 /\
+                    length (fst (un_snoc l2)) > 0);
+       lem_lastop_suf_0_help (fst (un_snoc l)) l1 (fst (un_snoc l2)) op*)
+
+let lem_lastop_suf_0_help (l2:log) (op:log_entry)
+  : Lemma (requires last (cons op l2) = op /\
+                    count op (cons op l2) = 1)
+          (ensures not (mem op l2) /\ length l2 = 0) =
+  lemma_mem_append (create 1 op) l2;
+  lemma_append_count (create 1 op) l2
+
+let rec lem_not_id (l:log) (op:log_entry)
+  : Lemma (requires distinct_ops l /\ 
+                    not (mem_id (fst op) l))
+          (ensures not (mem op l)) (decreases length l) = 
+  match length l with
+  |0 -> ()
+  |_ -> lem_not_id (tail l) op
+
+let rec lem_count_id_ele (l:log) (op:log_entry)
+  : Lemma (requires count_id (fst op) l = 1 /\ mem op l /\ distinct_ops l)
+          (ensures count op l = 1) (decreases length l) =
+  match length l with
+  |1 -> ()
+  |_ -> if (fst (head l) = fst op) 
+         then (assert (not (mem_id (fst op) (tail l))); lem_not_id (tail l) op)
+          else (lemma_tl (head l) (tail l);
+                lemma_append_count_id (create 1 (head l)) (tail l);
+                distinct_invert_append (create 1 (head l)) (tail l);
+                lem_count_id_ele (tail l) op)
+
+let lem_count (l l1:log) (op:log_entry)
+  : Lemma (requires mem op l1 /\ count op (l ++ l1) = 1)
+          (ensures count op l1 = 1) =
+  lemma_mem_append l l1;
+  lemma_append_count l l1
+
 let lem_lastop_suf_0 (l l1 l2:log) (op:log_entry)
   : Lemma (requires distinct_ops l /\ mem op l /\
                     l = snoc l1 op ++ l2 /\
                     (lemma_mem_append (snoc l1 op) l2;
                     last l = op))
           (ensures length l2 = 0) =
-  admit()
+  lemma_mem_append (snoc l1 op) l2;
+  lemma_append_count (snoc l1 op) l2;
+  mem_ele_id op l;
+  count_1 l;
+  lem_count_id_ele l op;
+  assert (count op l = 1);
+  append_assoc l1 (create 1 op) l2;
+  assert (l = l1 ++ cons op l2);
+
+  lemma_mem_append l1 (cons op l2);
+  lemma_append_count l1 (cons op l2);
+  lemma_mem_append (create 1 op) l2;
+  lemma_append_count (create 1 op) l2;
+  lem_count l1 (cons op l2) op;
+  assert (count op (cons op l2) = 1); 
+  assert (last l = last (cons op l2));
+  lem_lastop_suf_0_help l2 op
   
 #push-options "--z3rlimit 600"
 let not_add_eq (lca s1 s2:st)
@@ -2230,7 +2294,7 @@ let ind_case_last1_neq_pre4 (lca s1 s2:st)
  ind_case_last1_neq_pre4_help (diff (ops_of s1) (ops_of lca)) last2
 #pop-options
                     
-#push-options "--z3rlimit 2500 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 3000 --fuel 1 --ifuel 1"
 let rec linearizable_gt0_inv2_c3_new1 (lca s1 s2:st)
  : Lemma (requires common_pre1 lca s1 s2 /\ 
                    (let _, last2 = un_snoc (ops_of s2) in
