@@ -473,11 +473,16 @@ let lem_is_diff (s1 lca d:log)
 let lem_diff (s1 l:log)
   : Lemma (requires distinct_ops s1 /\ is_prefix l s1)
           (ensures distinct_ops (diff s1 l) /\ (forall id. mem_id id (diff s1 l) <==> mem_id id s1 /\ not (mem_id id l)) /\
-                   (Seq.length s1 > Seq.length l ==> last s1 = last (diff s1 l) /\ Seq.length (diff s1 l) > 0))
+                   (Seq.length s1 > Seq.length l ==> (last s1 = last (diff s1 l) /\ Seq.length (diff s1 l) > 0) /\
+                     (let _, l1 = un_snoc s1 in
+                      let _, ld = un_snoc (diff s1 l) in
+                      l1 = ld) /\
+                     (let s1',_ = un_snoc s1 in 
+                       diff s1' l = fst (un_snoc (diff s1 l)))))
   = let s = snd (split s1 (length l)) in
     lemma_split s1 (length l);
     lemma_append_count_id l s
-    
+
 let rec split_prefix (s:concrete_st) (l:log) (a:log)
   : Lemma (requires is_prefix l a /\ foldl_prop s a)
           (ensures foldl_prop s l /\ foldl_prop (seq_foldl s l) (diff a l) /\
@@ -1046,7 +1051,28 @@ let lem_suf_equal (lca s1:log) (op:log_entry)
     lem_suf_equal3 lca s1 op;
     lem_count_1 pre suf (lca ++ pred) sufd op;
     lemma_append_inj (snoc pre op) suf (snoc (lca ++ pred) op) sufd
-                     
+
+let lem_suf_equal4 (s1:log) (op:log_entry)
+  : Lemma (requires mem op s1 /\ distinct_ops s1)
+          (ensures (let pre, suf = pre_suf s1 op in
+                    not (mem_id (fst op) pre) /\
+                    not (mem_id (fst op) suf))) =
+  let pre, suf = pre_suf s1 op in
+  pre_suf_prop s1 op;
+  distinct_invert_append (snoc pre op) suf;
+  distinct_invert_append pre (create 1 op);
+  not_mem_id pre op;
+  lemma_mem_snoc1 pre op
+
+let lem_id_not_snoc (l l1:log) (op op1:log_entry)
+  : Lemma (requires not (mem_id (fst op) l) /\ mem_id (fst op1) l /\
+                    not (mem_id (fst op1) l1))
+          (ensures fst op1 <> fst op /\
+                   not (mem_id (fst op1) (snoc l1 op))) = 
+  assert (fst op1 <> fst op); 
+  assert (not (mem_id (fst op1) (create 1 op))); 
+  lemma_mem_snoc1 l1 op
+
 let un_snoc_prop (a:log)
   : Lemma (requires distinct_ops a /\ length a > 0)
           (ensures (forall id. mem_id id a <==> mem_id id (fst (un_snoc a)) \/ id = fst (last a)) /\
