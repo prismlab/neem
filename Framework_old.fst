@@ -1,7 +1,7 @@
-module Framework
+module Framework_old
 
 open FStar.Seq
-open App
+open App_old
 
 #set-options "--query_stats"
 
@@ -12,7 +12,7 @@ let linearizable_s1_01 (lca s1 s2:st)
                     ops_of s1 = ops_of lca /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1))
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1)) 
           (ensures (exists l. interleaving_predicate l lca s1 s2)) =
   split_prefix init_st (ops_of lca) (ops_of s2);
   linearizable_s1_0 lca s1 s2
@@ -24,7 +24,7 @@ let linearizable_s2_01 (lca s1 s2:st)
                     ops_of s2 = ops_of lca /\
                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1))
+                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1)) 
           (ensures (exists l. interleaving_predicate l lca s1 s2)) =
   split_prefix init_st (ops_of lca) (ops_of s1);
   linearizable_s2_0 lca s1 s2
@@ -72,17 +72,12 @@ let interleaving_s1_inv (lca s1 s2:st) (l':log)
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let l = Seq.snoc l' last1 in
                     interleaving_predicate l lca s1 s2 /\
-                    (exists l. interleaving_predicate l lca s1 s2))) =
+                    (exists l. interleaving_predicate l lca s1 s2))) = 
   let _, last1 = un_snoc (ops_of s1) in
-  let l = Seq.snoc l' last1 in
-  interleaving_helper_inv1 (ops_of lca) (ops_of s1) (ops_of s2) l';
+  interleaving_helper_inv1 (ops_of lca) (ops_of s1) (ops_of s2) l'; 
   linearizable_gt0 lca s1 s2;
-  lem_do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) (seq_foldl (v_of lca) l') last1;
-  inverse_helper (v_of lca) l' last1;
-  eq_is_equiv (seq_foldl (v_of lca) l) (do (seq_foldl (v_of lca) l') last1);
-  transitive (seq_foldl (v_of lca) l) (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
-             (concrete_merge (v_of lca) (v_of s1) (v_of s2))
-
+  inverse_helper (v_of lca) l' last1
+  
 let interleaving_s2_inv (lca s1 s2:st) (l':log)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -103,14 +98,9 @@ let interleaving_s2_inv (lca s1 s2:st) (l':log)
                     interleaving_predicate l lca s1 s2 /\
                     (exists l. interleaving_predicate l lca s1 s2))) =
   let _, last2 = un_snoc (ops_of s2) in
-  let l = Seq.snoc l' last2 in
-  interleaving_helper_inv2 (ops_of lca) (ops_of s1) (ops_of s2) l'; 
+  interleaving_helper_inv2 (ops_of lca) (ops_of s1) (ops_of s2) l';
   linearizable_gt0 lca s1 s2;
-  lem_do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) (seq_foldl (v_of lca) l') last2;
-  inverse_helper (v_of lca) l' last2;
-  eq_is_equiv (seq_foldl (v_of lca) l) (do (seq_foldl (v_of lca) l') last2);
-  transitive (seq_foldl (v_of lca) l) (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
-             (concrete_merge (v_of lca) (v_of s1) (v_of s2))
+  inverse_helper (v_of lca) l' last2
 
 let linearizable_s1_gt0_pre (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -161,8 +151,7 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
   lem_diff (ops_of s2) (ops_of lca)
 #pop-options
 
-
-#set-options "--z3rlimit 700 --fuel 1 --ifuel 1"
+#set-options "--z3rlimit 600 --fuel 1 --ifuel 1"
 let rec linearizable (lca s1 s2:st)
   : Lemma 
       (requires 

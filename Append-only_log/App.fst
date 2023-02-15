@@ -37,6 +37,20 @@ type concrete_st = l:list (nat (*timestamp*) * string (*message*)) {unique_s l /
 //initial state
 let init_st = []
 
+let eq (a b:concrete_st) = a == b
+
+let symmetric (a b:concrete_st) 
+  : Lemma (requires eq a b)
+          (ensures eq b a) = ()
+
+let transitive (a b c:concrete_st)
+  : Lemma (requires eq a b /\ eq b c)
+          (ensures eq a c) = ()
+
+let eq_is_equiv (a b:concrete_st)
+  : Lemma (requires a = b)
+          (ensures eq a b) = ()
+          
 // operation type
 // (the only operation is append value, so string is fine)
 type op_t = string
@@ -51,6 +65,10 @@ let do (s:concrete_st) (op:log_entry{concrete_do_pre s op})
   : (r:concrete_st{(forall e. L.mem e r <==> (L.mem e s \/ e = op))})
   = op::s
 
+let lem_do (a b:concrete_st) (op:log_entry)
+   : Lemma (requires concrete_do_pre a op /\ eq a b)
+           (ensures concrete_do_pre b op /\ eq (do a op) (do b op)) = ()
+           
 let lem_cons (#a:eqtype) (s:list a) (op:a)
   : Lemma (ensures (forall e. L.mem e (op::s) <==> L.mem e s \/ e = op)) = ()
 

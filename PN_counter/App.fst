@@ -12,6 +12,20 @@ type concrete_st = int
 //initial state
 let init_st = 0
 
+let eq (a b:concrete_st) = a == b
+
+let symmetric (a b:concrete_st) 
+  : Lemma (requires eq a b)
+          (ensures eq b a) = ()
+
+let transitive (a b c:concrete_st)
+  : Lemma (requires eq a b /\ eq b c)
+          (ensures eq a c) = ()
+
+let eq_is_equiv (a b:concrete_st)
+  : Lemma (requires a = b)
+          (ensures eq a b) = ()
+          
 // operation type
 type op_t:eqtype = 
   |Inc
@@ -26,6 +40,10 @@ let do (s:concrete_st) (op:log_entry{concrete_do_pre s op}) : concrete_st =
   |Inc -> s + 1
   |Dec -> s - 1
 
+let lem_do (a b:concrete_st) (op:log_entry)
+   : Lemma (requires concrete_do_pre a op /\ eq a b)
+           (ensures concrete_do_pre b op /\ eq (do a op) (do b op)) = ()
+           
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
 

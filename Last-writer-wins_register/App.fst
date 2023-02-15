@@ -10,6 +10,20 @@ type concrete_st = nat & nat
 //initial state
 let init_st = (0, 0)
 
+let eq (a b:concrete_st) = a == b
+
+let symmetric (a b:concrete_st) 
+  : Lemma (requires eq a b)
+          (ensures eq b a) = ()
+
+let transitive (a b c:concrete_st)
+  : Lemma (requires eq a b /\ eq b c)
+          (ensures eq a c) = ()
+
+let eq_is_equiv (a b:concrete_st)
+  : Lemma (requires a = b)
+          (ensures eq a b) = ()
+          
 // operation type
 // (the only operation is Write value, so nat is fine)
 type op_t = nat
@@ -20,6 +34,10 @@ let concrete_do_pre _ _ = true
 // apply an operation to a state
 let do (s:concrete_st) (op:log_entry) : (r:concrete_st{r = op}) = op
 
+let lem_do (a b:concrete_st) (op:log_entry)
+   : Lemma (requires concrete_do_pre a op /\ eq a b)
+           (ensures concrete_do_pre b op /\ eq (do a op) (do b op)) = ()
+           
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
 
