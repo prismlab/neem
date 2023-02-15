@@ -68,9 +68,16 @@ let rec mem_id_ele_l (id:nat) (ele:nat) (l:log)
   |0 -> false
   |_ -> (fst (head l) = id && get_ele (head l) = ele) || mem_id_ele_l id ele (tail l)
 
+let rec find_ele (id:nat) (a:concrete_st{mem_id_s id a})
+  : Tot (ele:nat{mem_ele ele a /\ L.mem (id, ele) a /\ snd (id, ele) = ele}) (decreases a) =
+  match a with
+  |x::xs -> if fst x = id then snd x else find_ele id xs
+  
 val filter : f:((nat * nat) -> bool)
            -> l:concrete_st
-           -> Tot (l1:concrete_st {(forall e. L.mem e l1 /\ mem_id_s (fst e) l1 <==> L.mem e l /\ mem_id_s (fst e) l /\ f e)})
+           -> Tot (l1:concrete_st {(forall e. L.mem e l1 /\ mem_id_s (fst e) l1 <==> L.mem e l /\ mem_id_s (fst e) l /\ f e) /\
+                                  (forall e. L.mem e l /\ f e ==> (find_ele (fst e) l = find_ele (fst e) l1 /\
+                                        L.mem e l /\ L.mem e l1))})
 let rec filter f l = 
   match l with
   |[] -> []
@@ -79,7 +86,7 @@ let rec filter f l =
 // concrete do pre-condition
 let concrete_do_pre (s:concrete_st) (op:log_entry) : prop =
   ~ (mem_id_s (fst op) s)
-
+  
 // apply an operation to a state
 let do (s:concrete_st) (o:log_entry{concrete_do_pre s o}) 
     : (r:concrete_st{(Add? (snd o) ==> (forall ele. mem_ele ele r <==> (mem_ele ele s \/ ele = get_ele o)) /\
@@ -91,7 +98,8 @@ let do (s:concrete_st) (o:log_entry{concrete_do_pre s o})
                      (Rem? (snd o) ==> (forall ele. mem_ele ele r <==> (mem_ele ele s /\ ele <> get_ele o)) /\
                                       (forall e. L.mem e r <==> (L.mem e s /\ snd e <> get_ele o)) /\
                                       (forall id. mem_id_s id r ==> mem_id_s id s) /\
-                                      not (mem_ele (get_ele o) r))}) =
+                                      not (mem_ele (get_ele o) r)) /\
+                     (forall id. mem_id_s id s /\ mem_id_s id r ==> find_ele id s = find_ele id r) }) =
   match o with
   |(id, Add e) -> (id, e)::s
   |(id, Rem e) -> filter (fun ele -> snd ele <> e) s
@@ -106,7 +114,8 @@ let do_prop (s:concrete_st) (o:log_entry{concrete_do_pre s o})
                                     (forall e. L.mem e (do s o) /\ snd e <> get_ele o <==> L.mem e s /\ snd e <> get_ele o))) /\
                    (Rem? (snd o) ==> ((forall e. L.mem e (do s o) <==> (L.mem e s /\ snd e <> get_ele o)) /\
                                      not (mem_ele (get_ele o) (do s o)) /\
-                                    (forall id. mem_id_s id (do s o) ==> mem_id_s id s)))) = ()
+                                    (forall id. mem_id_s id (do s o) ==> mem_id_s id s))) /\
+                   (forall id. mem_id_s id s /\ mem_id_s id (do s o) ==> find_ele id s = find_ele id (do s o))) = ()
 
 let lem_mem_id (i a:concrete_st) (ele:(nat * nat))
   : Lemma (requires (forall e. L.mem e i \/ e = ele <==> L.mem e a))
@@ -201,7 +210,7 @@ let rec lem_foldl (s:concrete_st) (l:log)
     |0 -> ()
     |1 -> ()
     |_ -> lem_foldl (do s (head l)) (tail l)
-
+    
 let rec lem_foldl_not_ele (s:concrete_st) (l:log) (ele:nat)
   : Lemma (requires foldl_prop s l /\ ~ (exists op. mem op l /\ get_ele op = ele))
           (ensures (forall e. L.mem e s /\ snd e = ele <==> L.mem e (seq_foldl s l) /\ snd e = ele)) 
@@ -246,19 +255,23 @@ let resolve_conflict_prop (x y:log_entry)
 
 // remove ele from l
 let rec remove (l:concrete_st) (ele:(nat * nat){L.mem ele l})
-  : Tot (res:concrete_st{(forall e. L.mem e res <==> L.mem e l /\ e <> ele) /\
-                         (forall id. mem_id_s id res <==> mem_id_s id l /\ id <> fst ele) /\ not (mem_id_s (fst ele) res)}) =
+  : Tot (res:concrete_st{(forall e. L.mem e res <==> L.mem e l /\ e <> ele) /\ not (L.mem ele res) /\
+                         (forall id. mem_id_s id res <==> mem_id_s id l /\ id <> fst ele) /\ not (mem_id_s (fst ele) res) /\
+                         (forall id. mem_id_s id l /\ id <> fst ele ==> (find_ele id l = find_ele id res /\
+                            L.mem (id, (find_ele id l)) l /\  L.mem (id, (find_ele id res)) res /\
+                             L.mem (id, (find_ele id l)) res /\  L.mem (id, (find_ele id res)) l))}) =
   match l with
   |[] -> []
   |x::xs -> if x = ele then xs else x::remove xs ele
 
 // a - l
 let rec diff_s (a l:concrete_st)
-  : Tot (d:concrete_st{(forall e. L.mem e d <==> (L.mem e a /\ not (L.mem e l))) /\
+  : Pure (concrete_st) 
+    (requires true)
+    (ensures (fun d -> (forall e. L.mem e d <==> (L.mem e a /\ not (L.mem e l))) /\
                        (forall ele. (forall e. L.mem e a /\ snd e = ele <==> L.mem e l /\ snd e = ele) ==>
                                not (mem_ele ele d)) /\
-                       (forall ele. not (mem_ele ele a) ==> not (mem_ele ele d)) /\
-                       (forall id. mem_id_s id a /\ not (mem_id_s id l) ==> mem_id_s id d)}) (decreases a) =
+                       (forall ele. not (mem_ele ele a) ==> not (mem_ele ele d)))) (decreases a) =
   match a with
   |[] -> []
   |x::xs -> if L.mem x l then diff_s xs (remove l x) else x::(diff_s xs l)
@@ -308,7 +321,6 @@ let rec concrete_merge1 l a b =
                      else (concrete_merge1 xs a b)
   |[],x::xs,_ -> x::(concrete_merge1 [] xs b)
   |[],[],x::xs -> b
-#pop-options
 
 // concrete merge operation
 let concrete_merge (l:concrete_st) (a:concrete_st) (b:concrete_st{concrete_merge_pre l a b}) 
@@ -316,11 +328,117 @@ let concrete_merge (l:concrete_st) (a:concrete_st) (b:concrete_st{concrete_merge
                                                  (L.mem e (diff_s a l)) \/ (L.mem e (diff_s b l)))})  =
  concrete_merge1 l a b
 
-let general_1 (lca s1:st)
+let rec lem_add (s:concrete_st) (l:log)
+  : Lemma (requires distinct_ops l /\ foldl_prop s l)
+          (ensures (forall e. L.mem e (seq_foldl s l) ==> (L.mem e s \/ mem (fst e, Add (snd e)) l)))
+          (decreases length l) =
+  match length l with
+  |0 -> ()
+  |1 -> ()
+  |_ -> lem_add (do s (head l)) (tail l)
+
+let lem_add_init (l:log)
+  : Lemma (requires distinct_ops l /\ foldl_prop init_st l)
+          (ensures (forall e. L.mem e (seq_foldl init_st l) ==> mem (fst e, Add (snd e)) l))
+  = lem_add init_st l
+  
+let rec lem_find (a:concrete_st)
+  : Lemma (requires true)
+          (ensures (forall e. L.mem e a ==> snd e = find_ele (fst e) a) /\
+                   (forall id. mem_id_s id a ==> L.mem (id, (find_ele id a)) a)) (decreases a) =
+  match a with
+  |[] -> ()
+  |x::xs -> lem_find xs
+
+let rec lem_count_id_gt0 (id:nat) (l:log)
+  : Lemma (requires (exists ele. mem (id, Add ele) l))
+          (ensures count_id id l > 0) (decreases length l) =
+  match length l with
+  |1 -> ()
+  |_ -> if fst (head l) = id then () else lem_count_id_gt0 id (tail l)
+
+let rec lem_two_id_help (id:nat) (l:log)
+  : Lemma (requires (exists ele ele1. mem (id, Add ele) l /\ mem (id, Add ele1) l /\ ele <> ele1))
+          (ensures count_id id l > 1)
+          (decreases length l)
+          [SMTPat (forall (ele ele1:nat). ele <> ele1)] 
+  = match length l with
+  |1 -> ()
+  |_ -> if id = fst (head l) then 
+          (assert (exists ele. mem (id, Add ele) (tail l)); 
+           lem_count_id_gt0 id (tail l);
+           assert (count_id id (tail l) > 0); ())
+        else lem_two_id_help id (tail l)
+          
+let lem_two_id (l:log)
+  : Lemma (requires true)
+          (ensures (forall id ele ele1. (mem (id, Add ele) l /\ mem (id, Add ele1) l /\ ele <> ele1) ==> count_id id l > 1)) = ()
+  
+let lem_id_ele (a:concrete_st) (l:log)
+  : Lemma (requires (forall e. L.mem e a ==> mem (fst e, Add (snd e)) l) /\
+                    (forall id. mem_id_s id a ==> L.mem (id, (find_ele id a)) a))
+          (ensures (forall id. mem_id_s id a ==> mem (id, Add (find_ele id a)) l)) = ()
+
+#push-options "--z3rlimit 300"
+let lem_find_ele (lca s1:st)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
+                    (forall id. mem_id id (ops_of lca) ==> not (mem_id id (diff (ops_of s1) (ops_of lca)))))
+          (ensures (forall id. mem_id_s id (v_of s1) /\ mem_id_s id (v_of lca) ==> find_ele id (v_of s1) = find_ele id (v_of lca))) =
+  lem_foldl init_st (ops_of lca);
+  lem_foldl init_st (ops_of s1);
+  split_prefix init_st (ops_of lca) (ops_of s1);
+  lem_diff (ops_of s1) (ops_of lca);
+  
+  lem_add_init (ops_of lca);
+  assert (forall e. L.mem e (v_of lca) ==> mem (fst e, Add (snd e)) (ops_of lca));
+  assert (forall id ele. L.mem (id, ele) (v_of lca) ==> mem (id, Add ele) (ops_of lca)); 
+  lem_find (v_of lca);
+  assert (forall e. L.mem e (v_of lca) ==> snd e = find_ele (fst e) (v_of lca));
+  assert (forall id. mem_id_s id (v_of lca) ==> mem_id id (ops_of lca) /\ L.mem (id, (find_ele id (v_of lca))) (v_of lca));
+  lem_id_ele (v_of lca) (ops_of lca);
+  assert (forall id. mem_id_s id (v_of lca) ==> mem (id, Add (find_ele id (v_of lca))) (ops_of lca)); 
+  assert (forall e. mem e (ops_of lca) ==> mem e (ops_of s1)); 
+  assert (forall id. mem_id_s id (v_of lca) ==> mem (id, Add (find_ele id (v_of lca))) (ops_of s1));
+  
+  lem_add_init (ops_of s1);
+  assert (forall e. L.mem e (v_of s1) ==> mem (fst e, Add (snd e)) (ops_of s1));
+  assert (forall id ele. L.mem (id, ele) (v_of s1) ==> mem (id, Add ele) (ops_of s1));
+  lem_find (v_of s1);
+  assert (forall e. L.mem e (v_of s1) ==> snd e = find_ele (fst e) (v_of s1));
+  assert (forall id. mem_id_s id (v_of s1) ==> mem_id id (ops_of s1) /\ L.mem (id, (find_ele id (v_of s1))) (v_of s1));
+  lem_id_ele (v_of s1) (ops_of s1);
+  assert (forall id. mem_id_s id (v_of s1) ==> mem (id, Add (find_ele id (v_of s1))) (ops_of s1));
+                                          
+  assert (forall id. mem_id_s id (v_of s1) /\ mem_id_s id (v_of lca) ==>
+                mem (id, Add (find_ele id (v_of lca))) (ops_of lca) /\ mem (id, Add (find_ele id (v_of s1))) (ops_of s1)); 
+  assert (forall id. mem_id_s id (v_of s1) /\ mem_id_s id (v_of lca) ==> mem (id, Add (find_ele id (v_of s1))) (ops_of s1));
+  assert (forall e. mem e (ops_of s1) <==> mem e (ops_of lca) \/ mem e (diff (ops_of s1) (ops_of lca)));
+  
+  assert (forall id. mem_id_s id (v_of s1) /\ mem_id_s id (v_of lca) /\ (find_ele id (v_of s1)) <> (find_ele id (v_of lca)) ==>
+             mem (id, Add (find_ele id (v_of lca))) (ops_of s1) /\
+             mem (id, Add (find_ele id (v_of s1))) (ops_of s1)); 
+  lem_two_id (ops_of s1); 
+  assert (forall id. mem_id_s id (v_of s1) /\ mem_id_s id (v_of lca) /\ (find_ele id (v_of s1)) <> (find_ele id (v_of lca)) ==>
+                (count_id id (ops_of s1) > 1));
+  ()
+
+let rec lem_diff_s (a l:concrete_st)
+  : Lemma (requires (forall id. mem_id_s id a /\ mem_id_s id l ==> find_ele id a = find_ele id l))
+          (ensures (forall id. mem_id_s id a /\ not (mem_id_s id l) ==> (find_ele id a = find_ele id (diff_s a l) /\
+                       L.mem (id, (find_ele id (diff_s a l))) (diff_s a l) /\  L.mem (id, (find_ele id a)) a /\
+                       L.mem (id, (find_ele id a)) (diff_s a l) /\  L.mem (id, (find_ele id a)) a)) /\
+                       (forall id. mem_id_s id a /\ not (mem_id_s id l) <==> mem_id_s id (diff_s a l))) (decreases a) =
+   match a with
+  |[] -> ()
+  |x::xs -> if L.mem x l then lem_diff_s xs (remove l x) else lem_diff_s xs l
+
+let lem_st_seq_help1 (lca s1:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1))
           (ensures (forall id. mem_id_s id (diff_s (v_of s1) (v_of lca)) ==> mem_id id (diff (ops_of s1) (ops_of lca))) /\
                    (forall id. mem_id_s id (v_of lca) ==> not (mem_id_s id (diff_s (v_of s1) (v_of lca))))) =
+  lem_find_ele lca s1;
+
   lem_foldl init_st (ops_of lca);
   assert (forall id. mem_id_s id (v_of lca) ==> mem_id id (ops_of lca));
   
@@ -333,19 +451,22 @@ let general_1 (lca s1:st)
   assert (forall id. mem_id_s id (v_of lca) ==> not (mem_id id (diff (ops_of s1) (ops_of lca))));
 
   assert (forall id. mem_id_s id (v_of s1) /\ not (mem_id_s id (v_of lca)) ==> mem_id id (diff (ops_of s1) (ops_of lca)));
-  assume (forall id. mem_id_s id (diff_s (v_of s1) (v_of lca)) <==> (mem_id_s id (v_of s1) /\ not (mem_id_s id (v_of lca)))); //todo
+  lem_foldl init_st (ops_of s1);
+  
+  lem_diff_s (v_of s1) (v_of lca);
+  assert (forall id. mem_id_s id (diff_s (v_of s1) (v_of lca)) <==> (mem_id_s id (v_of s1) /\ not (mem_id_s id (v_of lca)))); 
   assert (forall id. mem_id_s id (diff_s (v_of s1) (v_of lca)) ==> mem_id id (diff (ops_of s1) (ops_of lca)));
  
   assert (forall id. mem_id_s id (v_of lca) ==> not (mem_id_s id (diff_s (v_of s1) (v_of lca))));
   ()
 
-let general' (a b:concrete_st) (al bl:log)
+let lem_st_seq_help' (a b:concrete_st) (al bl:log)
   : Lemma (requires (forall id. mem_id_s id a ==> mem_id id al) /\
                     (forall id. mem_id_s id b ==> mem_id id bl) /\
                     (forall id. mem_id id al ==> not (mem_id id bl)))
           (ensures (forall id. mem_id_s id a ==> not (mem_id_s id b))) = ()
 
-let general (lca s1 s2:st)
+let lem_st_seq_help (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
@@ -356,9 +477,9 @@ let general (lca s1 s2:st)
                    (forall id. mem_id_s id (diff_s (v_of s1) (v_of lca)) ==> not (mem_id_s id (diff_s (v_of s2) (v_of lca)))) /\
                    (forall id. mem_id_s id (diff_s (v_of s1) (v_of lca)) ==> not (mem_id_s id (v_of s2))) /\
                    (forall id. mem_id_s id (diff_s (v_of s2) (v_of lca)) ==> not (mem_id_s id (v_of s1)))) =
-  general_1 lca s1;
-  general_1 lca s2;
-  general' (diff_s (v_of s1) (v_of lca)) (diff_s (v_of s2) (v_of lca)) (diff (ops_of s1) (ops_of lca)) (diff (ops_of s2) (ops_of lca))
+  lem_st_seq_help1 lca s1;
+  lem_st_seq_help1 lca s2;
+  lem_st_seq_help' (diff_s (v_of s1) (v_of lca)) (diff_s (v_of s2) (v_of lca)) (diff (ops_of s1) (ops_of lca)) (diff (ops_of s2) (ops_of lca))
 
 let lem_not_exists (lastop:log_entry) (l:log)
   : Lemma (requires Rem? (snd lastop))
@@ -669,7 +790,7 @@ let merge_inv_prop_inv2_c3 (lca s1 s2:st)
   lem_inverse (ops_of lca) (ops_of s2);
   lastop_diff (ops_of lca) (ops_of s2);
   inverse_diff_id1 (ops_of lca) (ops_of s1) (ops_of s2);
-  general lca s1 inv2
+  lem_st_seq_help lca s1 inv2
   
 let merge_inv_prop_inv2_c1 (lca s1 s2:st)
   : Lemma (requires common_pre lca s1 s2 /\
@@ -685,7 +806,7 @@ let merge_inv_prop_inv2_c1 (lca s1 s2:st)
   lem_inverse (ops_of lca) (ops_of s2);
   lastop_diff (ops_of lca) (ops_of s2);
   inverse_diff_id1 (ops_of lca) (ops_of s1) (ops_of s2);
-  general lca s1 inv2
+  lem_st_seq_help lca s1 inv2
 
 let merge_inv_prop (lca s1 s2:st)
   : Lemma (requires common_pre lca s1 s2)
@@ -1311,6 +1432,609 @@ let linearizable_gt0_inv2_c4 (lca s1 s2:st)
   assert (eq (do (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) last2)
              (concrete_merge (v_of lca) (v_of s1) (v_of s2))); ()
 
+
+#push-options "--z3rlimit 500"
+type common_pre1 (lca s1 s2:st) =
+  is_prefix (ops_of lca) (ops_of s1) /\
+  is_prefix (ops_of lca) (ops_of s2) /\
+  //Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+  Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
+  concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+  (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))
+
+type common_pre2 (lca s1 s2:st) =
+  is_prefix (ops_of lca) (ops_of s1) /\
+  is_prefix (ops_of lca) (ops_of s2) /\
+  //Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+  //Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
+  concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
+  (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))
+  
+let base_case (lca s1 s2:st)
+  : Lemma (requires common_pre1 lca s1 s2 /\
+                    ops_of s1 = ops_of lca /\
+                    (let _, last2 = un_snoc (ops_of s2) in
+                     let s2' = inverse_st s2 in
+                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2))                   
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    let s2' = inverse_st s2 in
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = ()
+
+let base_case1 (lca s1 s2:st)
+  : Lemma (requires common_pre1 lca s1 s2 /\
+                    ops_of s1 = ops_of lca /\
+                    (let _, last2 = un_snoc (ops_of s2) in
+                     let s2' = inverse_st s2 in
+                     ops_of s2' = ops_of lca /\
+                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2))                   
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    let s2' = inverse_st s2 in
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = ()
+                       
+let lem_last (a:log)
+  : Lemma (ensures (length a > 0 ==>
+                   (let _, lst = un_snoc a in
+                    last a = lst))) = ()
+
+#push-options "--z3rlimit 600"
+let ind_case_last1_rem_eq (lca s1 s2:st)
+  : Lemma (requires Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+                    common_pre1 lca s1 s2 /\
+                    (let _, last2 = un_snoc (ops_of s2) in
+                     let _, last1 = un_snoc (ops_of s1) in
+                     Rem? (snd last2) /\ Rem? (snd last1) && get_ele last1 = get_ele last2 /\
+                     not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                     (let s2' = inverse_st s2 in
+                     is_prefix (ops_of lca) (ops_of s2') /\
+                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))               
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    let s2' = inverse_st s2 in
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) =
+  let pre2, last2 = un_snoc (ops_of s2) in
+  let pre1, last1 = un_snoc (ops_of s1) in
+  let s2' = inverse_st s2 in
+  let s1' = inverse_st s1 in
+  lem_last (ops_of s2);
+  do_prop (v_of s2') last2;
+  assert (forall e. (L.mem e (v_of s2') /\ snd e <> get_ele last2) <==> L.mem e (v_of s2));
+  assert (forall e. L.mem e (diff_s (v_of s2) (v_of lca)) <==>
+               L.mem e (diff_s (v_of s2') (v_of lca)) /\ snd e <> get_ele last2);
+  lem_last (ops_of s1);
+  do_prop (v_of s1') last1;
+  assert (not (mem_ele (get_ele last1) (v_of s1)));
+  assert (not (mem_ele (get_ele last2) (diff_s (v_of s1) (v_of lca)))); 
+  assert (forall e. ((L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of s2')) /\ snd e <> get_ele last2) <==>
+               (L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of s2)));   
+  assert (forall e. L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2)) <==>
+               (L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2')) /\ snd e <> get_ele last2));
+
+  do_prop (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2;
+  assert (forall e. (L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2')) /\ snd e <> get_ele last2) <==>
+                L.mem e (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)); 
+
+  trans_op_ele (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
+               (concrete_merge (v_of lca) (v_of s1) (v_of s2'))
+               (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
+               (get_ele last2);
+  assert (eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
+             (concrete_merge (v_of lca) (v_of s1) (v_of s2))); ()
+#pop-options
+
+let lem_not_ele_diff (s1' s1 lca:concrete_st) (op:log_entry) (ele:nat)
+  : Lemma (requires concrete_do_pre s1' op /\ s1 = do s1' op /\ get_ele op <> ele /\
+                    not (mem_ele ele (diff_s s1' lca)))
+          (ensures not (mem_ele ele (diff_s s1 lca))) = ()
+
+let lem_not_ele_diff1 (lca s1 s2 m:concrete_st) (ele:nat)
+  : Lemma (requires concrete_merge_pre lca s1 s2 /\
+                    not (mem_ele ele m) /\
+                    eq m (concrete_merge lca s1 s2) /\
+                    not (mem_ele ele (diff_s s2 lca)) /\
+                    (forall e. L.mem e lca /\ L.mem e s1 /\ L.mem e s2 ==> snd e <> ele))
+          (ensures not (mem_ele ele (diff_s s1 lca))) = ()
+
+#push-options "--z3rlimit 200"
+let lem_lastop_suf_0_help (l2:log) (op:log_entry)
+  : Lemma (requires last (cons op l2) = op /\
+                    count op (cons op l2) = 1)
+          (ensures not (mem op l2) /\ length l2 = 0) =
+  lemma_mem_append (create 1 op) l2;
+  lemma_append_count (create 1 op) l2
+
+let rec lem_not_id (l:log) (op:log_entry)
+  : Lemma (requires distinct_ops l /\ 
+                    not (mem_id (fst op) l))
+          (ensures not (mem op l)) (decreases length l) = 
+  match length l with
+  |0 -> ()
+  |_ -> lem_not_id (tail l) op
+
+let rec lem_count_id_ele (l:log) (op:log_entry)
+  : Lemma (requires count_id (fst op) l = 1 /\ mem op l /\ distinct_ops l)
+          (ensures count op l = 1) (decreases length l) =
+  match length l with
+  |1 -> ()
+  |_ -> if (fst (head l) = fst op) 
+         then (assert (not (mem_id (fst op) (tail l))); lem_not_id (tail l) op)
+          else (lemma_tl (head l) (tail l);
+                lemma_append_count_id (create 1 (head l)) (tail l);
+                distinct_invert_append (create 1 (head l)) (tail l);
+                lem_count_id_ele (tail l) op)
+
+let lem_lastop_suf_0 (l l1 l2:log) (op:log_entry)
+  : Lemma (requires distinct_ops l /\ mem op l /\
+                    l = snoc l1 op ++ l2 /\
+                    (lemma_mem_append (snoc l1 op) l2;
+                    last l = op))
+          (ensures length l2 = 0) =
+  lemma_mem_append (snoc l1 op) l2;
+  lemma_append_count (snoc l1 op) l2;
+  mem_ele_id op l;
+  count_1 l;
+  lem_count_id_ele l op;
+  assert (count op l = 1); 
+  append_assoc l1 (create 1 op) l2;
+  assert (l = l1 ++ cons op l2);
+
+  lemma_mem_append l1 (cons op l2);
+  lemma_append_count l1 (cons op l2);
+  lemma_mem_append (create 1 op) l2;
+  lemma_append_count (create 1 op) l2;
+  assert (mem op (cons op l2)); 
+  assert (count op (cons op l2) = 1); 
+  assert (last l = last (cons op l2));
+  lem_lastop_suf_0_help l2 op
+  
+#push-options "--z3rlimit 600"
+let not_add_eq (lca s1 s2:st)
+  : Lemma (requires Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+                    common_pre1 lca s1 s2 /\
+                    (let _, last2 = un_snoc (ops_of s2) in
+                     let _, last1 = un_snoc (ops_of s1) in
+                     Rem? (snd last2) /\
+                     not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                     (let s2' = inverse_st s2 in
+                     is_prefix (ops_of lca) (ops_of s2') /\
+                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))  
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    let _, last1 = un_snoc (ops_of s1) in
+                    ~ (Add? (snd last1) /\ get_ele last1 = get_ele last2))) = 
+  let _, last2 = un_snoc (ops_of s2) in
+  let _, last1 = un_snoc (ops_of s1) in
+  lastop_neq (ops_of lca) (ops_of s1) (ops_of s2); 
+  assert (fst last1 <> fst last2);
+
+  let s1' = inverse_st s1 in
+  lemma_mem_snoc (ops_of s1') last1;
+  assert (mem last1 (ops_of s1));
+  assert (last (ops_of s1) = last1);
+  lem_diff (ops_of s1) (ops_of lca);
+  assert (last (diff (ops_of s1) (ops_of lca)) = last1);
+  assert (mem last1 (diff (ops_of s1) (ops_of lca)));
+  let pre, suf = pre_suf (diff (ops_of s1) (ops_of lca)) last1 in
+  lem_lastop_suf_0 (diff (ops_of s1) (ops_of lca)) pre suf last1;
+  assert (length suf = 0);
+  lemma_empty suf; 
+  comm_empty_log last1 suf; 
+  assert (commutative_seq last1 suf);
+
+  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> not (commutative last1 last2));
+  resolve_conflict_prop last2 last1;
+  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> 
+                last (resolve_conflict last2 last1) = last1);
+  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> 
+                not (commutative last2 last1) /\
+                last (resolve_conflict last2 last1) = last1 /\
+                commutative_seq last1 suf);
+  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> exists_triple last2 (diff (ops_of s1) (ops_of lca)));
+  assert (~ (Add? (snd last1) /\ get_ele last1 = get_ele last2)); ()
+#pop-options
+
+#push-options "--z3rlimit 700"
+let ind_case_last1_neq (lca s1 s2:st)
+  : Lemma (requires (Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
+                    (let s1' = inverse_st s1 in
+                    common_pre1 lca s1 s2 /\
+                    (let s2' = inverse_st s2 in
+                    (let _, last2 = un_snoc (ops_of s2) in
+                    let _, last1 = un_snoc (ops_of s1) in
+                    Rem? (snd last2) /\ get_ele last2 <> get_ele last1 /\
+                    is_prefix (ops_of lca) (ops_of s1) /\
+                    is_prefix (ops_of lca) (ops_of s2') /\
+                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                    concrete_merge_pre (v_of lca) (v_of s1') (v_of s2') /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
+                    concrete_merge_pre (v_of lca) (v_of s1') (v_of s2) /\
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2 /\
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2 /\
+                    eq (do (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (v_of s1') (v_of s2)))))))
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    let s2' = inverse_st s2 in
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) =
+  let _, last2 = un_snoc (ops_of s2) in 
+  let s2' = inverse_st s2 in 
+  lem_last (ops_of s2); 
+  do_prop (v_of s2') last2; 
+  assert (not (mem_ele (get_ele last2) (v_of s2))); 
+  assert (not (mem_ele (get_ele last2) (diff_s (v_of s2) (v_of lca))));
+  let _, last1 = un_snoc (ops_of s1) in
+  let s1' = inverse_st s1 in
+  lem_last (ops_of s1);
+  do_prop (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2;
+  assert (not (mem_ele (get_ele last2) (do (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2))); 
+  assert (forall e. L.mem e (v_of lca) /\ L.mem e (v_of s1') /\ L.mem e (v_of s2) ==> snd e <> get_ele last2); 
+  lem_not_ele_diff1 (v_of lca) (v_of s1') (v_of s2) (do (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2) (get_ele last2);
+  assert (not (mem_ele (get_ele last2) (diff_s (v_of s1') (v_of lca)))); 
+  lem_not_ele_diff (v_of s1') (v_of s1) (v_of lca) last1 (get_ele last2);
+  assert (not (mem_ele (get_ele last2) (diff_s (v_of s1) (v_of lca))));
+  ()
+#pop-options
+
+#push-options "--z3rlimit 500"
+let ind_case_last1_neq_pre1 (lca s1 s2:st)
+ : Lemma (requires common_pre1 lca s1 s2 /\ 
+                   length (ops_of s1) > length (ops_of lca) /\
+                   (let _, last2 = un_snoc (ops_of s2) in
+                    let _, last1 = un_snoc (ops_of s1) in
+                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
+                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                   (let s2' = inverse_st s2 in
+                    is_prefix (ops_of lca) (ops_of s2') /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
+         (ensures (let s1' = inverse_st s1 in
+                   common_pre1 lca s1' s2)) =
+ let s1' = inverse_st s1 in
+ let s2' = inverse_st s2 in
+ lem_inverse (ops_of lca) (ops_of s1);
+ assert (is_prefix (ops_of lca) (ops_of s1')); 
+ inverse_diff_id (ops_of lca) (ops_of s1) (ops_of s2);
+ assert (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))));
+ lastop_diff (ops_of lca) (ops_of s1);
+ assert (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1); 
+ lem_st_seq_help lca s1' s2;
+ assert (forall id. mem_id_s id (diff_s (v_of s1') (v_of lca)) ==> not (mem_id_s id (v_of s2)));
+ lem_merge_pre (v_of lca) (v_of s1') (v_of s2);
+ assert (concrete_merge_pre (v_of lca) (v_of s1') (v_of s2));
+ assert (common_pre1 lca s1' s2);
+ ()
+
+let ind_case_last1_neq_pre2 (lca s1 s2:st)
+ : Lemma (requires common_pre1 lca s1 s2 /\ 
+                   length (ops_of s1) > length (ops_of lca) /\
+                   (let _, last2 = un_snoc (ops_of s2) in
+                    let _, last1 = un_snoc (ops_of s1) in
+                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
+                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                   (let s2' = inverse_st s2 in
+                    is_prefix (ops_of lca) (ops_of s2') /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
+         (ensures (let s1' = inverse_st s1 in
+                   let s2' = inverse_st s2 in
+                   concrete_merge_pre (v_of lca) (v_of s1') (v_of s2'))) =
+ let s1' = inverse_st s1 in
+ ind_case_last1_neq_pre1 lca s1 s2;
+ let s2' = inverse_st s2 in
+ lem_inverse (ops_of lca) (ops_of s2);
+ assert (is_prefix (ops_of lca) (ops_of s2'));
+ inverse_diff_id2 (ops_of lca) (ops_of s1) (ops_of s2);
+ assert (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca))));
+ lastop_diff (ops_of lca) (ops_of s2);
+ assert (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1);
+ lem_st_seq_help lca s1' s2';
+ assert (forall id. mem_id_s id (diff_s (v_of s1') (v_of lca)) ==> not (mem_id_s id (v_of s2')));
+ lem_merge_pre (v_of lca) (v_of s1') (v_of s2')
+
+let ind_case_last1_neq_pre3 (lca s1 s2:st)
+ : Lemma (requires common_pre1 lca s1 s2 /\ 
+                   length (ops_of s1) > length (ops_of lca) /\
+                   (let _, last2 = un_snoc (ops_of s2) in
+                    let _, last1 = un_snoc (ops_of s1) in
+                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
+                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                   (let s2' = inverse_st s2 in
+                    is_prefix (ops_of lca) (ops_of s2') /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
+         (ensures (let s1' = inverse_st s1 in
+                   let s2' = inverse_st s2 in
+                   let _, last2 = un_snoc (ops_of s2) in
+                   (ind_case_last1_neq_pre1 lca s1 s2;
+                    ind_case_last1_neq_pre2 lca s1 s2;
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2))) =
+ ind_case_last1_neq_pre1 lca s1 s2; 
+ ind_case_last1_neq_pre2 lca s1 s2;
+ let s2' = inverse_st s2 in
+ let pre2, last2 = un_snoc (ops_of s2) in
+ let s1' = inverse_st s1 in
+ let pre1, last1 = un_snoc (ops_of s1) in
+ assert (forall id. mem_id_s id (concrete_merge (v_of lca) (v_of s1) (v_of s2')) ==> 
+               (mem_id_s id (v_of lca) \/ mem_id_s id (v_of s1) \/ mem_id_s id (v_of s2'))); 
+ lem_foldl init_st (ops_of lca);
+ assert (forall id. mem_id_s id (v_of lca) ==> mem_id id (ops_of lca));
+ lem_foldl init_st (ops_of s1);
+ assert (forall id. mem_id_s id (v_of s1) ==> mem_id id (ops_of s1));
+ lem_foldl init_st (ops_of s2');
+ assert (forall id. mem_id_s id (v_of s2') ==> mem_id id (ops_of s2'));
+ lem_foldl init_st (ops_of s1');
+ assert (forall id. mem_id_s id (v_of s1') ==> mem_id id (ops_of s1'));
+
+ assert (forall id. mem_id_s id (concrete_merge (v_of lca) (v_of s1) (v_of s2')) ==> 
+               (mem_id id (ops_of lca) \/ mem_id id (ops_of s1) \/ mem_id id (ops_of s2')));
+
+ assert (forall id. mem_id_s id (concrete_merge (v_of lca) (v_of s1') (v_of s2')) ==> 
+               (mem_id_s id (v_of lca) \/ mem_id_s id (v_of s1') \/ mem_id_s id (v_of s2')));
+ inverse_diff_id_last2 (ops_of lca) (ops_of s1) (ops_of s2);
+ assert (forall id. (mem_id id (ops_of lca) \/ mem_id id (ops_of s1') \/ mem_id id (ops_of s2')) ==> id <> fst last2);
+ ()
+
+let lem_exists_new (lastop:log_entry) (l:log)
+  : Lemma (ensures exists_triple lastop l <==>
+                   (exists op. mem op l /\
+                         (let pre,suf = pre_suf l op in
+                          not (commutative lastop op) /\
+                          last (resolve_conflict lastop op) = op /\
+                          commutative_seq op suf)))
+  = ()
+
+let commu_seq_prop (op:log_entry) (l:log)
+  : Lemma (requires Add? (snd op))
+          (ensures commutative_seq op l <==> (forall e. mem e l ==> ~ (get_ele op = get_ele e /\ Rem? (snd e)))) = ()
+  
+let commu_seq_prop_l (op:log_entry) (l':log) (last1:log_entry)
+  : Lemma (requires Add? (snd op) /\ get_ele last1 <> get_ele op /\ commutative_seq op l')
+          (ensures commutative_seq op (snoc l' last1)) = 
+  lemma_mem_snoc l' last1;
+  commu_seq_prop op l';
+  commu_seq_prop op (snoc l' last1)
+
+let ind_case_last1_neq_pre4_help1 (l:log) (last2:log_entry)
+  : Lemma (requires distinct_ops l /\ length l > 0 /\
+                    Rem? (snd last2) /\
+                   (let l', last1 = un_snoc l in
+                    get_ele last1 <> get_ele last2 /\
+                    exists_triple last2 l'))
+          (ensures exists_triple last2 l) 
+          [SMTPat (let l', last1 = un_snoc l in
+                   (exists_triple last2 l'))] =
+  let l', last1 = un_snoc l in
+  lem_exists_new last2 l';
+  let pre', op', suf' = find_triple last2 l' in
+  lemma_mem_snoc l' last1;
+  assert (mem op' l);
+  let pre, suf = pre_suf l op' in
+  commu_seq_prop op' suf';
+  
+  assert ((snoc pre op') ++ suf = snoc ((snoc pre' op') ++ suf') last1);
+  append_assoc (snoc pre' op') suf' (create 1 last1);
+  assert ((snoc pre op') ++ suf = ((snoc pre' op') ++ (snoc suf' last1)));
+  lem_suf_equal4 l op';
+  distinct_invert_append l' (create 1 last1);
+  lem_suf_equal4 l' op';
+
+  not_mem_id l' last1;
+  mem_ele_id op' l;
+  mem_ele_id op' l';
+  lem_id_not_snoc l' suf' last1 op'; 
+  assert (not (mem_id (fst op') (snoc suf' last1)));
+ 
+  count_1 l;
+  assert (count_id (fst op') (snoc pre op' ++ suf) = 1);
+  lem_count_1 pre suf pre' (snoc suf' last1) op';
+  
+  assert (length suf = length (snoc suf' last1));
+  lemma_append_inj (snoc pre op') suf (snoc pre' op') (snoc suf' last1);
+  assert (suf = snoc suf' last1);
+  commu_seq_prop_l op' suf' last1;
+  assert (commutative_seq op' suf);
+  lem_exists_new last2 l
+                    
+let ind_case_last1_neq_pre4_help (l:log) (last2:log_entry)
+  : Lemma (requires distinct_ops l /\ length l > 0 /\
+                    Rem? (snd last2) /\
+                   (let l', last1 = un_snoc l in
+                    get_ele last1 <> get_ele last2))
+          (ensures (let l', last1 = un_snoc l in 
+                    (exists_triple last2 l' ==> exists_triple last2 l) /\
+                    (not (exists_triple last2 l) ==> not (exists_triple last2 l')))) = ()
+                    
+let ind_case_last1_neq_pre4 (lca s1 s2:st)
+ : Lemma (requires common_pre1 lca s1 s2 /\ 
+                   length (ops_of s1) > length (ops_of lca) /\
+                   (let _, last2 = un_snoc (ops_of s2) in
+                    let _, last1 = un_snoc (ops_of s1) in
+                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
+                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                   (let s2' = inverse_st s2 in
+                    is_prefix (ops_of lca) (ops_of s2') /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
+         (ensures (let s1' = inverse_st s1 in
+                   let s2' = inverse_st s2 in
+                   let _, last2 = un_snoc (ops_of s2) in
+                   (ind_case_last1_neq_pre1 lca s1 s2;
+                    ind_case_last1_neq_pre2 lca s1 s2;
+                    ind_case_last1_neq_pre3 lca s1 s2;
+                    (not (exists_triple last2 (diff (ops_of s1') (ops_of lca))))))) = 
+ ind_case_last1_neq_pre1 lca s1 s2;
+ ind_case_last1_neq_pre2 lca s1 s2;
+ ind_case_last1_neq_pre3 lca s1 s2;
+ let s1' = inverse_st s1 in
+ let _, last2 = un_snoc (ops_of s2) in
+ let pre1, last1 = un_snoc (ops_of s1) in
+ let pre1d, last1d = un_snoc (diff (ops_of s1) (ops_of lca)) in
+ lem_diff (ops_of s1) (ops_of lca);
+ assert (last1 = last1d);
+ assert (get_ele last1d <> get_ele last2);
+ assert ((diff (ops_of s1') (ops_of lca)) = pre1d);
+ ind_case_last1_neq_pre4_help (diff (ops_of s1) (ops_of lca)) last2
+#pop-options
+                    
+#push-options "--z3rlimit 3000 --fuel 1 --ifuel 1"
+let rec linearizable_gt0_inv2_c3' (lca s1 s2:st)
+ : Lemma (requires common_pre1 lca s1 s2 /\ 
+                   (let _, last2 = un_snoc (ops_of s2) in
+                    Rem? (snd last2) /\
+                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                   (let s2' = inverse_st s2 in
+                    is_prefix (ops_of lca) (ops_of s2') /\
+                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
+                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    let s2' = inverse_st s2 in
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (v_of s1) (v_of s2))))
+         (decreases %[length (ops_of s1)]) =
+   let _, last2 = un_snoc (ops_of s2) in
+   let s2' = inverse_st s2 in
+   if ops_of s1 = ops_of lca then
+     base_case lca s1 s2
+   else 
+     (assert ((length (ops_of s1) > length (ops_of lca)));
+      let _, last1 = un_snoc (ops_of s1) in
+      not_add_eq lca s1 s2;
+      assert (~ (Add? (snd last1) /\ get_ele last1 = get_ele last2));
+      let s1' = inverse_st s1 in
+      if Rem? (snd last1) && get_ele last1 = get_ele last2 then
+        ind_case_last1_rem_eq lca s1 s2
+      else if get_ele last1 <> get_ele last2 then
+        (ind_case_last1_neq_pre1 lca s1 s2;
+         assert (common_pre1 lca s1' s2);
+         ind_case_last1_neq_pre2 lca s1 s2;
+         assert (concrete_merge_pre (v_of lca) (v_of s1') (v_of s2')); 
+         ind_case_last1_neq_pre3 lca s1 s2;
+         assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2);
+         ind_case_last1_neq_pre4 lca s1 s2;
+         assert (not (exists_triple last2 (diff (ops_of s1') (ops_of lca))));
+         linearizable_gt0_inv2_c3' lca s1' s2;
+         ind_case_last1_neq lca s1 s2)
+      else ())
+#pop-options
+
+let linearizable_gt0_inv2_c3 (lca s1 s2:st)
+ : Lemma (requires common_pre lca s1 s2 /\ 
+                    (let _, last1 = un_snoc (ops_of s1) in
+                     let _, last2 = un_snoc (ops_of s2) in
+                     Rem? (snd last2) /\
+                     not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                     not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                     last (resolve_conflict last1 last2) = last2 /\
+                     is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
+                     concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)) /\
+                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2))
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
+                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) =
+ linearizable_gt0_inv2_c3' lca s1 s2
+
+#push-options "--z3rlimit 500"
+let linearizable_gt0 (lca s1 s2:st)
+  : Lemma (requires common_pre lca s1 s2 /\ 
+                    (let _, last1 = un_snoc (ops_of s1) in
+                     let _, last2 = un_snoc (ops_of s2) in
+                     
+                     (exists_triple last1 (diff (ops_of s2) (ops_of lca)) ==>
+                      (let (_, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
+                        suf2 = snd (pre_suf (ops_of s2) op2) /\
+                        (let inv2 = inverse_st_op s2 op2 in
+                        concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2)))) /\
+
+                      ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                        exists_triple last2 (diff (ops_of s1) (ops_of lca))) ==>
+                      (let (_, op1, suf1) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in
+                        suf1 = snd (pre_suf (ops_of s1) op1) /\
+                        (let inv1 = inverse_st_op s1 op1 in
+                        concrete_merge_pre (v_of lca) (v_of inv1) (v_of s2)))) /\
+
+                     ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                       not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
+                     (last (resolve_conflict last1 last2) = last1 ==>
+                           is_prefix (ops_of lca) (ops_of (inverse_st s1)) /\
+                           concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of s2)) /\
+                           
+                     (last (resolve_conflict last1 last2) <> last1 ==>
+                           is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
+                           concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2))))))
+          (ensures (let _, last1 = un_snoc (ops_of s1) in
+                    let _, last2 = un_snoc (ops_of s2) in
+                    
+                    (exists_triple last1 (diff (ops_of s2) (ops_of lca)) ==>
+                      (let (_, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
+                       (let inv2 = inverse_st_op s2 op2 in
+                       concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2 /\
+                       eq (do (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2)
+                          (concrete_merge (v_of lca) (v_of s1) (v_of s2))))) /\
+
+                    ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                      exists_triple last2 (diff (ops_of s1) (ops_of lca))) ==>
+                      (let (_, op1, suf1) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in
+                       (let inv1 = inverse_st_op s1 op1 in
+                       concrete_do_pre (concrete_merge (v_of lca) (v_of inv1) (v_of s2)) op1 /\
+                       eq (do (concrete_merge (v_of lca) (v_of inv1) (v_of s2)) op1)
+                          (concrete_merge (v_of lca) (v_of s1) (v_of s2))))) /\
+
+                    ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                       not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
+                    
+                    (last (resolve_conflict last1 last2) = last1 ==>
+                      concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1 /\
+                      eq (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
+                         (concrete_merge (v_of lca) (v_of s1) (v_of s2))) /\
+                       
+                    (last (resolve_conflict last1 last2) <> last1 ==>
+                      concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
+                      eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
+                         (concrete_merge (v_of lca) (v_of s1) (v_of s2)))))) = 
+  let _, last1 = un_snoc (ops_of s1) in
+  let _, last2 = un_snoc (ops_of s2) in
+  lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
+  resolve_conflict_prop last1 last2; 
+  linearizable_gt0_pre lca s1 s2;
+  if exists_triple last1 (diff (ops_of s2) (ops_of lca)) 
+     then linearizable_gt0_inv2' lca s1 s2
+  else if exists_triple last2 (diff (ops_of s1) (ops_of lca)) 
+     then (assert (not (exists_triple last1 (diff (ops_of s2) (ops_of lca)))); linearizable_gt0_inv1' lca s1 s2)
+  else if last (resolve_conflict last1 last2) = last1
+     then (assert (not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                   not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))); linearizable_gt0_inv1 lca s1 s2)
+  else (assert (not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                last (resolve_conflict last1 last2) = last2);
+    match snd last1, snd last2 with
+    |Add _, Add _ -> linearizable_gt0_inv2_c2 lca s1 s2
+    |Rem _, Add _ -> linearizable_gt0_inv2_c4 lca s1 s2
+    |_, Rem _ -> linearizable_gt0_inv2_c3 lca s1 s2)
+                
+let convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
+  : Lemma (requires concrete_merge_pre lca s1 s2 /\
+                    concrete_merge_pre lca s1' s2 /\
+                    concrete_do_pre lca o /\
+                    concrete_do_pre s1 o /\ s1' = do s1 o /\
+                    concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
+          (ensures eq (concrete_merge lca s1' s2) (concrete_merge s1 (concrete_merge lca s1 s2) s1')) = ()
+
+(**********************************************************************************************************)
+
+
+
+(*
+
+
 #push-options "--z3rlimit 200"
 let rec lem_foldl_all_rem (s:concrete_st) (l:log) (ele:nat)
   : Lemma (requires foldl_prop s l /\
@@ -1700,715 +2424,4 @@ let linearizable_gt0_inv2_c1 (lca s1 s2:st)
     then linearizable_gt0_inv2_c1_nec2 lca s1 s2
   else linearizable_gt0_inv2_c1_nec3 lca s1 s2
 
-#push-options "--z3rlimit 500"
-let linearizable_gt0 (lca s1 s2:st)
-  : Lemma (requires common_pre lca s1 s2 /\ 
-                    (let _, last1 = un_snoc (ops_of s1) in
-                     let _, last2 = un_snoc (ops_of s2) in
-                     
-                     (exists_triple last1 (diff (ops_of s2) (ops_of lca)) ==>
-                      (let (_, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                        suf2 = snd (pre_suf (ops_of s2) op2) /\
-                        (let inv2 = inverse_st_op s2 op2 in
-                        concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2)))) /\
-
-                      ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                        exists_triple last2 (diff (ops_of s1) (ops_of lca))) ==>
-                      (let (_, op1, suf1) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in
-                        suf1 = snd (pre_suf (ops_of s1) op1) /\
-                        (let inv1 = inverse_st_op s1 op1 in
-                        concrete_merge_pre (v_of lca) (v_of inv1) (v_of s2)))) /\
-
-                     ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                       not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
-                     (last (resolve_conflict last1 last2) = last1 ==>
-                           is_prefix (ops_of lca) (ops_of (inverse_st s1)) /\
-                           concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of s2)) /\
-                           
-                     (last (resolve_conflict last1 last2) <> last1 ==>
-                           is_prefix (ops_of lca) (ops_of (inverse_st s2)) /\
-                           concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2))))))
-          (ensures (let _, last1 = un_snoc (ops_of s1) in
-                    let _, last2 = un_snoc (ops_of s2) in
-                    
-                    (exists_triple last1 (diff (ops_of s2) (ops_of lca)) ==>
-                      (let (_, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                       (let inv2 = inverse_st_op s2 op2 in
-                       concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2 /\
-                       eq (do (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2)
-                          (concrete_merge (v_of lca) (v_of s1) (v_of s2))))) /\
-
-                    ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                      exists_triple last2 (diff (ops_of s1) (ops_of lca))) ==>
-                      (let (_, op1, suf1) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in
-                       (let inv1 = inverse_st_op s1 op1 in
-                       concrete_do_pre (concrete_merge (v_of lca) (v_of inv1) (v_of s2)) op1 /\
-                       eq (do (concrete_merge (v_of lca) (v_of inv1) (v_of s2)) op1)
-                          (concrete_merge (v_of lca) (v_of s1) (v_of s2))))) /\
-
-                    ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                       not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
-                    
-                    (last (resolve_conflict last1 last2) = last1 ==>
-                      concrete_do_pre (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1 /\
-                      eq (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
-                         (concrete_merge (v_of lca) (v_of s1) (v_of s2))) /\
-                       
-                    (last (resolve_conflict last1 last2) <> last1 ==>
-                      concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2 /\
-                      eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
-                         (concrete_merge (v_of lca) (v_of s1) (v_of s2)))))) = 
-  let _, last1 = un_snoc (ops_of s1) in
-  let _, last2 = un_snoc (ops_of s2) in
-  lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
-  resolve_conflict_prop last1 last2; 
-  linearizable_gt0_pre lca s1 s2;
-  if exists_triple last1 (diff (ops_of s2) (ops_of lca)) 
-     then linearizable_gt0_inv2' lca s1 s2
-  else if exists_triple last2 (diff (ops_of s1) (ops_of lca)) 
-     then (assert (not (exists_triple last1 (diff (ops_of s2) (ops_of lca)))); linearizable_gt0_inv1' lca s1 s2)
-  else if last (resolve_conflict last1 last2) = last1
-     then (assert (not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                   not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))); linearizable_gt0_inv1 lca s1 s2)
-  else (assert (not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                last (resolve_conflict last1 last2) = last2);
-    match snd last1, snd last2 with
-    |Add _, Add _ -> linearizable_gt0_inv2_c2 lca s1 s2
-    |Add _, Rem _ -> linearizable_gt0_inv2_c1 lca s1 s2
-    |Rem _, Add _ -> linearizable_gt0_inv2_c4 lca s1 s2
-    |Rem _, Rem _ -> linearizable_gt0_inv2_c3 lca s1 s2)
-                
-let convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
-  : Lemma (requires concrete_merge_pre lca s1 s2 /\
-                    concrete_merge_pre lca s1' s2 /\
-                    concrete_do_pre lca o /\
-                    concrete_do_pre s1 o /\ s1' = do s1 o /\
-                    concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
-          (ensures eq (concrete_merge lca s1' s2) (concrete_merge s1 (concrete_merge lca s1 s2) s1')) = ()
-
-(**********************************************************************************************************)
-
-#push-options "--z3rlimit 500"
-type common_pre1 (lca s1 s2:st) =
-  is_prefix (ops_of lca) (ops_of s1) /\
-  is_prefix (ops_of lca) (ops_of s2) /\
-  //Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-  Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-  concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-  (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))
-
-type common_pre2 (lca s1 s2:st) =
-  is_prefix (ops_of lca) (ops_of s1) /\
-  is_prefix (ops_of lca) (ops_of s2) /\
-  //Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-  //Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-  concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-  (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-  (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))
-  
-let base_case (lca s1 s2:st)
-  : Lemma (requires common_pre1 lca s1 s2 /\
-                    ops_of s1 = ops_of lca /\
-                    (let _, last2 = un_snoc (ops_of s2) in
-                     let s2' = inverse_st s2 in
-                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2))                   
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let s2' = inverse_st s2 in
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = ()
-
-let base_case1 (lca s1 s2:st)
-  : Lemma (requires common_pre1 lca s1 s2 /\
-                    ops_of s1 = ops_of lca /\
-                    (let _, last2 = un_snoc (ops_of s2) in
-                     let s2' = inverse_st s2 in
-                     ops_of s2' = ops_of lca /\
-                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2))                   
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let s2' = inverse_st s2 in
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = ()
-                       
-let lem_last (a:log)
-  : Lemma (ensures (length a > 0 ==>
-                   (let _, lst = un_snoc a in
-                    last a = lst))) = ()
-
-#push-options "--z3rlimit 600"
-let ind_case_last1_rem_eq (lca s1 s2:st)
-  : Lemma (requires Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    common_pre1 lca s1 s2 /\
-                    (let _, last2 = un_snoc (ops_of s2) in
-                     let _, last1 = un_snoc (ops_of s1) in
-                     Rem? (snd last2) /\ Rem? (snd last1) && get_ele last1 = get_ele last2 /\
-                     not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                     (let s2' = inverse_st s2 in
-                     is_prefix (ops_of lca) (ops_of s2') /\
-                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))               
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let s2' = inverse_st s2 in
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) =
-  let pre2, last2 = un_snoc (ops_of s2) in
-  let pre1, last1 = un_snoc (ops_of s1) in
-  let s2' = inverse_st s2 in
-  let s1' = inverse_st s1 in
-  lem_last (ops_of s2);
-  do_prop (v_of s2') last2;
-  assert (forall e. (L.mem e (v_of s2') /\ snd e <> get_ele last2) <==> L.mem e (v_of s2));
-  assert (forall e. L.mem e (diff_s (v_of s2) (v_of lca)) <==>
-               L.mem e (diff_s (v_of s2') (v_of lca)) /\ snd e <> get_ele last2);
-  lem_last (ops_of s1);
-  do_prop (v_of s1') last1;
-  assert (not (mem_ele (get_ele last1) (v_of s1)));
-  assert (not (mem_ele (get_ele last2) (diff_s (v_of s1) (v_of lca)))); 
-  assert (forall e. ((L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of s2')) /\ snd e <> get_ele last2) <==>
-               (L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of s2)));   
-  assert (forall e. L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2)) <==>
-               (L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2')) /\ snd e <> get_ele last2));
-
-  do_prop (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2;
-  assert (forall e. (L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2')) /\ snd e <> get_ele last2) <==>
-                L.mem e (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)); 
-
-  trans_op_ele (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
-               (concrete_merge (v_of lca) (v_of s1) (v_of s2'))
-               (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-               (get_ele last2);
-  assert (eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-             (concrete_merge (v_of lca) (v_of s1) (v_of s2))); ()
-#pop-options
-
-let lem_not_ele_diff (s1' s1 lca:concrete_st) (op:log_entry) (ele:nat)
-  : Lemma (requires concrete_do_pre s1' op /\ s1 = do s1' op /\ get_ele op <> ele /\
-                    not (mem_ele ele (diff_s s1' lca)))
-          (ensures not (mem_ele ele (diff_s s1 lca))) = ()
-
-let lem_not_ele_diff1 (lca s1 s2 m:concrete_st) (ele:nat)
-  : Lemma (requires concrete_merge_pre lca s1 s2 /\
-                    not (mem_ele ele m) /\
-                    eq m (concrete_merge lca s1 s2) /\
-                    not (mem_ele ele (diff_s s2 lca)) /\
-                    (forall e. L.mem e lca /\ L.mem e s1 /\ L.mem e s2 ==> snd e <> ele))
-          (ensures not (mem_ele ele (diff_s s1 lca))) = ()
-
-#push-options "--z3rlimit 200"
-let lem_lastop_suf_0_help (l2:log) (op:log_entry)
-  : Lemma (requires last (cons op l2) = op /\
-                    count op (cons op l2) = 1)
-          (ensures not (mem op l2) /\ length l2 = 0) =
-  lemma_mem_append (create 1 op) l2;
-  lemma_append_count (create 1 op) l2
-
-let rec lem_not_id (l:log) (op:log_entry)
-  : Lemma (requires distinct_ops l /\ 
-                    not (mem_id (fst op) l))
-          (ensures not (mem op l)) (decreases length l) = 
-  match length l with
-  |0 -> ()
-  |_ -> lem_not_id (tail l) op
-
-let rec lem_count_id_ele (l:log) (op:log_entry)
-  : Lemma (requires count_id (fst op) l = 1 /\ mem op l /\ distinct_ops l)
-          (ensures count op l = 1) (decreases length l) =
-  match length l with
-  |1 -> ()
-  |_ -> if (fst (head l) = fst op) 
-         then (assert (not (mem_id (fst op) (tail l))); lem_not_id (tail l) op)
-          else (lemma_tl (head l) (tail l);
-                lemma_append_count_id (create 1 (head l)) (tail l);
-                distinct_invert_append (create 1 (head l)) (tail l);
-                lem_count_id_ele (tail l) op)
-
-let lem_lastop_suf_0 (l l1 l2:log) (op:log_entry)
-  : Lemma (requires distinct_ops l /\ mem op l /\
-                    l = snoc l1 op ++ l2 /\
-                    (lemma_mem_append (snoc l1 op) l2;
-                    last l = op))
-          (ensures length l2 = 0) =
-  lemma_mem_append (snoc l1 op) l2;
-  lemma_append_count (snoc l1 op) l2;
-  mem_ele_id op l;
-  count_1 l;
-  lem_count_id_ele l op;
-  assert (count op l = 1); 
-  append_assoc l1 (create 1 op) l2;
-  assert (l = l1 ++ cons op l2);
-
-  lemma_mem_append l1 (cons op l2);
-  lemma_append_count l1 (cons op l2);
-  lemma_mem_append (create 1 op) l2;
-  lemma_append_count (create 1 op) l2;
-  assert (mem op (cons op l2)); 
-  assert (count op (cons op l2) = 1); 
-  assert (last l = last (cons op l2));
-  lem_lastop_suf_0_help l2 op
-  
-#push-options "--z3rlimit 600"
-let not_add_eq (lca s1 s2:st)
-  : Lemma (requires Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    common_pre1 lca s1 s2 /\
-                    (let _, last2 = un_snoc (ops_of s2) in
-                     let _, last1 = un_snoc (ops_of s1) in
-                     Rem? (snd last2) /\
-                     not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                     (let s2' = inverse_st s2 in
-                     is_prefix (ops_of lca) (ops_of s2') /\
-                     concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                     concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))  
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let _, last1 = un_snoc (ops_of s1) in
-                    ~ (Add? (snd last1) /\ get_ele last1 = get_ele last2))) = 
-  let _, last2 = un_snoc (ops_of s2) in
-  let _, last1 = un_snoc (ops_of s1) in
-  lastop_neq (ops_of lca) (ops_of s1) (ops_of s2); 
-  assert (fst last1 <> fst last2);
-
-  let s1' = inverse_st s1 in
-  lemma_mem_snoc (ops_of s1') last1;
-  assert (mem last1 (ops_of s1));
-  assert (last (ops_of s1) = last1);
-  lem_diff (ops_of s1) (ops_of lca);
-  assert (last (diff (ops_of s1) (ops_of lca)) = last1);
-  assert (mem last1 (diff (ops_of s1) (ops_of lca)));
-  let pre, suf = pre_suf (diff (ops_of s1) (ops_of lca)) last1 in
-  lem_lastop_suf_0 (diff (ops_of s1) (ops_of lca)) pre suf last1;
-  assert (length suf = 0);
-  lemma_empty suf; 
-  comm_empty_log last1 suf; 
-  assert (commutative_seq last1 suf);
-
-  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> not (commutative last1 last2));
-  resolve_conflict_prop last2 last1;
-  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> 
-                last (resolve_conflict last2 last1) = last1);
-  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> 
-                not (commutative last2 last1) /\
-                last (resolve_conflict last2 last1) = last1 /\
-                commutative_seq last1 suf);
-  assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> exists_triple last2 (diff (ops_of s1) (ops_of lca)));
-  assert (~ (Add? (snd last1) /\ get_ele last1 = get_ele last2)); ()
-#pop-options
-
-#push-options "--z3rlimit 700"
-let ind_case_last1_neq (lca s1 s2:st)
-  : Lemma (requires (Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    (let s1' = inverse_st s1 in
-                    common_pre1 lca s1 s2 /\
-                    (let s2' = inverse_st s2 in
-                    (let _, last2 = un_snoc (ops_of s2) in
-                    let _, last1 = un_snoc (ops_of s1) in
-                    Rem? (snd last2) /\ get_ele last2 <> get_ele last1 /\
-                    is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                    concrete_merge_pre (v_of lca) (v_of s1') (v_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    concrete_merge_pre (v_of lca) (v_of s1') (v_of s2) /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2 /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2 /\
-                    eq (do (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (v_of s1') (v_of s2)))))))
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let s2' = inverse_st s2 in
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) =
-  let _, last2 = un_snoc (ops_of s2) in 
-  let s2' = inverse_st s2 in 
-  lem_last (ops_of s2); 
-  do_prop (v_of s2') last2; 
-  assert (not (mem_ele (get_ele last2) (v_of s2))); 
-  assert (not (mem_ele (get_ele last2) (diff_s (v_of s2) (v_of lca))));
-  let _, last1 = un_snoc (ops_of s1) in
-  let s1' = inverse_st s1 in
-  lem_last (ops_of s1);
-  do_prop (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2;
-  assert (not (mem_ele (get_ele last2) (do (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2))); 
-  assert (forall e. L.mem e (v_of lca) /\ L.mem e (v_of s1') /\ L.mem e (v_of s2) ==> snd e <> get_ele last2); 
-  lem_not_ele_diff1 (v_of lca) (v_of s1') (v_of s2) (do (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2) (get_ele last2);
-  assert (not (mem_ele (get_ele last2) (diff_s (v_of s1') (v_of lca)))); 
-  lem_not_ele_diff (v_of s1') (v_of s1) (v_of lca) last1 (get_ele last2);
-  assert (not (mem_ele (get_ele last2) (diff_s (v_of s1) (v_of lca))));
-  ()
-#pop-options
-
-#push-options "--z3rlimit 500"
-let ind_case_last1_neq_pre1 (lca s1 s2:st)
- : Lemma (requires common_pre1 lca s1 s2 /\ 
-                   length (ops_of s1) > length (ops_of lca) /\
-                   (let _, last2 = un_snoc (ops_of s2) in
-                    let _, last1 = un_snoc (ops_of s1) in
-                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
-                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                   (let s2' = inverse_st s2 in
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
-         (ensures (let s1' = inverse_st s1 in
-                   common_pre1 lca s1' s2)) =
- let s1' = inverse_st s1 in
- let s2' = inverse_st s2 in
- lem_inverse (ops_of lca) (ops_of s1);
- assert (is_prefix (ops_of lca) (ops_of s1')); 
- inverse_diff_id (ops_of lca) (ops_of s1) (ops_of s2);
- assert (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))));
- lastop_diff (ops_of lca) (ops_of s1);
- assert (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1); 
- general lca s1' s2;
- assert (forall id. mem_id_s id (diff_s (v_of s1') (v_of lca)) ==> not (mem_id_s id (v_of s2)));
- lem_merge_pre (v_of lca) (v_of s1') (v_of s2);
- assert (concrete_merge_pre (v_of lca) (v_of s1') (v_of s2));
- assert (common_pre1 lca s1' s2);
- ()
-
-let ind_case_last1_neq_pre2 (lca s1 s2:st)
- : Lemma (requires common_pre1 lca s1 s2 /\ 
-                   length (ops_of s1) > length (ops_of lca) /\
-                   (let _, last2 = un_snoc (ops_of s2) in
-                    let _, last1 = un_snoc (ops_of s1) in
-                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
-                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                   (let s2' = inverse_st s2 in
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
-         (ensures (let s1' = inverse_st s1 in
-                   let s2' = inverse_st s2 in
-                   concrete_merge_pre (v_of lca) (v_of s1') (v_of s2'))) =
- let s1' = inverse_st s1 in
- ind_case_last1_neq_pre1 lca s1 s2;
- let s2' = inverse_st s2 in
- lem_inverse (ops_of lca) (ops_of s2);
- assert (is_prefix (ops_of lca) (ops_of s2'));
- inverse_diff_id2 (ops_of lca) (ops_of s1) (ops_of s2);
- assert (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca))));
- lastop_diff (ops_of lca) (ops_of s2);
- assert (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1);
- general lca s1' s2';
- assert (forall id. mem_id_s id (diff_s (v_of s1') (v_of lca)) ==> not (mem_id_s id (v_of s2')));
- lem_merge_pre (v_of lca) (v_of s1') (v_of s2')
-
-let ind_case_last1_neq_pre3 (lca s1 s2:st)
- : Lemma (requires common_pre1 lca s1 s2 /\ 
-                   length (ops_of s1) > length (ops_of lca) /\
-                   (let _, last2 = un_snoc (ops_of s2) in
-                    let _, last1 = un_snoc (ops_of s1) in
-                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
-                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                   (let s2' = inverse_st s2 in
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
-         (ensures (let s1' = inverse_st s1 in
-                   let s2' = inverse_st s2 in
-                   let _, last2 = un_snoc (ops_of s2) in
-                   (ind_case_last1_neq_pre1 lca s1 s2;
-                    ind_case_last1_neq_pre2 lca s1 s2;
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2))) =
- ind_case_last1_neq_pre1 lca s1 s2; 
- ind_case_last1_neq_pre2 lca s1 s2;
- let s2' = inverse_st s2 in
- let pre2, last2 = un_snoc (ops_of s2) in
- let s1' = inverse_st s1 in
- let pre1, last1 = un_snoc (ops_of s1) in
- assert (forall id. mem_id_s id (concrete_merge (v_of lca) (v_of s1) (v_of s2')) ==> 
-               (mem_id_s id (v_of lca) \/ mem_id_s id (v_of s1) \/ mem_id_s id (v_of s2'))); 
- lem_foldl init_st (ops_of lca);
- assert (forall id. mem_id_s id (v_of lca) ==> mem_id id (ops_of lca));
- lem_foldl init_st (ops_of s1);
- assert (forall id. mem_id_s id (v_of s1) ==> mem_id id (ops_of s1));
- lem_foldl init_st (ops_of s2');
- assert (forall id. mem_id_s id (v_of s2') ==> mem_id id (ops_of s2'));
- lem_foldl init_st (ops_of s1');
- assert (forall id. mem_id_s id (v_of s1') ==> mem_id id (ops_of s1'));
-
- assert (forall id. mem_id_s id (concrete_merge (v_of lca) (v_of s1) (v_of s2')) ==> 
-               (mem_id id (ops_of lca) \/ mem_id id (ops_of s1) \/ mem_id id (ops_of s2')));
-
- assert (forall id. mem_id_s id (concrete_merge (v_of lca) (v_of s1') (v_of s2')) ==> 
-               (mem_id_s id (v_of lca) \/ mem_id_s id (v_of s1') \/ mem_id_s id (v_of s2')));
- inverse_diff_id_last2 (ops_of lca) (ops_of s1) (ops_of s2);
- assert (forall id. (mem_id id (ops_of lca) \/ mem_id id (ops_of s1') \/ mem_id id (ops_of s2')) ==> id <> fst last2);
- ()
-
-let lem_exists_new (lastop:log_entry) (l:log)
-  : Lemma (ensures exists_triple lastop l <==>
-                   (exists op. mem op l /\
-                         (let pre,suf = pre_suf l op in
-                          not (commutative lastop op) /\
-                          last (resolve_conflict lastop op) = op /\
-                          commutative_seq op suf)))
-  = ()
-
-let commu_seq_prop (op:log_entry) (l:log)
-  : Lemma (requires Add? (snd op))
-          (ensures commutative_seq op l <==> (forall e. mem e l ==> ~ (get_ele op = get_ele e /\ Rem? (snd e)))) = ()
-
-let commu_seq_prop_l (op:log_entry) (l':log) (last1:log_entry)
-  : Lemma (requires Add? (snd op) /\ get_ele last1 <> get_ele op /\ commutative_seq op l')
-          (ensures commutative_seq op (snoc l' last1)) = 
-  lemma_mem_snoc l' last1;
-  commu_seq_prop op l';
-  commu_seq_prop op (snoc l' last1)
-
-let ind_case_last1_neq_pre4_help1 (l:log) (last2:log_entry)
-  : Lemma (requires distinct_ops l /\ length l > 0 /\
-                    Rem? (snd last2) /\
-                   (let l', last1 = un_snoc l in
-                    get_ele last1 <> get_ele last2 /\
-                    exists_triple last2 l'))
-          (ensures exists_triple last2 l) 
-          [SMTPat (let l', last1 = un_snoc l in
-                   (exists_triple last2 l'))] =
-  let l', last1 = un_snoc l in
-  lem_exists_new last2 l';
-  let pre', op', suf' = find_triple last2 l' in
-  lemma_mem_snoc l' last1;
-  assert (mem op' l);
-  let pre, suf = pre_suf l op' in
-  commu_seq_prop op' suf';
-  
-  assert ((snoc pre op') ++ suf = snoc ((snoc pre' op') ++ suf') last1);
-  append_assoc (snoc pre' op') suf' (create 1 last1);
-  assert ((snoc pre op') ++ suf = ((snoc pre' op') ++ (snoc suf' last1)));
-  lem_suf_equal4 l op';
-  distinct_invert_append l' (create 1 last1);
-  lem_suf_equal4 l' op';
-
-  not_mem_id l' last1;
-  mem_ele_id op' l;
-  mem_ele_id op' l';
-  lem_id_not_snoc l' suf' last1 op'; 
-  assert (not (mem_id (fst op') (snoc suf' last1)));
- 
-  count_1 l;
-  assert (count_id (fst op') (snoc pre op' ++ suf) = 1);
-  lem_count_1 pre suf pre' (snoc suf' last1) op';
-  
-  assert (length suf = length (snoc suf' last1));
-  lemma_append_inj (snoc pre op') suf (snoc pre' op') (snoc suf' last1);
-  assert (suf = snoc suf' last1);
-  commu_seq_prop_l op' suf' last1;
-  assert (commutative_seq op' suf);
-  lem_exists_new last2 l
-                    
-let ind_case_last1_neq_pre4_help (l:log) (last2:log_entry)
-  : Lemma (requires distinct_ops l /\ length l > 0 /\
-                    Rem? (snd last2) /\
-                   (let l', last1 = un_snoc l in
-                    get_ele last1 <> get_ele last2))
-          (ensures (let l', last1 = un_snoc l in 
-                    (exists_triple last2 l' ==> exists_triple last2 l) /\
-                    (not (exists_triple last2 l) ==> not (exists_triple last2 l')))) = ()
-                    
-let ind_case_last1_neq_pre4 (lca s1 s2:st)
- : Lemma (requires common_pre1 lca s1 s2 /\ 
-                   length (ops_of s1) > length (ops_of lca) /\
-                   (let _, last2 = un_snoc (ops_of s2) in
-                    let _, last1 = un_snoc (ops_of s1) in
-                    Rem? (snd last2) /\ get_ele last1 <> get_ele last2 /\
-                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                   (let s2' = inverse_st s2 in
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
-         (ensures (let s1' = inverse_st s1 in
-                   let s2' = inverse_st s2 in
-                   let _, last2 = un_snoc (ops_of s2) in
-                   (ind_case_last1_neq_pre1 lca s1 s2;
-                    ind_case_last1_neq_pre2 lca s1 s2;
-                    ind_case_last1_neq_pre3 lca s1 s2;
-                    (not (exists_triple last2 (diff (ops_of s1') (ops_of lca))))))) = 
- ind_case_last1_neq_pre1 lca s1 s2;
- ind_case_last1_neq_pre2 lca s1 s2;
- ind_case_last1_neq_pre3 lca s1 s2;
- let s1' = inverse_st s1 in
- let _, last2 = un_snoc (ops_of s2) in
- let pre1, last1 = un_snoc (ops_of s1) in
- let pre1d, last1d = un_snoc (diff (ops_of s1) (ops_of lca)) in
- lem_diff (ops_of s1) (ops_of lca);
- assert (last1 = last1d);
- assert (get_ele last1d <> get_ele last2);
- assert ((diff (ops_of s1') (ops_of lca)) = pre1d);
- ind_case_last1_neq_pre4_help (diff (ops_of s1) (ops_of lca)) last2
-#pop-options
-                    
-#push-options "--z3rlimit 3000 --fuel 1 --ifuel 1"
-let rec linearizable_gt0_inv2_c3_new1 (lca s1 s2:st)
- : Lemma (requires common_pre1 lca s1 s2 /\ 
-                   (let _, last2 = un_snoc (ops_of s2) in
-                    Rem? (snd last2) /\
-                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                   (let s2' = inverse_st s2 in
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let s2' = inverse_st s2 in
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (v_of s1) (v_of s2))))
-         (decreases %[length (ops_of s1)]) =
-   let _, last2 = un_snoc (ops_of s2) in
-   let s2' = inverse_st s2 in
-   if ops_of s1 = ops_of lca then
-     base_case lca s1 s2
-   else 
-     (assert ((length (ops_of s1) > length (ops_of lca)));
-      let _, last1 = un_snoc (ops_of s1) in
-      not_add_eq lca s1 s2;
-      assert (~ (Add? (snd last1) /\ get_ele last1 = get_ele last2));
-      let s1' = inverse_st s1 in
-      if Rem? (snd last1) && get_ele last1 = get_ele last2 then
-        ind_case_last1_rem_eq lca s1 s2
-      else if get_ele last1 <> get_ele last2 then
-        (ind_case_last1_neq_pre1 lca s1 s2;
-         assert (common_pre1 lca s1' s2);
-         ind_case_last1_neq_pre2 lca s1 s2;
-         assert (concrete_merge_pre (v_of lca) (v_of s1') (v_of s2')); 
-         ind_case_last1_neq_pre3 lca s1 s2;
-         assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2);
-         ind_case_last1_neq_pre4 lca s1 s2;
-         assert (not (exists_triple last2 (diff (ops_of s1') (ops_of lca))));
-         linearizable_gt0_inv2_c3_new1 lca s1' s2;
-         ind_case_last1_neq lca s1 s2)
-      else ())
-
-#push-options "--z3rlimit 500" // --fuel 1 --ifuel 1"
-(*let rec linearizable_gt0_inv2_c3_new (lca s1 s2:st)
- : Lemma (requires common_pre1 lca s1 s2 /\ 
-                   (let _, last2 = un_snoc (ops_of s2) in
-                    Rem? (snd last2) /\
-                    not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                   (let s2' = inverse_st s2 in
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2') /\
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)))
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let s2' = inverse_st s2 in
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (v_of s1) (v_of s2))))
-         (decreases %[length (ops_of s1); length (ops_of s2)]) =
-   let _, last2 = un_snoc (ops_of s2) in
-   let s2' = inverse_st s2 in
-   if ops_of s1 = ops_of lca then
-     if ops_of s2' = ops_of lca then
-       admit() //base_case1 lca s1 s2
-     else (assume ((length (ops_of s2') > length (ops_of lca)));
-           let s2'' = inverse_st s2' in 
-           assume (concrete_do_pre (v_of s2'') last2);
-           assume (not (mem_id (fst last2) (ops_of s2'')));
-           let s2''l = (do (v_of s2'') last2, hide (snoc (ops_of s2'') last2)) in
-           assume (common_pre1 lca s1 s2''l); admit();
-                   //not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                   //concrete_merge_pre (v_of lca) (v_of s1) (v_of s2''l) /\
-                   //concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of s2''l)) last2); admit();
-           (*linearizable_gt0_inv2_c3_new lca s1 s2''l;
-           assume (eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) last2)
-                      (concrete_merge (v_of lca) (v_of s1) (v_of s2)));
-           ()*) ())
-     
-     //base_case lca s1 s2
-   
-   else 
-     (admit()(*;assert ((length (ops_of s1) > length (ops_of lca)));
-      let _, last1 = un_snoc (ops_of s1) in
-      not_add_eq lca s1 s2;
-      assert (~ (Add? (snd last1) /\ get_ele last1 = get_ele last2));
-      let s1' = inverse_st s1 in
-      if Rem? (snd last1) && get_ele last1 = get_ele last2 then
-        ind_case_last1_rem_eq lca s1 s2
-      else if Rem? (snd last1) && get_ele last1 <> get_ele last2 then
-        (assume (common_pre2 lca s1' s2 /\
-                 not (exists_triple last2 (diff (ops_of s1') (ops_of lca))) /\
-`                 concrete_merge_pre (v_of lca) (v_of s1') (v_of s2') /\
-                 concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2);
-        linearizable_gt0_inv2_c3_new lca s1' s2;
-        ind_case_last1_rem_neq lca s1 s2)
-      else if Add? (snd last1) && get_ele last1 <> get_ele last2 then
-        (assume (common_pre2 lca s1' s2 /\
-                 not (exists_triple last2 (diff (ops_of s1') (ops_of lca))) /\
-                 concrete_merge_pre (v_of lca) (v_of s1') (v_of s2') /\
-                 concrete_do_pre (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2);
-         linearizable_gt0_inv2_c3_new lca s1' s2;
-         ind_case_last1_add_neq lca s1 s2)
-      else ()*))*)
-
-
-(*
-
-let linearizable_gt0_pre_inv2'_1 (lca s1 s2:st)
-  : Lemma (requires common_pre lca s1 s2 /\ 
-                    (let _, last1 = un_snoc (ops_of s1) in
-                     exists_triple last1 (diff (ops_of s2) (ops_of lca)) /\
-                    (let (_, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                     suf2 = snd (pre_suf (ops_of s2) op2) /\
-                    (let inv2 = inverse_st_op s2 op2 in
-                     concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2)))))
-          (ensures (let _, last1 = un_snoc (ops_of s1) in
-                    let (_, op2, _) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                    let inv2 = inverse_st_op s2 op2 in
-                    fst last1 <> fst op2 /\
-                    Add? (snd op2) /\ Rem? (snd last1) /\ get_ele last1 = get_ele op2 /\
-                    L.mem (fst op2, get_ele op2) (v_of s2) /\
-                    (forall e. L.mem e (v_of inv2) <==> (L.mem e (v_of s2) /\ e <> (fst op2, get_ele op2))))) =
-  let _, last1 = un_snoc (ops_of s1) in
-  let (_, op, suf) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-  let inv2 = inverse_st_op s2 op in
-  mem_ele_id op (diff (ops_of s2) (ops_of lca));
-  assert (mem_id (fst op) (diff (ops_of s2) (ops_of lca)));
-  lastop_diff (ops_of lca) (ops_of s1);
-  assert (mem_id (fst last1) (diff (ops_of s1) (ops_of lca))); 
-  id_not_eq (diff (ops_of s1) (ops_of lca)) (diff (ops_of s2) (ops_of lca)) (fst last1) (fst op);
-  assert (fst op <> fst last1);
-  resolve_conflict_prop last1 op;
-  assert (Add? (snd op) /\ Rem? (snd last1) /\ get_ele last1 = get_ele op);
-  do_prop (v_of inv2) op; 
-  assert (L.mem (fst op, get_ele op) (v_of s2)); 
-  assert (forall e. (L.mem e (v_of inv2) \/ e = (fst op, get_ele op)) <==> L.mem e (v_of s2)); 
-  assert (forall e. L.mem e (v_of inv2) <==> (L.mem e (v_of s2) /\ e <> (fst op, get_ele op))); ()
-  
-let linearizable_gt0_pre_inv2' (lca s1 s2:st)
-  : Lemma (requires common_pre lca s1 s2 /\ 
-                    (let _, last1 = un_snoc (ops_of s1) in
-                     exists_triple last1 (diff (ops_of s2) (ops_of lca)) /\
-                    (let (_, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                     suf2 = snd (pre_suf (ops_of s2) op2) /\
-                    (let inv2 = inverse_st_op s2 op2 in
-                     concrete_merge_pre (v_of lca) (v_of s1) (v_of inv2)))))
-          (ensures (let _, last1 = un_snoc (ops_of s1) in
-                   (let (_, op2, _) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                   (let inv2 = inverse_st_op s2 op2 in
-                    concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) op2)))) =
-  linearizable_gt0_pre_inv2'_1 lca s1 s2;
-  let _, last1 = un_snoc (ops_of s1) in
-  let (_, op, suf) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-  let inv2 = inverse_st_op s2 op in
-  lem_foldl init_st (ops_of lca);
-  split_prefix init_st (ops_of lca) (ops_of s2);
-  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
-  lem_suf_equal2 (ops_of lca) (ops_of s2) op;
-  assert (not (mem_id_s (fst op) (v_of lca)));
-  no_id_not_ele (fst op, get_ele op) (v_of lca);
-  assert (not (L.mem (fst op, get_ele op) (v_of lca)));
-  assert (L.mem (fst op, get_ele op) (diff_s (v_of s2) (v_of lca)));
-  assert (forall e. L.mem e (diff_s (v_of inv2) (v_of lca)) <==>
-               L.mem e (diff_s (v_of s2) (v_of lca)) /\ e <> (fst op, get_ele op)); 
-  assert (forall e. ((L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of s2)) /\ e <> (fst op, get_ele op)) <==>
-               (L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of inv2))); 
-  assert (forall e. L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of inv2)) <==>
-               (L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2)) /\ e <> (fst op, get_ele op))); 
-  lemma2 (concrete_merge (v_of lca) (v_of s1) (v_of inv2))
-         (concrete_merge (v_of lca) (v_of s1) (v_of s2))
-         (fst op, get_ele op);
-  assert (not (L.mem (fst op, get_ele op) (concrete_merge (v_of lca) (v_of s1) (v_of inv2))));
-  admit()
-    
-    *)
+*)
