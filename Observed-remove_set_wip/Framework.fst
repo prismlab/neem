@@ -87,7 +87,7 @@ let interleaving_helper_inv2 (lca s1 s2 l':log)
                     l = Seq.snoc l' last2
     with l'
     and ()
-
+  
 #push-options "--z3rlimit 500"
 let interleaving_s1_inv (lca s1 s2:st) (l':log)
   : Lemma (requires common_pre lca s1 s2 /\ 
@@ -140,6 +140,16 @@ let interleaving_s2_inv (lca s1 s2:st) (l':log)
              (concrete_merge (v_of lca) (v_of s1) (v_of s2));
   assert (interleaving_predicate l lca s1 s2); ()
 
+let rec lem_app (l a b:log)
+  : Lemma (requires l ++ a = l ++ b)
+          (ensures a = b) (decreases length l) =
+  match length l with
+  |0 -> lemma_empty l; append_empty_l a; append_empty_l b
+  |_ -> lemma_append_cons l a; 
+       lemma_append_cons l b;
+       lemma_cons_inj (head l) (head l) (tail l ++ a) (tail l ++ b);
+       lem_app (tail l) a b
+ 
 let interleaving_s2_inv_comm (lca s1 s2:st) (l':log)
   : Lemma (requires common_pre lca s1 s2 /\
                     (let _, last1 = un_snoc (ops_of s1) in
@@ -211,7 +221,9 @@ let interleaving_s1_inv_comm (lca s1 s2:st) (l':log)
   transitive (seq_foldl (v_of lca) l) (do (concrete_merge (v_of lca) (v_of inv1) (v_of s2)) op1)
              (concrete_merge (v_of lca) (v_of s1) (v_of s2));
   assert (interleaving_predicate l lca s1 s2); ()
+#pop-options
 
+#push-options "--z3rlimit 500"
 let linearizable_s1_gt0_pre (lca s1 s2:st)
   : Lemma (requires common_pre lca s1 s2 /\
                     (let _, last1 = un_snoc (ops_of s1) in
