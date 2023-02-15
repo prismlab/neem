@@ -317,29 +317,6 @@ val linearizable_s2_0 (lca s1 s2:st)
                     foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
           (ensures v_of s1 == concrete_merge (v_of lca) (v_of s1) (v_of s2))
 
-let linearizable_s1_01 (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    ops_of s1 = ops_of lca /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1)) 
-          (ensures (exists l. interleaving_predicate l lca s1 s2)) =
-  split_prefix init_st (ops_of lca) (ops_of s2);
-  linearizable_s1_0 lca s1 s2
-
-let linearizable_s2_01 (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    ops_of s2 = ops_of lca /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1)) 
-          (ensures (exists l. interleaving_predicate l lca s1 s2)) =
-  split_prefix init_st (ops_of lca) (ops_of s1);
-  linearizable_s2_0 lca s1 s2
-
 let rec inverse_helper (s:concrete_st) (l':log) (op:log_entry)
   : Lemma 
     (requires (foldl_prop s l' /\ concrete_do_pre (seq_foldl s l') op))
