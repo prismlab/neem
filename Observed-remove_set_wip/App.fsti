@@ -473,11 +473,12 @@ let lem_is_diff (s1 lca d:log)
 let lem_diff (s1 l:log)
   : Lemma (requires distinct_ops s1 /\ is_prefix l s1)
           (ensures distinct_ops (diff s1 l) /\ (forall id. mem_id id (diff s1 l) <==> mem_id id s1 /\ not (mem_id id l)) /\
+                   (forall id. mem_id id s1 <==> mem_id id l \/ mem_id id (diff s1 l)) /\
                    (Seq.length s1 > Seq.length l ==> (last s1 = last (diff s1 l) /\ Seq.length (diff s1 l) > 0) /\
                      (let _, l1 = un_snoc s1 in
                       let _, ld = un_snoc (diff s1 l) in
                       l1 = ld) /\
-                     (let s1',_ = un_snoc s1 in 
+                     (let s1',lastop = un_snoc s1 in 
                        diff s1' l = fst (un_snoc (diff s1 l)))))
   = let s = snd (split s1 (length l)) in
     lemma_split s1 (length l);
@@ -506,7 +507,7 @@ let rec split_prefix_forall (l:log) (a:log)
     |0 -> ()
     |1 -> ()
     |_ -> split_prefix_forall (tail l) (tail a)
-    
+
 // returns the inverse state by undoing the last operation
 #push-options "--z3rlimit 50"
 let inverse_st (s:st{Seq.length (ops_of s) > 0}) 
@@ -514,6 +515,7 @@ let inverse_st (s:st{Seq.length (ops_of s) > 0})
                (v_of s = do (v_of i) (last (ops_of s))) /\
                (ops_of i = fst (un_snoc (ops_of s))) /\
                (ops_of s = snoc (ops_of i) (last (ops_of s))) /\
+               length (ops_of i) = length (ops_of s) - 1 /\
                is_prefix (ops_of i) (ops_of s) /\
                (forall id. mem_id id (ops_of i) <==> mem_id id (ops_of s) /\ id <> fst (last (ops_of s)))}) = 
   lem_seq_foldl init_st (ops_of s);
@@ -1009,10 +1011,10 @@ let lem_suf_equal2 (lca s1:log) (op:log_entry)
     lemma_mem_snoc1 pred op;
     lem_not_append lca pred (fst op)
 
-let lem_suf_equal2_last (lca s1:log) (op:log_entry)
+let lem_suf_equal2_last (lca s1:log)
   : Lemma (requires is_prefix lca s1 /\ length (diff s1 lca) > 0 /\ distinct_ops s1)
-          (ensures (let _, last = un_snoc s1 in
-                    not (mem_id (fst last) lca))) =
+          (ensures (let _, lastop = un_snoc s1 in
+                    not (mem_id (fst lastop) lca))) =
     distinct_invert_append lca (diff s1 lca); 
     let pre, lst = un_snoc s1 in
     lem_diff s1 lca;
@@ -1097,10 +1099,54 @@ let lastop_diff (l a:log)
     un_snoc_prop (diff a l);
     lem_inverse l a
 
+let lem_id_s2' (l a b:log)
+  : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
+                    is_prefix l a /\ is_prefix l b /\
+                    length b > length l /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
+                    (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
+          (ensures (let b',lastop = un_snoc b in
+                    not (mem_id (fst lastop) l) /\
+                    not (mem_id (fst lastop) a) /\
+                    not (mem_id (fst lastop) b'))) = 
+  let b', lastop = un_snoc b in
+  lemma_append_count_id b' (create 1 lastop);
+  distinct_invert_append b' (create 1 lastop);
+  //assert (not (mem_id (fst lastop) b'));
+  lem_suf_equal2_last l b;
+  //assert (not (mem_id (fst lastop) l) );
+  lem_diff a l;
+  lastop_diff l b;
+  //assert (not (mem_id (fst lastop) a));
+  ()
+
+let lem_id_s1' (l a b:log)
+  : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
+                    is_prefix l a /\ is_prefix l b /\
+                    length a > length l /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
+                    (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
+          (ensures (let a',lastop = un_snoc a in
+                    not (mem_id (fst lastop) l) /\
+                    not (mem_id (fst lastop) a') /\
+                    not (mem_id (fst lastop) b))) = 
+  let a', lastop = un_snoc a in
+  lemma_append_count_id a' (create 1 lastop);
+  distinct_invert_append a' (create 1 lastop);
+  //assert (not (mem_id (fst lastop) a')); 
+  lem_suf_equal2_last l a;
+  //assert (not (mem_id (fst lastop) l) );
+  lem_diff b l;
+  lastop_diff l a;
+  //assert (not (mem_id (fst lastop) b));
+  () 
+  
 let inverse_diff_id (l a b:log)
   : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
                     is_prefix l a /\ is_prefix l b /\
-                    length a > length l /\ length b > length l /\
+                    length a > length l /\ 
                     (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
                     (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
                     (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
@@ -1113,7 +1159,7 @@ let inverse_diff_id (l a b:log)
 let inverse_diff_id1 (l a b:log)
   : Lemma (requires distinct_ops l /\ distinct_ops a /\ distinct_ops b /\
                     is_prefix l a /\ is_prefix l b /\
-                    length a > length l /\ length b > length l /\
+                    length b > length l /\
                     (forall id id1. mem_id id l /\ mem_id id1 (diff a l) ==> lt id id1) /\
                     (forall id id1. mem_id id l /\ mem_id id1 (diff b l) ==> lt id id1) /\
                     (forall id. mem_id id (diff a l) ==> not (mem_id id (diff b l))))
@@ -1341,7 +1387,7 @@ val linearizable_s2_0 (lca s1 s2:st)
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                     foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
           (ensures eq (v_of s1) (concrete_merge (v_of lca) (v_of s1) (v_of s2)))
-
+          
 // taking inverse on any one branch and applying the operation again is equivalent to
 // concrete merge
 val linearizable_gt0 (lca s1 s2:st)
