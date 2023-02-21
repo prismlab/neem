@@ -235,12 +235,9 @@ let merge_inv_prop (lca s1 s2:st)
   lastop_neq (ops_of lca) (ops_of s1) (ops_of s2);
   resolve_conflict_prop last1 last2;
   lem_foldl init_st (ops_of s1);
-  lem_foldl init_st (ops_of (inverse_st s2));
   lem_inverse (ops_of lca) (ops_of s2);
   split_prefix init_st (ops_of lca) (ops_of (inverse_st s2));
-  split_prefix init_st (ops_of lca) (ops_of s1);
-  lem_foldl (v_of lca) (diff (ops_of (inverse_st s2)) (ops_of lca));
-  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))
+  lem_foldl (v_of lca) (diff (ops_of (inverse_st s2)) (ops_of lca))
   
 let linearizable_s1_0 (lca s1 s2:st)
   : Lemma 
@@ -251,8 +248,7 @@ let linearizable_s1_0 (lca s1 s2:st)
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                 foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
-      (ensures eq (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) =
-  ()
+      (ensures eq (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
 
 let linearizable_s2_0 (lca s1 s2:st)
   : Lemma 
@@ -264,8 +260,7 @@ let linearizable_s2_0 (lca s1 s2:st)
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                 foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
-      (ensures eq (v_of s1) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) =
-  ()
+      (ensures eq (v_of s1) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
 
 let lem_do_op (a:concrete_st) (op:log_entry)
   : Lemma (requires concrete_do_pre a op)
@@ -297,7 +292,7 @@ let linearizable_s2_gt0 (lca s1 s2:st)
   let _, last1 = un_snoc (ops_of s1) in
   let p2, last2 = un_snoc (ops_of s2) in
   lem_foldl init_st (ops_of s2); 
-  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2);
+  assert (concrete_do_pre (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2); 
   assert (forall k. mem_k k (concrete_merge (v_of lca) (v_of s1) (v_of s2)) <==>
                mem_k k (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) \/ (k = key last2));
   assert (forall k v. mem_kv k v (concrete_merge (v_of lca) (v_of s1) (v_of s2)) <==>
