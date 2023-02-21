@@ -311,10 +311,7 @@ let linearizable_s1_0' (lca s1 s2:st)
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                 (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                 foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
-      (ensures (forall e. L.mem e (v_of s2) <==> L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) =
-  lem_foldl init_st (ops_of lca);
-  lem_foldl init_st (ops_of s2);
-  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
+      (ensures (forall e. L.mem e (v_of s2) <==> L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = ()
 
 let linearizable_s1_0 (lca s1 s2:st)
   : Lemma 
@@ -342,10 +339,7 @@ let linearizable_s2_0' (lca s1 s2:st)
                 (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                 (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                 foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
-      (ensures (forall e. L.mem e (v_of s1) <==> L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) =
-  lem_foldl init_st (ops_of lca);
-  lem_foldl init_st (ops_of s1);
-  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))
+      (ensures (forall e. L.mem e (v_of s1) <==> L.mem e (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = ()
 
 let linearizable_s2_0 (lca s1 s2:st)
   : Lemma 

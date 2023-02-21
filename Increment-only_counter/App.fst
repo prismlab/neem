@@ -116,7 +116,7 @@ let merge_inv_prop (lca s1 s2:st)
   resolve_conflict_prop last1 last2;
   lem_foldl init_st (ops_of lca); 
   lem_foldl init_st (ops_of (inverse_st s2))
-                      
+
 let linearizable_s1_0 (lca s1 s2:st)
   : Lemma 
       (requires concrete_merge_pre (v_of lca) (v_of s1) (v_of s2) /\
