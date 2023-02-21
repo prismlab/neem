@@ -140,25 +140,10 @@ let merge_flag l a b =
           else bc - lc > 0
 
 // concrete merge operation
-let concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_merge_pre lca s1 s2}) : concrete_st = 
+let concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_merge_pre lca s1 s2}) : concrete_st =
   (fst s1 + fst s2 - fst lca, merge_flag lca s1 s2)
 
 #push-options "--z3rlimit 50"
-let merge_prop (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\ 
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
-          (ensures concrete_merge_pre (v_of lca) (v_of s1) (v_of s2)) = 
-  lem_foldl init_st (ops_of lca);
-  lem_foldl init_st (ops_of s1); 
-  lem_foldl init_st (ops_of s2);
-  split_prefix init_st (ops_of lca) (ops_of s1);
-  split_prefix init_st (ops_of lca) (ops_of s2);
-  lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
-  lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
-
 let merge_inv_s1_prop (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -175,7 +160,9 @@ let merge_inv_s1_prop (lca s1 s2:st)
   lem_inverse (ops_of lca) (ops_of s1);
   lastop_diff (ops_of lca) (ops_of s1); 
   inverse_diff_id (ops_of lca) (ops_of s1) (ops_of s2);
-  merge_prop lca (inverse_st s1) s2
+  split_prefix init_st (ops_of lca) (ops_of (inverse_st s1)); 
+  lem_foldl (v_of lca) (diff (ops_of (inverse_st s1)) (ops_of lca));
+  lem_foldl init_st (ops_of s2)
 
 let merge_inv_s2_prop (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -193,7 +180,9 @@ let merge_inv_s2_prop (lca s1 s2:st)
   lem_inverse (ops_of lca) (ops_of s2);
   lastop_diff (ops_of lca) (ops_of s2); 
   inverse_diff_id (ops_of lca) (ops_of s2) (ops_of s1);
-  merge_prop lca s1 (inverse_st s2)
+  split_prefix init_st (ops_of lca) (ops_of (inverse_st s2)); 
+  lem_foldl (v_of lca) (diff (ops_of (inverse_st s2)) (ops_of lca));
+  lem_foldl init_st (ops_of s1)
 #pop-options
 
 let merge_inv_prop (lca s1 s2:st)
@@ -229,9 +218,7 @@ let linearizable_s1_0 (lca s1 s2:st)
                 (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                 foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
       (ensures v_of s2 == concrete_merge (v_of lca) (v_of s1) (v_of s2)) =
-  lem_foldl init_st (ops_of lca);
   lem_foldl init_st (ops_of s1);
-  lem_foldl init_st (ops_of s2);
   split_prefix init_st (ops_of lca) (ops_of s2);
   lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca))
 
@@ -247,8 +234,6 @@ let linearizable_s2_0 (lca s1 s2:st)
                 (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                 foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
       (ensures v_of s1 == concrete_merge (v_of lca) (v_of s1) (v_of s2)) =
-  lem_foldl init_st (ops_of lca);
-  lem_foldl init_st (ops_of s1);
   lem_foldl init_st (ops_of s2);
   split_prefix init_st (ops_of lca) (ops_of s1);
   lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca))
