@@ -1888,7 +1888,7 @@ let rec lem_l2a''_s20 (lca s1 s2:st) (last2:log_entry)
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2)) last2)
                       (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2))) 
           (decreases %[length (ops_of s1)]) = 
-  if ops_of s1 = ops_of s2 then 
+  if ops_of s1 = ops_of lca then 
     lem_l2a''_s20_base lca s1 s2 last2
   else 
     (assert (length (ops_of s1) > length (ops_of lca));
