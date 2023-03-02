@@ -517,6 +517,11 @@ let rec split_prefix_forall (l:log) (a:log)
     |1 -> ()
     |_ -> split_prefix_forall (tail l) (tail a)
 
+let lem_last (a:log)
+  : Lemma (ensures (length a > 0 ==>
+                   (let _, lst = un_snoc a in
+                    last a = lst))) = ()
+                    
 // returns the inverse state by undoing the last operation
 #push-options "--z3rlimit 50"
 let inverse_st (s:st{Seq.length (ops_of s) > 0}) 
@@ -526,6 +531,9 @@ let inverse_st (s:st{Seq.length (ops_of s) > 0})
                (ops_of s = snoc (ops_of i) (last (ops_of s))) /\
                length (ops_of i) = length (ops_of s) - 1 /\
                is_prefix (ops_of i) (ops_of s) /\
+               (let _, last2 = un_snoc (ops_of s) in
+                (lem_last (ops_of s);
+                s == (do (v_of i) last2, hide (snoc (ops_of i) last2)))) /\
                (forall id. mem_id id (ops_of i) <==> mem_id id (ops_of s) /\ id <> fst (last (ops_of s)))}) = 
   lem_seq_foldl init_st (ops_of s);
   let p, l = un_snoc (ops_of s) in
@@ -933,11 +941,6 @@ let rec lem_foldl_prop (x:concrete_st) (p s:log)
        mem_cons (head s) (tail s); 
        append_assoc p (create 1 (head s)) (tail s);
        assert (p ++ s = snoc p (head s) ++ tail s); ()
-
-let lem_last (a:log)
-  : Lemma (ensures (length a > 0 ==>
-                   (let _, lst = un_snoc a in
-                    last a = lst))) = ()
 
 val lem_cons_snoc (x:concrete_st) (l:log) (op:log_entry)
   : Lemma (requires foldl_prop x (cons op l) /\
