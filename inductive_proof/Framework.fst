@@ -78,20 +78,11 @@ let linearizable_s1_0 (lca s1 s2:st)
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                     (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
-          (ensures eq (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) =
-  if ops_of s2 = ops_of lca then
-    linearizable_s1_0_base lca s1 s2 
-  else linearizable_s1_0' lca s1 s2
-
-let linearizable_s1_01 (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    ops_of s1 = ops_of lca /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1))
           (ensures (exists l. interleaving_predicate l lca s1 s2)) =
   split_prefix init_st (ops_of lca) (ops_of s2);
-  linearizable_s1_0 lca s1 s2
+  if ops_of s2 = ops_of lca then
+    linearizable_s1_0_s2_0_base lca s1 s2 
+  else linearizable_s1_0' lca s1 s2
 
 let rec linearizable_s2_0''_base (lca s1' s2:st) (last1:log_entry)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
@@ -165,21 +156,11 @@ let linearizable_s2_0 (lca s1 s2:st)
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                     (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
-          (ensures eq (v_of s1) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) =
-  if ops_of s1 = ops_of lca then
-    linearizable_s2_0_base lca s1 s2 
-  else linearizable_s2_0' lca s1 s2
-
-let linearizable_s2_01 (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    ops_of s2 = ops_of lca /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1))
           (ensures (exists l. interleaving_predicate l lca s1 s2)) =
   split_prefix init_st (ops_of lca) (ops_of s1);
-  linearizable_s2_0 lca s2 s1
+  if ops_of s1 = ops_of lca then
+    linearizable_s1_0_s2_0_base lca s1 s2 
+  else linearizable_s2_0' lca s1 s2
 
 let rec linearizable_gt0_s2'_s10 (lca s1 s2:st) (last1 last2: log_entry)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -194,7 +175,7 @@ let rec linearizable_gt0_s2'_s10 (lca s1 s2:st) (last1 last2: log_entry)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases  %[length (ops_of s2)]) =
   if ops_of s2 = ops_of lca then
-     linearizable_gt0_s2'_base lca s1 s2 last1 last2
+     linearizable_gt0_base lca s1 s2 last1 last2
   else 
     (assert (length (ops_of s2) > length (ops_of lca)); 
      let s2' = inverse_st s2 in
@@ -202,7 +183,7 @@ let rec linearizable_gt0_s2'_s10 (lca s1 s2:st) (last1 last2: log_entry)
      lastop_diff (ops_of lca) (ops_of s2);
      inverse_diff_id_s2' (ops_of lca) (ops_of s1) (ops_of s2);
      linearizable_gt0_s2'_s10 lca s1 s2' last1 last2;
-     linearizable_gt0_s2'_s10_s2_gt0 lca s1 s2 last1 last2)
+     linearizable_gt0_ind lca s1 s2 last1 last2)
 
 #push-options "--z3rlimit 1000 --fuel 1 --ifuel 1"
 let rec linearizable_gt0_s2' (lca s1 s2:st) (last1 last2: log_entry)
@@ -217,7 +198,7 @@ let rec linearizable_gt0_s2' (lca s1 s2:st) (last1 last2: log_entry)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases %[length (ops_of s1); length (ops_of s2)]) = 
   if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then
-    linearizable_gt0_s2'_base lca s1 s2 last1 last2 
+    linearizable_gt0_base lca s1 s2 last1 last2 
   else if ops_of s1 = ops_of lca then
     linearizable_gt0_s2'_s10 lca s1 s2 last1 last2 
   else (assert (length (ops_of s1) > length (ops_of lca));
@@ -226,8 +207,10 @@ let rec linearizable_gt0_s2' (lca s1 s2:st) (last1 last2: log_entry)
         lastop_diff (ops_of lca) (ops_of s1);
         inverse_diff_id_s1' (ops_of lca) (ops_of s1) (ops_of s2);
         linearizable_gt0_s2' lca s1' s2 last1 last2;
-        linearizable_gt0_s2'_s1_gt0 lca s1 s2 last1 last2)  
+        linearizable_gt0_ind1 lca s1 s2 last1 last2)  
+#pop-options
 
+#push-options "--z3rlimit 500"
 let linearizable_gt0_s2 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -267,7 +250,7 @@ let rec linearizable_gt0_s1'_s20 (lca s1 s2:st) (last1 last2: log_entry)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases  %[length (ops_of s1)]) =
   if ops_of s1 = ops_of lca then
-     linearizable_gt0_s1'_base lca s1 s2 last1 last2
+     linearizable_gt0_base lca s1 s2 last1 last2
   else 
     (assert (length (ops_of s1) > length (ops_of lca)); 
      let s1' = inverse_st s1 in
@@ -275,7 +258,7 @@ let rec linearizable_gt0_s1'_s20 (lca s1 s2:st) (last1 last2: log_entry)
      lastop_diff (ops_of lca) (ops_of s1);
      inverse_diff_id_s1' (ops_of lca) (ops_of s1) (ops_of s2);
      linearizable_gt0_s1'_s20 lca s1' s2 last1 last2;
-     linearizable_gt0_s1'_s20_s1_gt0 lca s1 s2 last1 last2)
+     linearizable_gt0_ind1 lca s1 s2 last1 last2)
 
 #push-options "--z3rlimit 1000 --fuel 1 --ifuel 1"
 let rec linearizable_gt0_s1' (lca s1 s2:st) (last1 last2: log_entry)
@@ -289,8 +272,8 @@ let rec linearizable_gt0_s1' (lca s1 s2:st) (last1 last2: log_entry)
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases %[length (ops_of s2); length (ops_of s1)]) =
-  if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then
-    linearizable_gt0_s1'_base lca s1 s2 last1 last2 
+   if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then
+    linearizable_gt0_base lca s1 s2 last1 last2 
   else if ops_of s2 = ops_of lca then
     linearizable_gt0_s1'_s20 lca s1 s2 last1 last2 
   else (assert (length (ops_of s2) > length (ops_of lca));
@@ -299,8 +282,10 @@ let rec linearizable_gt0_s1' (lca s1 s2:st) (last1 last2: log_entry)
         lastop_diff (ops_of lca) (ops_of s2);
         inverse_diff_id_s2' (ops_of lca) (ops_of s1) (ops_of s2);
         linearizable_gt0_s1' lca s1 s2' last1 last2;
-        linearizable_gt0_s1'_s2_gt0 lca s1 s2 last1 last2) 
+        linearizable_gt0_ind lca s1 s2 last1 last2) 
+#pop-options
 
+#push-options "--z3rlimit 500"
 let linearizable_gt0_s1 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -478,7 +463,7 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
   lem_diff (ops_of s2) (ops_of lca)
 #pop-options
 
-#set-options "--z3rlimit 1500 --fuel 1 --ifuel 1"
+#set-options "--z3rlimit 2000 --fuel 1 --ifuel 1"
 let rec linearizable (lca s1 s2:st)
   : Lemma 
       (requires 
@@ -493,12 +478,12 @@ let rec linearizable (lca s1 s2:st)
 
   = if ops_of s1 = ops_of lca 
     then begin
-      linearizable_s1_01 lca s1 s2
+      linearizable_s1_0 lca s1 s2
     end
     else 
     if ops_of s2 = ops_of lca
     then begin
-      linearizable_s2_01 lca s1 s2
+      linearizable_s2_0 lca s1 s2
     end
     else begin 
         assert (Seq.length (ops_of s1) > Seq.length (ops_of lca)); 
@@ -512,7 +497,7 @@ let rec linearizable (lca s1 s2:st)
         let inv2 = inverse_st s2 in 
 
         if last (resolve_conflict last1 last2) = last1 then
-        begin
+        begin 
           linearizable_s1_gt0_pre lca s1 s2;
 
           linearizable lca inv1 s2;
@@ -529,7 +514,7 @@ let rec linearizable (lca s1 s2:st)
           end
         end
         else 
-        begin 
+        begin
           assert (last (resolve_conflict last1 last2) <> last1);
           linearizable_s2_gt0_pre lca s1 s2;
 
