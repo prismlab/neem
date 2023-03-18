@@ -223,9 +223,21 @@ let concrete_merge (l a b:concrete_st)
     : Tot (res:concrete_st {(forall e. L.mem e res <==> (L.mem e l /\ L.mem e a /\ L.mem e b) \/ 
                                                  (L.mem e (diff_s a l)) \/ (L.mem e (diff_s b l))) /\
                             (l = a ==> (forall e. L.mem e res <==> L.mem e b)) /\
-                            (l = b ==> (forall e. L.mem e res <==> L.mem e a))}) =
+                            (l = b ==> (forall e. L.mem e res <==> L.mem e a)) /\
+                            (forall b'. eq b b' ==> eq res (concrete_merge1 l a b')) /\
+                            (forall a'. eq a a' ==> eq res (concrete_merge1 l a' b))}) =
  concrete_merge1 l a b
 
+let lem_trans_merge_s1' (lca s1 s2 s1':concrete_st)
+  : Lemma (requires eq s1 s1')
+          (ensures eq (concrete_merge lca s1 s2)
+                      (concrete_merge lca s1' s2)) = ()
+                    
+let lem_trans_merge_s2' (lca s1 s2 s2':concrete_st)
+  : Lemma (requires eq s2 s2')
+          (ensures eq (concrete_merge lca s1 s2)
+                      (concrete_merge lca s1 s2')) = ()
+                      
 #push-options "--z3rlimit 500"        
 let linearizable_s1_0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -1322,7 +1334,7 @@ let linearizable_gt0_s2' (lca s1 s2:st)
   if Add? (snd last2) then
     lem_l2a lca s1 s2
   else lem_l2r lca s1 s2
-                       
+
 (*let rem_add_lastop_neq_ele (lca s1 s2:st)
   : Lemma (requires Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
                     common_pre_s2_gt0 lca s1 s2 /\

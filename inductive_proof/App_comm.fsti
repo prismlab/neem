@@ -369,6 +369,7 @@ let find_triple (last_op:log_entry) (l:log{(exists_triple last_op l)})
   let pre, suf = pre_suf l op in
   (pre, op, suf)
 
+
 // l is interleaving of l1 and l2
 let rec is_interleaving (l l1 l2:log)
   : Tot eqtype (decreases %[Seq.length l1; Seq.length l2]) =
@@ -390,8 +391,7 @@ let rec is_interleaving (l l1 l2:log)
     (let prefix1, last1 = un_snoc l1 in
      let prefix2, last2 = un_snoc l2 in
      
-     
-      (exists_triple last1 l2 /\
+     (exists_triple last1 l2 /\
        (let (p2, op2, s2) = find_triple last1 l2 in
        (exists l'.
            is_interleaving l' l1 (p2 ++ s2) /\
@@ -408,8 +408,8 @@ let rec is_interleaving (l l1 l2:log)
       \/
 
       (exists l'.
-          is_interleaving l' prefix1 prefix2 /\
           fst last1 <> fst last2 /\
+          is_interleaving l' prefix1 prefix2 /\
           l = l' ++ (resolve_conflict last1 last2))
 
       \/
@@ -1186,6 +1186,16 @@ let id_not_eq (l l1:log) (id id1:nat)
                     mem_id id l /\ mem_id id1 l1)
           (ensures id <> id1) = ()
 
+val lem_trans_merge_s1' (lca s1 s2 s1':concrete_st)
+  : Lemma (requires eq s1 s1')
+          (ensures eq (concrete_merge lca s1 s2)
+                      (concrete_merge lca s1' s2))
+
+val lem_trans_merge_s2' (lca s1 s2 s2':concrete_st)
+  : Lemma (requires eq s2 s2')
+          (ensures eq (concrete_merge lca s1 s2)
+                      (concrete_merge lca s1 s2'))
+                      
 // branch s1 does not see new operations
 val linearizable_s1_0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -1259,69 +1269,7 @@ val linearizable_gt0_s2' (lca s1 s2:st)
           (ensures (let _, last2 = un_snoc (ops_of s2) in
                     eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
                        (concrete_merge (v_of lca) (v_of s1) (v_of s2))))
-                       
-// taking inverse on any one branch and applying the operation again is equivalent to
-// concrete merge
-let linearizable_gt0 (lca s1 s2:st)
-  : Lemma (requires common_pre lca s1 s2 /\ 
-                    (let _, last1 = un_snoc (ops_of s1) in
-                     let _, last2 = un_snoc (ops_of s2) in
-                     fst last1 <> fst last2 /\
-                     
-                     (exists_triple last1 (diff (ops_of s2) (ops_of lca)) ==>
-                       (let (_, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                        suf2 = snd (pre_suf (ops_of s2) op2))) /\
 
-                      ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                        exists_triple last2 (diff (ops_of s1) (ops_of lca))) ==>
-                          (let (_, op1, suf1) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in
-                           suf1 = snd (pre_suf (ops_of s1) op1))) /\
-
-                     ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                       not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
-                         (last (resolve_conflict last1 last2) = last1 ==>
-                          is_prefix (ops_of lca) (ops_of (inverse_st s1))) /\
-                           
-                         (last (resolve_conflict last1 last2) <> last1 ==>
-                          is_prefix (ops_of lca) (ops_of (inverse_st s2))))))
-          (ensures (let _, last1 = un_snoc (ops_of s1) in
-                    let _, last2 = un_snoc (ops_of s2) in
-                    
-                    (exists_triple last1 (diff (ops_of s2) (ops_of lca)) ==>
-                       (let (pre2, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
-                       (let s2' = inverse_st_op s2 op2 in
-                       eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2')) op2)
-                          (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') op2))))) /\
-
-                    ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                     exists_triple last2 (diff (ops_of s1) (ops_of lca))) ==>
-                       (let (pre1, op1, suf1) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in
-                       (let s1' = inverse_st_op s1 op1 in
-                       eq (do (concrete_merge (v_of lca) (v_of s1') (v_of s2)) op1)
-                          (concrete_merge (v_of lca) (do (v_of s1') op1) (v_of s2))))) /\
-
-                    ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
-                      not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
-                    
-                    (last (resolve_conflict last1 last2) = last1 ==>
-                      eq (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
-                         (concrete_merge (v_of lca) (v_of s1) (v_of s2))) /\
-                       
-                    (last (resolve_conflict last1 last2) <> last1 ==>
-                      eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
-                         (concrete_merge (v_of lca) (v_of s1) (v_of s2)))))) =
-  let _, last1 = un_snoc (ops_of s1) in
-  let _, last2 = un_snoc (ops_of s2) in
-  if exists_triple last1 (diff (ops_of s2) (ops_of lca)) then
-     linearizable_gt0_s1'_op lca s1 s2
-  else if not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) &&
-          exists_triple last2 (diff (ops_of s1) (ops_of lca)) then
-     linearizable_gt0_s2'_op lca s1 s2
-  else if not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) &&
-          not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) &&
-          last (resolve_conflict last1 last2) = last1 then
-     linearizable_gt0_s1' lca s1 s2
-  else linearizable_gt0_s2' lca s1 s2
 
 (*// convergence theorem
 val convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
