@@ -375,54 +375,60 @@ let rec is_interleaving (l l1 l2:log)
   : Tot eqtype (decreases %[Seq.length l1; Seq.length l2]) =
 
   // if l1 is empty, then l == l2
-  (Seq.length l1 = 0 ==> l = l2)
+  (Seq.length l1 == 0 ==> l == l2)
 
   /\
 
   // similarly for l2 being empty
-  ((Seq.length l1 > 0  /\ Seq.length l2 = 0) ==> l = l1)
+  ((Seq.length l1 > 0  /\ Seq.length l2 == 0) ==> l == l1)
 
   /\
 
   // if both are non-empty
 
-  ((Seq.length l1 > 0 /\ Seq.length l2 > 0) ==>
+  ((Seq.length l1 > 0 /\ Seq.length l2 > 0 /\
+    exists_triple (snd (un_snoc l1)) l2) ==>
+    (let pre, op, suf = find_triple (snd (un_snoc l1)) l2 in
+      (exists l'.
+         is_interleaving l' l1 (pre ++ suf) /\
+         l == Seq.snoc l' op)))
+
+   /\
+
+   ((Seq.length l1 > 0 /\ Seq.length l2 > 0 /\
+    not (exists_triple (snd (un_snoc l1)) l2) /\
+    exists_triple (snd (un_snoc l2)) l1) ==>
+    (let pre, op, suf = find_triple (snd (un_snoc l2)) l1 in
+      (exists l'.
+         is_interleaving l' (pre ++ suf) l2 /\
+         l == Seq.snoc l' op)))
+
+   /\
+
+   ((Seq.length l1 > 0 /\ Seq.length l2 > 0 /\
+    not (exists_triple (snd (un_snoc l1)) l2) /\
+    not (exists_triple (snd (un_snoc l2)) l1)) ==>
 
     (let prefix1, last1 = un_snoc l1 in
      let prefix2, last2 = un_snoc l2 in
+ 
+    (exists l'.
+        fst last1 <> fst last2 /\
+        is_interleaving l' prefix1 prefix2 /\
+        l = l' ++ (resolve_conflict last1 last2))
+
+    \/
+
+    (exists l'.
+        is_interleaving l' l1 prefix2 /\
+        l = Seq.snoc l' last2)    
      
-     (exists_triple last1 l2 /\
-       (let (p2, op2, s2) = find_triple last1 l2 in
-       (exists l'.
-           is_interleaving l' l1 (p2 ++ s2) /\
-           l = Seq.snoc l' op2)))
+    \/
 
-      \/
+    (exists l'.
+        is_interleaving l' prefix1 l2 /\
+        l = Seq.snoc l' last1)))
 
-      (exists_triple last2 l1 /\
-       (let (p1, op1, s1) = find_triple last2 l1 in
-       (exists l'.
-           is_interleaving l' (p1 ++ s1) l2 /\
-           l = Seq.snoc l' op1)))
-
-      \/
-
-      (exists l'.
-          fst last1 <> fst last2 /\
-          is_interleaving l' prefix1 prefix2 /\
-          l = l' ++ (resolve_conflict last1 last2))
-
-      \/
-
-      (exists l'.
-          is_interleaving l' l1 prefix2 /\
-          l = Seq.snoc l' last2)    
-      \/
-
-      (exists l'.
-          is_interleaving l' prefix1 l2 /\
-          l = Seq.snoc l' last1)))
-          
 // concrete merge operation
 val concrete_merge (lca s1 s2:concrete_st) : concrete_st
 
@@ -734,6 +740,7 @@ let inverse_st_op (s:st) (op:log_entry{mem op (ops_of s) /\
                (ops_of i = (pre ++ suf)) /\
                (ops_of s = (Seq.snoc pre op) ++ suf) /\
                is_prefix pre (ops_of s) /\ is_prefix pre (ops_of i) /\
+               length (ops_of i) = length (ops_of s) - 1 /\
                (forall id. (mem_id id (ops_of i) \/ id = fst op) <==> mem_id id (ops_of s)) /\
                (forall id. mem_id id (ops_of i) <==> (mem_id id (ops_of s) /\ id <> fst op)))}) = 
   let pre, suf = pre_suf (ops_of s) op in
@@ -893,16 +900,19 @@ let lem_suf_equal3 (lca s1:log) (op:log_entry)
 
 let lem_suf_equal (lca s1:log) (op:log_entry)
   : Lemma (requires is_prefix lca s1 /\ mem op (diff s1 lca) /\ distinct_ops s1)
-          (ensures (let _, suf = pre_suf s1 op in
-                    let _, sufd = pre_suf (diff s1 lca) op in
-                    suf = sufd))
+          (ensures (let pre, suf = pre_suf s1 op in
+                    let pred, sufd = pre_suf (diff s1 lca) op in
+                    suf = sufd /\
+                    pre = lca ++ pred))
   = let pre, suf = pre_suf s1 op in
     let pred, sufd = pre_suf (diff s1 lca) op in
     lem_suf_equal1 lca s1 op;
     lem_suf_equal2 lca s1 op;
     lem_suf_equal3 lca s1 op;
     lem_count_1 pre suf (lca ++ pred) sufd op;
-    lemma_append_inj (snoc pre op) suf (snoc (lca ++ pred) op) sufd
+    lemma_append_inj (snoc pre op) suf (snoc (lca ++ pred) op) sufd;
+    un_snoc_snoc pre op;
+    un_snoc_snoc (lca ++ pred) op
 
 let lem_suf_equal4 (s1:log) (op:log_entry)
   : Lemma (requires mem op s1 /\ distinct_ops s1)
@@ -1172,7 +1182,7 @@ let interleaving_predicate (l:log) (lca s1:st)
   eq (seq_foldl (v_of lca) l)
      (concrete_merge (v_of lca) (v_of s1) (v_of s2))
 
-type common_pre (lca s1 s2:st) =
+let common_pre (lca s1 s2:st) =
   is_prefix (ops_of lca) (ops_of s1) /\
   is_prefix (ops_of lca) (ops_of s2) /\
   Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
@@ -1278,3 +1288,4 @@ val convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
                     concrete_do_pre s1 o /\ eq s1' (do s1 o) /\
                     concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
           (ensures eq (concrete_merge lca s1' s2) (concrete_merge s1 (concrete_merge lca s1 s2) s1'))*)
+
