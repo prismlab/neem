@@ -16,6 +16,13 @@ val init_st : concrete_st
 // equivalence between 2 concrete states
 val eq (a b:concrete_st) : prop
 
+//
+// AR: the SMTPat here may be too permissive,
+//     whenever Z3 has `eq e1 e2` in its context, it may fire this
+//
+//     it would be good to remove this pattern,
+//       and instead invoke the lemma explicitly whereever needed
+//
 val symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
           (ensures eq b a)
@@ -25,6 +32,12 @@ val transitive (a b c:concrete_st)
   : Lemma (requires eq a b /\ eq b c)
           (ensures eq a c)
 
+
+//
+// AR: use propositional equality `==`
+//     In proof-irrelevant contexts, like pre- and postconditions
+//     and refinements, `==` is better
+//
 val eq_is_equiv (a b:concrete_st)
   : Lemma (requires a = b)
           (ensures eq a b)
@@ -32,8 +45,22 @@ val eq_is_equiv (a b:concrete_st)
 // operation type
 val op_t : eqtype
 
+//
+// AR: make it pos, below we are restricting all ids to be > 0 explicitly,
+//     so why not make it pos to begin with
+//
 type timestamp_t = nat
 
+//
+// AR: the names are a bit confusing
+//     as far as I understand, the operations are always associated with a timestamp
+//     so I would have called op_t as timestamp_t & app_op_t
+//     where app_op_t is the application enum for operations
+//
+//     when I see log_entry used everywhere below,
+//     I get the impression that we are asking app writers to do
+//     something for spec world, but we are not
+//
 type log_entry = timestamp_t & op_t
 
 type log = seq log_entry
@@ -41,6 +68,10 @@ type log = seq log_entry
 unfold
 let ( ++ ) (l1 l2:log) = Seq.append l1 l2
 
+//
+// AR: try hoisting out the recursive call before the `if fst (head l) = id`
+//     when you later do induction on count_id, it may give better mileage
+//
 let rec count_id (id:nat) (l:log) : Tot nat (decreases length l) =
   if length l = 0 then 0
      else if fst (head l) = id
@@ -49,8 +80,26 @@ let rec count_id (id:nat) (l:log) : Tot nat (decreases length l) =
 
 let mem_id (id:nat) (l:log) : bool = count_id id l > 0
   
+
+//
+// AR: remove the second conjunct once you make timestamp_t to be pos,
+//     and use timestamp_t more uniformly, rather than (id:nat)
+//
+//     you could also try adding a pattern to the forall quantifier:
+//     forall (id:timestamp_t).{:pattern count_id id l} count_id id l <= 1
+//
+//     the pattern means that z3 would instantiate the quantifier on count_id id l
+//
 let distinct_ops (l:log) : prop = (forall (id:nat). count_id id l <= 1) /\ (forall (id:nat). mem_id id l ==> id <> 0)
 
+
+//
+// AR: you don't need to write `cut` explicitly
+//     instead you could just use `assert`
+//
+//     also once you hoist the recursive call in count_id,
+//     this proof may not need increased rlimit, try
+//
 #push-options "--z3rlimit 50"
 let rec lemma_append_count_id (lo:log) (hi:log)
   : Lemma
@@ -64,6 +113,12 @@ let rec lemma_append_count_id (lo:log) (hi:log)
            let lh = cons (head lo) tl_l_h in
            cut (equal (tail lh) tl_l_h))
 #pop-options
+
+
+//
+// AR: you could add a pattern to the forall quantifier as well:
+//     forall (id:timestamp_t).{:pattern (mem_id id a \/ mem_id id b)}
+//
 
 let distinct_invert_append (a b:log)
   : Lemma
@@ -83,6 +138,11 @@ val concrete_do_pre (_:concrete_st) (_:log_entry) : prop
 // apply an operation to a state
 val do (s:concrete_st) (o:log_entry{concrete_do_pre s o}) : concrete_st
 
+//
+// AR: stylistic thing, but this can be split into two,
+//     that concrete_do_pre commutes with eq can be a separate lemma
+//
+
 val lem_do (a b:concrete_st) (op:log_entry)
    : Lemma (requires concrete_do_pre a op /\ eq a b)
            (ensures concrete_do_pre b op /\ eq (do a op) (do b op))
@@ -90,7 +150,12 @@ val lem_do (a b:concrete_st) (op:log_entry)
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
 
-// the concrete state 
+// the concrete state
+
+//
+// AR: what is the difference between concrete_st and concrete_st_s?
+//     in general, how is this block (concrete_st_s, init_st_s, ...) different from what we have already defined?
+//
 val concrete_st_s : Type0
 
 // init state 
@@ -113,6 +178,27 @@ val do_eq (st_s:concrete_st_s) (st:concrete_st) (op:log_entry)
 
 ////////////////////////////////////////////////////////////////
 
+
+//
+// AR: there are two inductions going on here,
+//     one for concrete_do_pre and one for do
+//     wonder if we can combine them into one, e.g.
+//
+// let rec st_log_consistent (s:concrete_st) (l:log) : prop =
+//   if Seq.length l = 0 then True
+//   else let hd, tl = Seq.hd l, Seq.tl l in
+//        concrete_do_pre x hd /\ st_log_consistent (do x hd) tl
+//
+//
+// let valid_st (s:st0) : prop =
+//   distinct_ops (ops_of s) /\
+//   st_log_consistent (v_of s) (ops_of s)
+//
+//
+//     we should try it, it may simplify things
+//
+//     in general, use more descriptive names than foldl_prop, seq_foldl etc.
+//
 let rec foldl_prop (x:concrete_st) (l:log) : Tot prop (decreases length l) =
   match length l with
   |0 -> True
@@ -144,9 +230,17 @@ let valid_st (s:st0) : prop =
 type st = s:st0{valid_st s}
 
 //conflict resolution
+
+//
+// AR: just noting that this is not saying that l has entries from x and y only
+//
 val resolve_conflict (x y:log_entry) : (l:log{Seq.length l = 1 \/ Seq.length l = 2})
 
 // l is interleaving of l1 and l2
+
+//
+// AR: can we move is_interleaving and interleaving_predicate below out of this interface?
+//
 let rec is_interleaving (l l1 l2:log)
   : Tot eqtype (decreases %[Seq.length l1; Seq.length l2]) =
 
@@ -184,6 +278,15 @@ let rec is_interleaving (l l1 l2:log)
           l = Seq.snoc l' last1)))
 
 // concrete merge pre-condition
+
+//
+// AR: concrete_merge_pre, concrete_do_pre are prop
+//     but to interface them with external world (rest of the unverified code),
+//     we would ideally write wrappers that check these conditions and then
+//     call into our verified code
+//
+//     so just keep in mind that the implementations of these functions should be realizable
+//
 val concrete_merge_pre (lca a b:concrete_st) : prop
 
 // concrete merge operation
@@ -192,12 +295,22 @@ val concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_m
 let is_prefix (p:log) (l:log) : Tot prop =
   Seq.length l >= Seq.length p /\ Seq.equal p (Seq.slice l 0 (Seq.length p))
 
+//
+// AR: use propositional equality, length s1 == ... /\ s1 == lca ++ l
+//
+//     I think the length postcondition is not needed,
+//     once we have s1 == lca ++ l, then lemmas from the sequence library
+//     will give it to us (and they have smt pats)
+//
 let diff (s1:log) (lca:log{is_prefix lca s1}) 
   : Tot (l:log{(length s1 = length lca + length l) /\ (s1 = lca ++ l)}) =
   let s = snd (split s1 (length lca)) in
   lemma_split s1 (length lca);
   s
 
+//
+// AR: let's move all these lemmas etc. to some utils file
+//
 let lem_diff (s1:log) (l:log{is_prefix l s1})
   : Lemma (requires distinct_ops s1)
           (ensures distinct_ops (diff s1 l) /\ (forall id. mem_id id (diff s1 l) <==> mem_id id s1 /\ not (mem_id id l)) /\
@@ -206,6 +319,9 @@ let lem_diff (s1:log) (l:log{is_prefix l s1})
     lemma_split s1 (length l);
     lemma_append_count_id l s
 
+//
+// AR: if we remove foldl_prop, would this go away?
+//
 let rec split_prefix (s:concrete_st) (l:log) (a:log)
   : Lemma (requires is_prefix l a /\ foldl_prop s a)
           (ensures foldl_prop s l /\ foldl_prop (seq_foldl s l) (diff a l) /\
@@ -217,7 +333,20 @@ let rec split_prefix (s:concrete_st) (l:log) (a:log)
     |0 -> ()
     |1 -> ()
     |_ -> split_prefix (do s (head l)) (tail l) (tail a)
-         
+
+//
+// AR: (use propositional equalities)
+//
+//     the two postconditions ops_of i == ... and ops_of s == ...
+//     are equivalent, can we just write one of them?
+//     actually three, the is_prefix one also
+//
+//     i would also say, write inverse_st as a simple function that just returns a st,
+//     and then write a lemma that proves facts about inverse_st,
+//     and that lemma can have an smtpat (inverse_st s)
+//
+//     and let's move all these to a utils file
+//
 #push-options "--z3rlimit 50"
 let inverse_st (s:st{Seq.length (ops_of s) > 0}) 
   : GTot (i:st{(concrete_do_pre (v_of i) (last (ops_of s))) /\
@@ -234,6 +363,10 @@ let inverse_st (s:st{Seq.length (ops_of s) > 0})
   distinct_invert_append p (snd (split (ops_of s) (length (ops_of s) - 1))); 
   (r, hide p)
 
+//
+// AR: you could package is_prefix s1 s2 /\ Seq.length s1 < Seq.length s2,
+//     into a is_strict_prefix function, if it comes up again and again
+//
 let lem_inverse (lca s1:log)
   : Lemma (requires is_prefix lca s1 /\
                     Seq.length s1 > Seq.length lca)
@@ -302,6 +435,28 @@ let interleaving_predicate (l:log) (lca s1:st)
   eq (seq_foldl (v_of lca) l)
      (concrete_merge (v_of lca) (v_of s1) (v_of s2))
 
+
+//
+// AR: it looks to me is_prefix (ops_of lca) (ops_of s1) /\
+//                    is_prefix (ops_of lca) (ops_of s2) /\
+//                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2)
+//
+//     is a very basic requirement, that every lemma will have in its requires
+//
+//     can we hoist it into a function and use that?
+//
+//     also these:(forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
+//                (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1)
+//
+//     and even the last one that says of an id is in s1 - lca, then it is not in s2 - lca,
+//     that's always the requirement, right?
+//
+//     can we hoist them too?
+//
+//     it will reduce the cognitive load, if we can abstract them out
+//
+//     Question 2: do we rely on lt id id1? uniqueness is not enough?
+//
 val merge_inv_prop (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -318,6 +473,17 @@ val merge_inv_prop (lca s1 s2:st)
                     (last (resolve_conflict last1 last2) <> last1 ==>
                       concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)))))  
 
+//
+// AR: I would like to see this lemma just as:
+//
+// let linearizable_s1_empty (lca s1 s2:st)
+//   : Lemma
+//       (requires
+//         consistent_branches lca s1 s2 /\
+//         Seq.equal (diff s1 lca) Seq.empty)
+//       (ensures eq (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2)))
+//                     
+//           
 val linearizable_s1_0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -328,6 +494,9 @@ val linearizable_s1_0 (lca s1 s2:st)
                     foldl_prop (v_of lca) (diff (ops_of s2) (ops_of lca)))
           (ensures eq (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2)))
 
+//
+// AR: same comment as above
+//
 val linearizable_s2_0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -338,6 +507,7 @@ val linearizable_s2_0 (lca s1 s2:st)
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
                     foldl_prop (v_of lca) (diff (ops_of s1) (ops_of lca)))
           (ensures eq (v_of s1) (concrete_merge (v_of lca) (v_of s1) (v_of s2)))
+
 
 let rec inverse_helper (s:concrete_st) (l':log) (op:log_entry)
   : Lemma 
@@ -350,7 +520,19 @@ let rec inverse_helper (s:concrete_st) (l':log) (op:log_entry)
     |0 -> ()
     |1 -> ()
     |_ -> inverse_helper (do s (head l')) (tail l') op
-               
+
+//
+// AR: could this lemma spec just be:
+//
+// let linearizable_s1_s2_nonempty (lca s1 s2:st)
+//   : Lemma
+//       (requires
+//          branches_consistent lca s1 s2 /\
+//          Seq.length (ops_of lca) < Seq.length (ops_of s1) /\
+//          Seq.length (ops_of lca) < Seq.length (ops_of s2))
+//       (ensures
+//          // what you have)
+//
 val linearizable_gt0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
@@ -385,4 +567,4 @@ val convergence (lca s1 s2 s1':concrete_st) (o:log_entry)
                     concrete_do_pre s1 o /\ eq s1' (do s1 o) /\
                     concrete_merge_pre s1 (concrete_merge lca s1 s2) s1')
           (ensures eq (concrete_merge lca s1' s2) (concrete_merge s1 (concrete_merge lca s1 s2) s1'))
-          
+
