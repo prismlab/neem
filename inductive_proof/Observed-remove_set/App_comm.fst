@@ -1,4 +1,4 @@
-module App_comm_merge_pre
+module App_comm
 
 open FStar.Seq
 open FStar.Ghost
