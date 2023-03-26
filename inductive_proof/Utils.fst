@@ -1,12 +1,12 @@
-module Utils_merge_pre
+module Utils
 
 open FStar.Seq
 open FStar.Ghost
-open App_merge_pre
+open App
 
 let rec inverse_helper (s:concrete_st) (l':log) (op:op_t)
   : Lemma (ensures (let l = Seq.snoc l' op in 
-                   (apply_log s l = do (apply_log s l') op))) 
+                   (apply_log s l == do (apply_log s l') op))) 
           (decreases length l')
   = Seq.un_snoc_snoc l' op;
     match length l' with
@@ -15,7 +15,7 @@ let rec inverse_helper (s:concrete_st) (l':log) (op:op_t)
     |_ -> inverse_helper (do s (head l')) (tail l') op
 
 let rec lem_un_snoc_id (a b:log)
-  : Lemma (requires length b > 0 /\ a = fst (un_snoc b))
+  : Lemma (requires length b > 0 /\ a == fst (un_snoc b))
           (ensures (forall id. mem_id id a ==> mem_id id b)) (decreases length a) =
   match length a with
   |0 -> ()
@@ -26,12 +26,12 @@ let lem_diff (s1 l:log)
   : Lemma (requires distinct_ops s1 /\ is_prefix l s1)
           (ensures distinct_ops (diff s1 l) /\ (forall id. mem_id id (diff s1 l) <==> mem_id id s1 /\ not (mem_id id l)) /\
                    (forall id. mem_id id s1 <==> mem_id id l \/ mem_id id (diff s1 l)) /\
-                   (Seq.length s1 > Seq.length l ==> (last s1 = last (diff s1 l) /\ Seq.length (diff s1 l) > 0) /\
+                   (Seq.length s1 > Seq.length l ==> (last s1 == last (diff s1 l) /\ Seq.length (diff s1 l) > 0) /\
                      (let _, l1 = un_snoc s1 in
                       let _, ld = un_snoc (diff s1 l) in
                       l1 = ld) /\
                      (let s1',lastop = un_snoc s1 in 
-                       diff s1' l = fst (un_snoc (diff s1 l)))))
+                       diff s1' l == fst (un_snoc (diff s1 l)))))
   = let s = snd (split s1 (length l)) in
     lemma_split s1 (length l);
     lemma_append_count_id l s
@@ -57,9 +57,9 @@ let lem_lt_lastop_id_lca (lca s1:log)
     
 let rec split_prefix (s:concrete_st) (l:log) (a:log)
   : Lemma (requires is_prefix l a)
-          (ensures (apply_log s a = apply_log (apply_log s l) (diff a l)) /\
+          (ensures (apply_log s a == apply_log (apply_log s l) (diff a l)) /\
                    (forall e. mem e l ==> mem e a) /\
-                   (Seq.length a > Seq.length l ==> (last a) = (last (diff a l))))
+                   (Seq.length a > Seq.length l ==> (last a) == (last (diff a l))))
           (decreases Seq.length l)
   = match Seq.length l with
     |0 -> ()
@@ -74,7 +74,7 @@ let lem_inverse (lca s1:log)
 
 let un_snoc_prop (a:log)
   : Lemma (requires distinct_ops a /\ length a > 0)
-          (ensures (forall id. mem_id id a <==> mem_id id (fst (un_snoc a)) \/ id = fst (last a)) /\
+          (ensures (forall id. mem_id id a <==> mem_id id (fst (un_snoc a)) \/ id == fst (last a)) /\
                    (forall id. mem_id id a /\ id <> fst (last a) <==> mem_id id (fst (un_snoc a))) /\
                    (let _, l = un_snoc a in 
                     mem_id (fst l) a) /\ distinct_ops (fst (un_snoc a))) =
