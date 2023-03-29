@@ -3,9 +3,7 @@ module App_comm
 open FStar.Seq
 open FStar.Ghost
 module L = FStar.List.Tot
-
-module S = FStar.Set
-open Set_extended
+module S = Set_extended
 
 #set-options "--query_stats"
 // the concrete state type
@@ -14,7 +12,7 @@ type concrete_st = S.set (nat * nat)
 let init_st = S.empty
 
 let eq (a b:concrete_st) =
-  (forall ele. S.mem ele a <==> S.mem ele b)
+  S.equal a b
 
 // few properties of equivalence relation
 let symmetric (a b:concrete_st) 
@@ -39,14 +37,14 @@ let get_ele (o:op_t) : nat =
   |Add e -> e
   |Rem e -> e
 
-let mem_ele (ele:nat) (s:concrete_st) : prop =
-  exists_s s (fun e -> snd e = ele)
+let mem_ele (ele:nat) (s:concrete_st) : bool =
+  S.exists_s s (fun e -> snd e = ele)
 
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
   |(id, Add e) -> S.union (S.singleton (id, e)) s
-  |(id, Rem e) -> remove_if s (fun ele -> snd ele = e)
+  |(id, Rem e) -> S.remove_if s (fun ele -> snd ele = e)
   
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b)
@@ -71,8 +69,8 @@ let resolve_conflict_prop (x y:op_t)
 
 (*merge l a b == (intersect l a b) U (a - l) U (b - l)*)
 let concrete_merge (l a b:concrete_st) : concrete_st =
-  let da = remove_if a (fun e -> S.mem e l) in    //a - l
-  let db = remove_if b (fun e -> S.mem e l) in    //b - l
+  let da = S.remove_if a (fun e -> S.mem e l) in    //a - l
+  let db = S.remove_if b (fun e -> S.mem e l) in    //b - l
   let i_la = S.intersect l a in
   let i_lab = S.intersect i_la b in            // intersect l a b
   S.union i_lab (S.union da db)
@@ -1111,7 +1109,6 @@ let linearizable_gt0_s2' (lca s1 s2:st)
     lem_l2a lca s1 s2
   else lem_l2r lca s1 s2
 
-
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
 
@@ -1125,7 +1122,7 @@ let init_st_s = S.empty
 let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s =
   match snd o with
   |(Add e) -> S.union (S.singleton e) st_s
-  |(Rem e) -> remove_if st_s (fun ele -> ele = e) 
+  |(Rem e) -> S.remove_if st_s (fun ele -> ele = e) 
 
 //equivalence relation between the concrete states of sequential type and MRDT
 let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
@@ -1138,7 +1135,8 @@ let initial_eq (_:unit)
 //equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
-          (ensures eq_sm (do_s st_s op) (do st op)) = ()
+          (ensures eq_sm (do_s st_s op) (do st op)) = 
+  ()
 
 ////////////////////////////////////////////////////////////////
 
