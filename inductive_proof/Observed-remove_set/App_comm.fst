@@ -5,6 +5,7 @@ open FStar.Ghost
 module L = FStar.List.Tot
 
 module S = FStar.Set
+open Set_extended
 
 #set-options "--query_stats"
 // the concrete state type
@@ -39,12 +40,7 @@ let get_ele (o:op_t) : nat =
   |Rem e -> e
 
 let mem_ele (ele:nat) (s:concrete_st) : prop =
-  (exists id. S.mem (id, ele) s)
-
-assume val remove_if (#a:eqtype) (s:S.set a) (f:a -> bool) : S.set a
-assume val remove_if_mem (#a:eqtype) (s:S.set a) (f:a -> bool) (x:a)
-  : Lemma (ensures S.mem x (remove_if s f) <==> (S.mem x s /\ ~ (f x))) 
-    [SMTPat (S.mem x (remove_if s f))]
+  exists_s s (fun e -> snd e = ele)
 
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
@@ -75,10 +71,10 @@ let resolve_conflict_prop (x y:op_t)
 
 (*merge l a b == (intersect l a b) U (a - l) U (b - l)*)
 let concrete_merge (l a b:concrete_st) : concrete_st =
-  let da = remove_if a (fun e -> S.mem e l) in
-  let db = remove_if b (fun e -> S.mem e l) in
+  let da = remove_if a (fun e -> S.mem e l) in    //a - l
+  let db = remove_if b (fun e -> S.mem e l) in    //b - l
   let i_la = S.intersect l a in
-  let i_lab = S.intersect i_la b in
+  let i_lab = S.intersect i_la b in            // intersect l a b
   S.union i_lab (S.union da db)
 
 //operations x and y are commutative
@@ -219,7 +215,7 @@ let lem_l2a_l1r_eq''_s10_s2_gt0 (lca s1 s2:st) (last1 last2:op_t)
 let rec lem_l2a_l1r_eq''_s10 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ops_of s1 = ops_of lca /\
                     is_prefix (ops_of lca) (ops_of s2) /\
-                    Add? (snd last2) /\ //Rem? (snd last1) /\ get_ele last1 = get_ele last2 /\
+                    Add? (snd last2) /\ 
                     not (mem_id (fst last1) (ops_of lca)) /\
                     not (mem_id (fst last2) (ops_of lca)))
           (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
@@ -975,7 +971,7 @@ let lem_l2a (lca s1 s2:st)
 ///////////////////////////////////////////
 
 let lem_exists (lastop:op_t) (l:log)
-  : Lemma (requires true) //Rem? (snd lastop))
+  : Lemma (requires true)
           (ensures exists_triple lastop l <==> (Rem? (snd lastop) /\
                    (exists op. mem op l /\ Add? (snd op) /\ get_ele op = get_ele lastop /\ fst op <> fst lastop /\
                     (let _, suf = pre_suf l op in
@@ -1145,4 +1141,7 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
           (ensures eq_sm (do_s st_s op) (do st op)) = ()
 
 ////////////////////////////////////////////////////////////////
+
+
+
 
