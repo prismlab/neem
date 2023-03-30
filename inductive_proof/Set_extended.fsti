@@ -1,6 +1,6 @@
 module Set_extended
 
-val set (a:eqtype) : Type0
+val set (a:eqtype) : eqtype
 
 val mem (#a:eqtype) (x:a) (s:set a) : Tot bool
 

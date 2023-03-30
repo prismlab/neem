@@ -2,8 +2,7 @@ module App
 
 open FStar.Seq
 open FStar.Ghost
-module L = FStar.List.Tot
-module S = FStar.Set
+module S = Set_extended
 
 #set-options "--query_stats"
 // the concrete state type
@@ -14,7 +13,7 @@ let init_st = S.empty
 
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) = 
-  (forall e. S.mem e a <==> S.mem e b)
+  S.equal a b
 
 // few properties of equivalence relation
 let symmetric (a b:concrete_st) 
@@ -35,7 +34,7 @@ type app_op_t = nat
 
 // apply an operation to a state
 let do (s:concrete_st) (op:op_t) : concrete_st =
-  S.union s (S.singleton (snd op))
+  S.add (snd op) s
   
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b)
@@ -453,7 +452,7 @@ let init_st_s = S.empty
 
 // apply an operation to a state 
 let do_s (s:concrete_st_s) (op:op_t) : concrete_st_s =
-  S.union s (S.singleton (snd op))
+  S.add (snd op) s
 
 //equivalence relation between the concrete states of sequential type and MRDT
 let eq_sm (st_s:concrete_st_s) (st:concrete_st) = st_s == st
