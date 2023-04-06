@@ -50,13 +50,6 @@ let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : (l:log{(forall e. mem e
      cons y (cons x empty) else
        cons x (cons y empty)
 
-// concrete merge pre
-let concrete_merge_pre (lca s1 s2:concrete_st) = True
-
-val merge_flag : l:concrete_st
-               -> a:concrete_st
-               -> b:concrete_st{concrete_merge_pre l a b}
-               -> Tot bool
 let merge_flag l a b =
   let lc = fst l in
   let ac = fst a in
@@ -69,291 +62,108 @@ let merge_flag l a b =
           else bc - lc > 0
 
 // concrete merge operation
-let concrete_merge (lca:concrete_st) (s1:concrete_st) (s2:concrete_st{concrete_merge_pre lca s1 s2}) : concrete_st =
+let concrete_merge (lca s1 s2:concrete_st) 
+  : Pure concrete_st
+         (requires (exists l1 l2. apply_log lca l1 == s1 /\ apply_log lca l2 == s2))
+         (ensures (fun _ -> True)) =
   (fst s1 + fst s2 - fst lca, merge_flag lca s1 s2)
 
-let linearizable_s1_0''_base_pre (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
-                    ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca)))) /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2) /\
-                    length (ops_of lca) > 0)
-        
-          (ensures (let l' = inverse_st lca in
-                    let s1' = inverse_st s1 in
-                    let s2'' = inverse_st s2' in
-                    concrete_merge_pre (v_of l') (v_of s1') (do (v_of s2'') last2))) = ()
-
 let linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2') /\
+  : Lemma (requires consistent_branches lca s1 s2' /\
                     is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
                     ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
                     length (ops_of lca) = 0 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca)))) /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2))
+                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)))
         
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
 
-let linearizable_s1_0''_pre (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2') /\
-                    is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
-                    ops_of s1 = ops_of lca /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca)))) /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2) /\
-                    length (ops_of s2') > length (ops_of lca))
-       
-          (ensures (let inv2 = inverse_st s2' in
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of inv2) last2))) = ()
-
 let linearizable_s1_0''_base_ind (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2') /\
+  : Lemma (requires consistent_branches lca s1 s2' /\
                     is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
                     ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
                     length (ops_of lca) > 0 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca)))) /\
                     (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)) /\
 
                     (let l' = inverse_st lca in
                     let s1' = inverse_st s1 in
                     let s2'' = inverse_st s2' in
-                    is_prefix (ops_of l') (ops_of s1') /\ 
-                    is_prefix (ops_of l') (ops_of s2'') /\
+                    consistent_branches l' s1' s2'' /\
                     is_prefix (ops_of l') (snoc (ops_of s2'') last2) /\
                     ops_of s1' = ops_of l' /\ ops_of s2'' = ops_of l' /\
-                    (forall id id1. mem_id id (ops_of l') /\ mem_id id1 (diff (ops_of s1') (ops_of l')) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of l') /\ mem_id id1 (diff (ops_of s2'') (ops_of l')) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1') (ops_of l')) ==> not (mem_id id (diff (ops_of s2'') (ops_of l')))) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2) /\
-                    concrete_merge_pre (v_of l') (v_of s1') (do (v_of s2'') last2) /\
                     eq (do (v_of s2'') last2) (concrete_merge (v_of l') (v_of s1') (do (v_of s2'') last2))))
 
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
-
+          
 let linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2') /\
+  : Lemma (requires consistent_branches_s2_gt0 lca s1 s2' /\
                     is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
                     ops_of s1 = ops_of lca /\
-                    length (ops_of s2') > length (ops_of lca) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca)))) /\
                     (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)) /\
 
                     (let inv2 = inverse_st s2' in
-                    is_prefix (ops_of lca) (ops_of inv2) /\
+                    consistent_branches lca s1 inv2 /\
                     is_prefix (ops_of lca) (snoc (ops_of inv2) last2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca)))) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of inv2) last2) /\
+                    (exists l2. do (v_of inv2) last2 == apply_log (v_of lca) l2) /\
+                    (exists l2. do (v_of s2') last2 == apply_log (v_of lca) l2) /\                    
                     eq (do (v_of inv2) last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of inv2) last2))))
         
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
           
 let linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
+  : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2))
+                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
+                    (exists l1. (v_of s1) == apply_log (v_of lca) l1))
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
 
-let linearizable_s2_0''_base_pre (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
-                    ops_of s1' = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (v_of s2) /\
-                    length (ops_of lca) > 0)
-          
-          (ensures (let l' = inverse_st lca in
-                    let s1'' = inverse_st s1' in
-                    let s2' = inverse_st s2 in
-                    concrete_merge_pre (v_of l') (do (v_of s1'') last1) (v_of s2'))) = ()
-
 let linearizable_s2_0''_base_base (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
+  : Lemma (requires consistent_branches lca s1' s2 /\
                     is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
                     ops_of s1' = ops_of lca /\ ops_of s2 = ops_of lca /\
                     length (ops_of lca) = 0 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (v_of s2))
+                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)))
          
           (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2))) = ()
 
-let linearizable_s2_0''_pre (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
-                    ops_of s2 = ops_of lca /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (v_of s2) /\
-                    length (ops_of s1') > length (ops_of lca))
-         
-          (ensures (let inv1 = inverse_st s1' in
-                    concrete_merge_pre (v_of lca) (do (v_of inv1) last1) (v_of s2))) = ()
-
 let linearizable_s2_0''_base_ind (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
+  : Lemma (requires consistent_branches lca s1' s2 /\
                     is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
                     ops_of s1' = ops_of lca /\ ops_of s2 = ops_of lca /\
                     length (ops_of lca) > 0 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                     (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)) /\
 
                     (let l' = inverse_st lca in
                     let s1'' = inverse_st s1' in
                     let s2' = inverse_st s2 in
-                    is_prefix (ops_of l') (ops_of s1'') /\ 
-                    is_prefix (ops_of l') (ops_of s2') /\
+                    consistent_branches l' s1'' s2' /\
                     is_prefix (ops_of l') (snoc (ops_of s1'') last1) /\
                     ops_of s1'' = ops_of l' /\ ops_of s2' = ops_of l' /\
-                    (forall id id1. mem_id id (ops_of l') /\ mem_id id1 (diff (ops_of s1'') (ops_of l')) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of l') /\ mem_id id1 (diff (ops_of s2') (ops_of l')) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1'') (ops_of l')) ==> not (mem_id id (diff (ops_of s2') (ops_of l')))) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (v_of s2) /\
-                    concrete_merge_pre (v_of l') (do (v_of s1'') last1) (v_of s2') /\
                     eq (do (v_of s1'') last1) (concrete_merge (v_of l') (do (v_of s1'') last1) (v_of s2'))))
 
           (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2))) = ()
           
 let linearizable_s2_0''_ind (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
+  : Lemma (requires consistent_branches_s1_gt0 lca s1' s2 /\
                     is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
                     ops_of s2 = ops_of lca /\
-                    length (ops_of s1') > length (ops_of lca) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
                     (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)) /\
 
                     (let inv1 = inverse_st s1' in
-                    is_prefix (ops_of lca) (ops_of inv1) /\
+                    consistent_branches lca inv1 s2 /\
                     is_prefix (ops_of lca) (snoc (ops_of inv1) last1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of inv1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (v_of s2) /\
-                    concrete_merge_pre (v_of lca) (do (v_of inv1) last1) (v_of s2) /\
+                    (exists l1. (do (v_of inv1) last1 == apply_log (v_of lca) l1)) /\
+                    (exists l1. (do (v_of s1') last1 == apply_log (v_of lca) l1)) /\
                     eq (do (v_of inv1) last1) (concrete_merge (v_of lca) (do (v_of inv1) last1) (v_of s2))))
          
           (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2))) = ()
 
-let linearizable_gt0_s2'_s10_pre (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    ops_of s1 = ops_of lca /\
-                    fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) <> last1 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2) /\
-                    length (ops_of s2) > length (ops_of lca))
-        
-          (ensures (let s2' = inverse_st s2 in
-                   concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2) /\
-                   concrete_merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2'))) = ()
-
-let linearizable_gt0_s2'_pre (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\ 
-                    fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) <> last1 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2) /\
-                    length (ops_of s1) > length (ops_of lca))
-         
-          (ensures (let s1' = inverse_st s1 in
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (v_of s2))) = ()
-
-let linearizable_gt0_s1'_s20_pre (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    ops_of s2 = ops_of lca /\
-                    fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) = last1 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2) last2) /\
-                    length (ops_of s1) > length (ops_of lca))
-         
-          (ensures (let s1' = inverse_st s1 in
-                    concrete_merge_pre (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2) /\
-                    concrete_merge_pre (v_of lca) (v_of s1') (do (v_of s2) last2))) = ()
-
-let linearizable_gt0_s1'_pre (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) = last1 /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2) last2) /\
-                    length (ops_of s2) > length (ops_of lca))
-       
-          (ensures (let s2' = inverse_st s2 in
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2) /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
-
 let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
+  : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
                     fst last1 <> fst last2 /\ 
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
-                    (last (resolve_conflict last1 last2) = last1 ==>
-                      concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2) last2)) /\
-                
-                    (last (resolve_conflict last1 last2) <> last1 ==>
-                      concrete_merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2)) /\
-                      
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))))
+                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
+                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)))
          
           (ensures (last (resolve_conflict last1 last2) = last1 ==>
                       (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
@@ -365,103 +175,57 @@ let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
 
 #push-options "--z3rlimit 50"
 let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    length (ops_of s2) > length (ops_of lca) /\
+  : Lemma (requires consistent_branches_s2_gt0 lca s1 s2 /\
                     fst last1 <> fst last2 /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-          
+                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
+                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (let s2' = inverse_st s2 in
-                    (last (resolve_conflict last1 last2) = last1 ==>
-                      concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2) /\
-                      concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2) /\
-                      concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2) last2)) /\
-                   
-                    (last (resolve_conflict last1 last2) <> last1 ==>
-                      concrete_merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2') /\
-                      concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2) /\
-                      concrete_merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2)) /\
-                      
-                     is_prefix (ops_of lca) (ops_of s2') /\
-                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2') (ops_of lca)) ==> lt id id1) /\
-                     (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2') (ops_of lca))))))
+                    (exists l2. (do (v_of s2') last2 == apply_log (v_of lca) l2)) /\
+                    (exists l2. (v_of s2' == apply_log (v_of lca) l2)) /\
+                    (exists l1. (v_of s1 == apply_log (v_of lca) l1)) /\
+                    (exists l2. (v_of s2 == apply_log (v_of lca) l2)) /\
+                    consistent_branches lca s1 s2'))
        
           (ensures (let s2' = inverse_st s2 in
-                   (last (resolve_conflict last1 last2) = last1 /\
+                   ((last (resolve_conflict last1 last2) = last1 /\
                     eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1)
-                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2)) ==>
+                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
                     (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) /\
                           
-                   (ops_of s1 = ops_of lca /\
+                   ((ops_of s1 = ops_of lca /\
                     last (resolve_conflict last1 last2) <> last1 /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
-                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2)) ==>
+                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
                     (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))) = ()
-                       
-let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    fst last1 <> fst last2 /\
-                    concrete_merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
 
+let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires consistent_branches_s1_gt0 lca s1 s2 /\
+                    fst last1 <> fst last2 /\
+                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
+                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (let s1' = inverse_st s1 in
-                    (last (resolve_conflict last1 last2) = last1 ==>
-                      concrete_merge_pre (v_of lca) (v_of s1) (do (v_of s2) last2) /\
-                      concrete_merge_pre (v_of lca) (v_of s1') (do (v_of s2) last2) /\
-                      concrete_merge_pre (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)) /\
-                   
-                    (last (resolve_conflict last1 last2) <> last1 ==>
-                      concrete_merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2) /\
-                      concrete_merge_pre (v_of lca) (do (v_of s1') last1) (v_of s2) /\
-                      concrete_merge_pre (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)) /\
-                   
-                    is_prefix (ops_of lca) (ops_of s1') /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1') (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))))
+                    (exists l1. (do (v_of s1') last1 == apply_log (v_of lca) l1)) /\
+                    (exists l1. (v_of s1' == apply_log (v_of lca) l1)) /\
+                    (exists l1. (v_of s1 == apply_log (v_of lca) l1)) /\
+                    (exists l2. (v_of s2 == apply_log (v_of lca) l2)) /\
+                    consistent_branches lca s1' s2))
         
           (ensures (let s1' = inverse_st s1 in
-                   (ops_of s2 = ops_of lca /\
+                   ((ops_of s2 = ops_of lca /\
                    last (resolve_conflict last1 last2) = last1 /\
                    eq (do (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1)
-                      (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)) ==>
+                      (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))) ==>
                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) /\
 
-                   (last (resolve_conflict last1 last2) <> last1 /\
+                   ((last (resolve_conflict last1 last2) <> last1 /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)) ==>
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
-                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))))) = ()
-#pop-options
-
-let linearizable_gt0_merge_pre (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
-                    is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
-                    Seq.length (ops_of s2) > Seq.length (ops_of lca) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
-                    (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1) /\
-                    (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
-                    last1 = last (ops_of s1) /\
-                    last2 = last (ops_of s2) /\             
-                    fst last1 <> fst last2 /\
-                    concrete_merge_pre (v_of lca) (v_of s1) (v_of s2))
-       
-          (ensures (last (resolve_conflict last1 last2) = last1 ==>
-                       concrete_merge_pre (v_of lca) (v_of (inverse_st s1)) (v_of s2)) /\
-
-                   (last (resolve_conflict last1 last2) <> last1 ==>
-                       concrete_merge_pre (v_of lca) (v_of s1) (v_of (inverse_st s2)))) = ()
-  
+                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))) = ()
+#pop-options  
 
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
