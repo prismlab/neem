@@ -2,7 +2,6 @@ module App_comm
 
 open FStar.Seq
 open FStar.Ghost
-module L = FStar.List.Tot
 module S = Set_extended
 
 #set-options "--query_stats"
@@ -12,6 +11,7 @@ type concrete_st = S.set (nat * nat)
 let init_st = S.empty
 
 let eq (a b:concrete_st) =
+  //a == b
   S.equal a b
 
 // few properties of equivalence relation
@@ -110,7 +110,6 @@ let linearizable_s1_0 (lca s1 s2:st)
 let linearizable_s2_0 (lca s1 s2:st)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
                     is_prefix (ops_of lca) (ops_of s2) /\
-                    Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
                     ops_of s2 == ops_of lca /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s1) (ops_of lca)) ==> lt id id1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of s2) (ops_of lca)) ==> lt id id1))
@@ -643,6 +642,57 @@ let lem_l2r_neq_p1 (lca s1 s2:st)
  assert (common_pre_s2_gt0 lca s1' s2);
  ()
 
+let commu_seq_prop (op:op_t) (l:log)
+  : Lemma (requires Add? (snd op))
+          (ensures commutative_seq op l <==> (forall e. mem e l ==> ~ (get_ele op = get_ele e /\ Rem? (snd e)))) = ()
+
+let commu_seq_prop_l (op:op_t) (l':log) (last1:op_t)
+  : Lemma (requires Add? (snd op) /\ get_ele last1 <> get_ele op /\ commutative_seq op l')
+          (ensures commutative_seq op (snoc l' last1)) = 
+  lemma_mem_snoc l' last1;
+  commu_seq_prop op l';
+  commu_seq_prop op (snoc l' last1)
+  
+let lem_l2r_neq_p2'_help (l:log) (last2:op_t)
+  : Lemma (requires distinct_ops l /\ length l > 0 /\
+                    Rem? (snd last2) /\
+                   (let l', last1 = un_snoc l in
+                    get_ele last1 <> get_ele last2 /\
+                    exists_triple last2 l'))
+          (ensures exists_triple last2 l) 
+          [SMTPat (let l', last1 = un_snoc l in
+                   (exists_triple last2 l'))] =
+  let l', last1 = un_snoc l in
+  let pre', op', suf' = find_triple last2 l' in
+  lemma_mem_snoc l' last1;
+  assert (mem op' l);
+  let pre, suf = pre_suf l op' in
+  commu_seq_prop op' suf';
+  
+  assert ((snoc pre op') ++ suf = snoc ((snoc pre' op') ++ suf') last1);
+  append_assoc (snoc pre' op') suf' (create 1 last1);
+  assert ((snoc pre op') ++ suf = ((snoc pre' op') ++ (snoc suf' last1)));
+  lem_suf_equal4 l op';
+  distinct_invert_append l' (create 1 last1);
+  lem_suf_equal4 l' op';
+
+  not_mem_id l' last1;
+  mem_ele_id op' l;
+  mem_ele_id op' l';
+  lem_id_not_snoc l' suf' last1 op'; 
+  assert (not (mem_id (fst op') (snoc suf' last1)));
+ 
+  count_1 l;
+  assert (count_id (fst op') (snoc pre op' ++ suf) = 1);
+  lem_count_1 pre suf pre' (snoc suf' last1) op';
+  
+  assert (length suf = length (snoc suf' last1));
+  lemma_append_inj (snoc pre op') suf (snoc pre' op') (snoc suf' last1);
+  assert (suf = snoc suf' last1);
+  commu_seq_prop_l op' suf' last1;
+  assert (commutative_seq op' suf); 
+  ()
+  
 let lem_l2r_neq_p2' (l:log) (last2:op_t)
   : Lemma (requires distinct_ops l /\ length l > 0 /\
                     Rem? (snd last2) /\
@@ -650,7 +700,7 @@ let lem_l2r_neq_p2' (l:log) (last2:op_t)
                     get_ele last1 <> get_ele last2))
           (ensures (let l', last1 = un_snoc l in 
                     (exists_triple last2 l' ==> exists_triple last2 l) /\
-                    (not (exists_triple last2 l) ==> not (exists_triple last2 l')))) = () //check
+                    (not (exists_triple last2 l) ==> not (exists_triple last2 l')))) = ()
 
 let lem_l2r_neq_p2 (lca s1 s2:st)
  : Lemma (requires common_pre_s2_gt0 lca s1 s2 /\ 
