@@ -98,8 +98,7 @@ let lem_do (a b:concrete_st) (op:op_t)
    do_prop b op
 
 //conflict resolution
-let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : (l:log{(forall e. mem e l <==> (e == x \/ e == y))}) =
-  cons x (cons y empty)
+let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res = First
 
 // concrete merge operation
 let rec concrete_merge_g (lca s1 s2:gset_st)
@@ -191,10 +190,7 @@ let linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
   do_prop (v_of inv2) last2
           
 let linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires consistent_branches lca s1 s2 /\
-                    ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
-                    (exists l1. (v_of s1) == apply_log (v_of lca) l1))
+  : Lemma (requires ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
 
@@ -249,11 +245,11 @@ let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
                     (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)))
          
-          (ensures (last (resolve_conflict last1 last2) = last1 ==>
+          (ensures (First? (resolve_conflict last1 last2) ==>
                       (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                          (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) /\
 
-                   (last (resolve_conflict last1 last2) <> last1 ==>
+                   (Second? (resolve_conflict last1 last2) ==>
                       (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                          (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))))) = 
   do_prop (v_of s1) last1; 
@@ -274,14 +270,14 @@ let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
                     consistent_branches lca s1 s2'))
        
           (ensures (let s2' = inverse_st s2 in
-                   ((last (resolve_conflict last1 last2) = last1 /\
+                   ((First? (resolve_conflict last1 last2) /\
                     eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
                     (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) /\
                           
                    ((ops_of s1 = ops_of lca /\
-                    last (resolve_conflict last1 last2) <> last1 /\
+                    Second? (resolve_conflict last1 last2) /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
                     (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
@@ -307,13 +303,13 @@ let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
         
           (ensures (let s1' = inverse_st s1 in
                    ((ops_of s2 = ops_of lca /\
-                   last (resolve_conflict last1 last2) = last1 /\
+                   First? (resolve_conflict last1 last2) /\
                    eq (do (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))) ==>
                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) /\
 
-                   ((last (resolve_conflict last1 last2) <> last1 /\
+                   ((Second? (resolve_conflict last1 last2) /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)) ==>
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)

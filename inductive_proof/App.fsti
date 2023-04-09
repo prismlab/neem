@@ -3,6 +3,8 @@ module App
 open FStar.Seq
 open FStar.Ghost
 
+open SeqUtils
+
 #set-options "--query_stats"
 
 let lt (a b:nat) : bool = a < b
@@ -40,38 +42,15 @@ type log = seq op_t
 unfold
 let ( ++ ) (l1 l2:log) = Seq.append l1 l2
 
-let rec count_id (id:nat) (l:log) : Tot nat (decreases length l) =
-  if length l = 0 then 0
-  else (let tl_count = count_id id (tail l) in
-        if fst (head l) = id then 1 + tl_count 
-        else tl_count)
+unfold
+let count_id (id:timestamp_t) (l:log) = count_assoc_fst id l
 
-let mem_id (id:timestamp_t) (l:log) : bool = count_id id l > 0
+unfold
+let mem_id (id:timestamp_t) (l:log) : bool =
+  mem_assoc_fst id l
   
-let distinct_ops (l:log) : prop = (forall (id:timestamp_t).{:pattern count_id id l} count_id id l <= 1)
-
-#push-options "--z3rlimit 50"
-let rec lemma_append_count_id (lo:log) (hi:log)
-  : Lemma
-      (ensures (forall x. count_id x (lo ++ hi) = (count_id x lo + count_id x hi)) /\
-               (forall id. mem_id id (lo ++ hi) <==> (mem_id id lo \/ mem_id id hi)))
-      (decreases (length lo))
-  = if length lo = 0
-       then (assert (equal (lo ++ hi) hi); ())
-       else (assert (equal (cons (head lo) ((tail lo) ++ hi)) (lo ++ hi));
-           lemma_append_count_id (tail lo) hi;
-           let tl_l_h = (tail lo) ++ hi in
-           let lh = cons (head lo) tl_l_h in
-           (assert (equal (tail lh) tl_l_h); ()))
-#pop-options
-
-let distinct_invert_append (a b:log)
-  : Lemma
-      (requires distinct_ops (a ++ b))
-      (ensures distinct_ops a /\ distinct_ops b /\ 
-               (forall id. (*{:pattern (mem_id id a ==> not (mem_id id b))}*) mem_id id a ==> not (mem_id id b)))
-      //[SMTPat (distinct_ops (a ++ b))]
-  = lemma_append_count_id a b
+unfold
+let distinct_ops (l:log) = distinct_assoc_fst l
 
 type st0 = concrete_st & erased log
   
@@ -98,40 +77,26 @@ let rec lem_apply_log (x:concrete_st) (l:log)
   match length l with
   |0 -> ()
   |_ -> lem_apply_log (do x (head l)) (tail l)
-  
+
 let valid_st (s:st0) : prop =
   distinct_ops (ops_of s) /\
   (v_of s == apply_log init_st (ops_of s))
 
 type st = s:st0{valid_st s}
 
-//conflict resolution
-val resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : (l:log{(forall e. mem e l <==> (e == x \/ e == y))})
+type resolve_conflict_res =
+  | First
+  | Second
+  //| First_then_second
+  //| Second_then_first
+
+val resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res
 
 // concrete merge operation
 val concrete_merge (lca s1 s2:concrete_st) 
   : Pure concrete_st
          (requires (exists l1 l2. apply_log lca l1 == s1 /\ apply_log lca l2 == s2))
          (ensures (fun _ -> True))
-
-// p is a prefix of l
-let is_prefix (p:log) (l:log) : Tot prop =
-  Seq.length l >= Seq.length p /\ Seq.equal p (Seq.slice l 0 (Seq.length p))
-
-// s is a suffix of l
-let is_suffix (s:log) (l:log) : Tot prop =
-  Seq.length l >= Seq.length s /\ Seq.equal s (Seq.slice l (Seq.length l - Seq.length s) (Seq.length l))
-  
-// s1 - lca
-let diff (s1:log) (lca:log{is_prefix lca s1}) 
-  : Tot (l:log{(length s1 == length lca + length l) /\ (s1 == lca ++ l) /\
-                (forall e. mem e s1 <==> (mem e lca \/ mem e l)) /\
-                (forall op. mem op l ==> length s1 > length lca) /\
-                is_suffix l s1}) =
-  let s = snd (split s1 (length lca)) in
-  lemma_split s1 (length lca);
-  lemma_mem_append lca s;
-  s
 
 let inverse_st (s:st{Seq.length (ops_of s) > 0}) 
   : GTot (i:st{(v_of s == do (v_of i) (last (ops_of s))) /\
@@ -145,10 +110,13 @@ let inverse_st (s:st{Seq.length (ops_of s) > 0})
   let p, l = un_snoc (ops_of s) in
   let r = apply_log init_st p in
   lemma_split (ops_of s) (length (ops_of s) - 1); 
-  lemma_append_count_id p (snd (split (ops_of s) (length (ops_of s) - 1))); 
+  lemma_append_count_assoc_fst p (snd (split (ops_of s) (length (ops_of s) - 1))); 
   distinct_invert_append p (snd (split (ops_of s) (length (ops_of s) - 1)));
   (r, hide p)
 
+//
+// AR: This is not used in the interface, move it out?
+//
 let rec mem_ele_id (op:op_t) (l:log)
   : Lemma (requires mem op l)
           (ensures mem_id (fst op) l) (decreases length l) =
@@ -174,16 +142,34 @@ let consistent_branches_s1s2_gt0 (lca s1 s2:st) =
   consistent_branches lca s1 s2 /\
   length (ops_of s1) > length (ops_of lca) /\
   length (ops_of s2) > length (ops_of lca)
-  
+
+//
+// AR: Can we simplify this lemma, a couple of observations:
+//     - from consistent_branches, we know is_prefix (ops_of lca) (ops_of s2'),
+//       so the precondition is_prefix (ops_of lca) (snoc (ops_of s2') last2) is redundant?
+//     - there is a precondition length (ops_of lca) = 0,
+//       so isn't the preconditon forall id. mem_id id (ops_of lca) ==> lt id (fst last2))
+//       trivially valid, since there is no such id s.t. mem_id id (ops_of lca)?
+//     - Is there a more general form of this lemma, something like:
+//       val foo (lca s1 s2:st) : Lemma
+//         (requires consistent_branches lca s1 s2 /\
+//                   ops_of s1 == ops_of lca)
+//         (ensures concrete_merge (v_of lca) (v_of s1) (v_of s2) == v_of s2)
+//
+//       Can't we derive the lemma below from foo signature here?
+//
 val linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2' /\
                     is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
                     ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
-                    length (ops_of lca) = 0 /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)))
+                    length (ops_of lca) = 0)
         
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)))
 
+//
+// AR: Similar comments, some preconditons seem unnecessary
+//     More generally, this is also derivable from `foo` in the previous comment?
+//
 val linearizable_s1_0''_base_ind (lca s1 s2':st) (last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2' /\
                     is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
@@ -201,6 +187,9 @@ val linearizable_s1_0''_base_ind (lca s1 s2':st) (last2:op_t)
 
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)))
 
+//
+// AR: also derivable from `foo`?
+//
 val linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
   : Lemma (requires consistent_branches_s2_gt0 lca s1 s2' /\
                     is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
@@ -216,14 +205,24 @@ val linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
         
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)))
 
+//
+// AR: The exists preconditions seem unnecessary,
+//     why a lemma that says:
+//     val bar lca s1 s2 : Lemma (requires ops lca == ops s1 /\ ops lca == ops l2)
+//                               (ensures concrete_merge lca s1 s2 == v_of lca)
+//
+//     is not sufficient?
+//
 val linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires consistent_branches lca s1 s2 /\
-                    ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
-                    (exists l1. (v_of s1) == apply_log (v_of lca) l1))
+  : Lemma (requires ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2)))
 
+//
+// AR: The following seem counterparts of s2 cases above?
+//     Can we require the client to prove that concrete_merge is commutative?
+//     If so, we can remove the following lemmas?
+//
 val linearizable_s2_0''_base_base (lca s1' s2:st) (last1:op_t)
   : Lemma (requires consistent_branches lca s1' s2 /\
                     is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
@@ -265,6 +264,10 @@ val linearizable_s2_0''_ind (lca s1' s2:st) (last1:op_t)
          
           (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)))
 
+//
+// AR: the exists preconditions seem unnecessary to me, why is l2 not just Seq.singleton last2, for example?
+//     May be we can strengthen what does it mean to be consistent branches?
+//
 val linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
@@ -272,11 +275,11 @@ val linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
                     (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)))
          
-          (ensures (last (resolve_conflict last1 last2) = last1 ==>
+          (ensures (First? (resolve_conflict last1 last2) ==>
                       (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                          (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) /\
 
-                   (last (resolve_conflict last1 last2) <> last1 ==>
+                   (Second? (resolve_conflict last1 last2) ==>
                       (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                          (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))                 
 
@@ -293,14 +296,14 @@ val linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
                     consistent_branches lca s1 s2'))
        
           (ensures (let s2' = inverse_st s2 in
-                   ((last (resolve_conflict last1 last2) = last1 /\
+                   ((First? (resolve_conflict last1 last2) /\
                     eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
                     (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) /\
                           
                    ((ops_of s1 = ops_of lca /\
-                    last (resolve_conflict last1 last2) <> last1 /\
+                    Second? (resolve_conflict last1 last2) /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
                     (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
@@ -320,13 +323,13 @@ val linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
         
           (ensures (let s1' = inverse_st s1 in
                    ((ops_of s2 = ops_of lca /\
-                   last (resolve_conflict last1 last2) = last1 /\
+                   First? (resolve_conflict last1 last2) /\
                    eq (do (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))) ==>
                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) /\
 
-                   ((last (resolve_conflict last1 last2) <> last1 /\
+                   ((Second? (resolve_conflict last1 last2) /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)) ==>
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)

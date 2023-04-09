@@ -2,6 +2,7 @@ module Framework
 
 open FStar.Seq
 open App
+open SeqUtils
 open Utils
 open FStar.Ghost
 
@@ -27,13 +28,6 @@ let rec is_interleaving (l l1 l2:log)
 
    (let prefix1, last1 = un_snoc l1 in
     let prefix2, last2 = un_snoc l2 in
-
-    (exists l'.
-          is_interleaving l' prefix1 prefix2 /\
-          fst last1 <> fst last2 /\
-          l == l' ++ (resolve_conflict last1 last2))
-
-    \/
 
     (exists l'.
           is_interleaving l' l1 prefix2 /\
@@ -179,7 +173,7 @@ let rec linearizable_s2_0'' (lca s1' s2:st) (last1:op_t)
     lastop_diff (ops_of lca) (ops_of s1');
     inverse_diff_id_s1' (ops_of lca) (ops_of s1') (ops_of s2);
     split_prefix init_st (ops_of lca) (ops_of s1');
-    add_lastop lca s1' last1; //assert ((exists l1. (do (v_of s1') last1 == apply_log (v_of lca) l1)));
+    add_lastop lca s1' last1; // ((exists l1. (do (v_of s1') last1 == apply_log (v_of lca) l1)));
     linearizable_s2_0'' lca (inverse_st s1') s2 last1;
     linearizable_s2_0''_ind lca s1' s2 last1)
     
@@ -216,14 +210,14 @@ let rec linearizable_gt0_s2'_s10 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 = ops_of lca /\
                     fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) <> last1)
+                    Second? (resolve_conflict last1 last2))                   
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases  %[length (ops_of s2)]) = 
-  split_prefix init_st (ops_of lca) (ops_of s2); //assert (exists l2. (v_of s2) == apply_log (v_of lca) l2);
+  split_prefix init_st (ops_of lca) (ops_of s2); // (exists l2. (v_of s2) == apply_log (v_of lca) l2);
   add_lastop lca s2 last2; //(exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)); 
   add_lastop lca s1 last1; //(exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)));
   
@@ -240,7 +234,7 @@ let rec linearizable_gt0_s2'_s10 (lca s1 s2:st) (last1 last2:op_t)
 let rec linearizable_gt0_s2' (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) <> last1)
+                    Second? (resolve_conflict last1 last2))
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                    (exists l1. (v_of s1) == apply_log (v_of lca) l1) /\
@@ -248,8 +242,8 @@ let rec linearizable_gt0_s2' (lca s1 s2:st) (last1 last2:op_t)
                    eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases %[length (ops_of s1); length (ops_of s2)]) = 
-  split_prefix init_st (ops_of lca) (ops_of s2); //assert (exists l2. (v_of s2) == apply_log (v_of lca) l2);
-  split_prefix init_st (ops_of lca) (ops_of s1); //assert (exists l1. (v_of s1) == apply_log (v_of lca) l1);
+  split_prefix init_st (ops_of lca) (ops_of s2); // (exists l2. (v_of s2) == apply_log (v_of lca) l2);
+  split_prefix init_st (ops_of lca) (ops_of s1); // (exists l1. (v_of s1) == apply_log (v_of lca) l1);
   add_lastop lca s2 last2; //(exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)); 
   add_lastop lca s1 last1; //(exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)));
   
@@ -269,7 +263,7 @@ let linearizable_gt0_s2 (lca s1 s2:st)
                     (let _, last1 = un_snoc (ops_of s1) in
                     let _, last2 = un_snoc (ops_of s2) in
                     fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) <> last1 /\
+                    Second? (resolve_conflict last1 last2) /\
                     (exists l2. (v_of (inverse_st s2) == apply_log (v_of lca) l2)) /\
                     (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                     (exists l1. (v_of s1) == apply_log (v_of lca) l1)))
@@ -278,9 +272,6 @@ let linearizable_gt0_s2 (lca s1 s2:st)
                        (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = 
   let pre2, last2 = un_snoc (ops_of s2) in
   let _, last1 = un_snoc (ops_of s1) in
-  (*split_prefix init_st (ops_of lca) (ops_of s2); //assert (exists l2. (v_of s2) == apply_log (v_of lca) l2);
-  split_prefix init_st (ops_of lca) (ops_of s1); //assert (exists l1. (v_of s1) == apply_log (v_of lca) l1);
-  split_prefix init_st (ops_of lca) pre2; //assert (exists l2. (v_of (inverse_st s2) == apply_log (v_of lca) l2);*)
   assert (v_of s2 == do (v_of (inverse_st s2)) last2);
   assert (v_of s1 == do (v_of (inverse_st s1)) last1);
   lem_inverse (ops_of lca) (ops_of s2);
@@ -294,14 +285,14 @@ let rec linearizable_gt0_s1'_s20 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s2 = ops_of lca /\
                     fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) = last1)
+                    First? (resolve_conflict last1 last2))
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l1. (v_of s1) == apply_log (v_of lca) l1) /\
                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases  %[length (ops_of s1)]) =
-  split_prefix init_st (ops_of lca) (ops_of s1); //assert (exists l1. (v_of s1) == apply_log (v_of lca) l1);
+  split_prefix init_st (ops_of lca) (ops_of s1); // (exists l1. (v_of s1) == apply_log (v_of lca) l1);
   add_lastop lca s2 last2; //(exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)); 
   add_lastop lca s1 last1; //(exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)));
   
@@ -318,7 +309,7 @@ let rec linearizable_gt0_s1'_s20 (lca s1 s2:st) (last1 last2:op_t)
 let rec linearizable_gt0_s1' (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) = last1)
+                    First? (resolve_conflict last1 last2))
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                    (exists l1. (v_of s1) == apply_log (v_of lca) l1) /\
@@ -326,8 +317,8 @@ let rec linearizable_gt0_s1' (lca s1 s2:st) (last1 last2:op_t)
                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases %[length (ops_of s2); length (ops_of s1)]) =
-  split_prefix init_st (ops_of lca) (ops_of s2); //assert (exists l2. (v_of s2) == apply_log (v_of lca) l2);
-  split_prefix init_st (ops_of lca) (ops_of s1); //assert (exists l1. (v_of s1) == apply_log (v_of lca) l1);
+  split_prefix init_st (ops_of lca) (ops_of s2); // (exists l2. (v_of s2) == apply_log (v_of lca) l2);
+  split_prefix init_st (ops_of lca) (ops_of s1); // (exists l1. (v_of s1) == apply_log (v_of lca) l1);
   add_lastop lca s2 last2; //(exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)); 
   add_lastop lca s1 last1; //(exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)));
   
@@ -347,7 +338,7 @@ let linearizable_gt0_s1 (lca s1 s2:st)
                     (let _, last1 = un_snoc (ops_of s1) in
                     let _, last2 = un_snoc (ops_of s2) in
                     fst last1 <> fst last2 /\
-                    last (resolve_conflict last1 last2) = last1 /\
+                    First? (resolve_conflict last1 last2) /\
                     (exists l1. (v_of (inverse_st s1) == apply_log (v_of lca) l1)) /\
                     (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                     (exists l1. (v_of s1) == apply_log (v_of lca) l1)))
@@ -356,9 +347,6 @@ let linearizable_gt0_s1 (lca s1 s2:st)
                        (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = 
   let _, last2 = un_snoc (ops_of s2) in
   let pre1, last1 = un_snoc (ops_of s1) in
-  (*split_prefix init_st (ops_of lca) (ops_of s2); //assert (exists l2. (v_of s2) == apply_log (v_of lca) l2);
-  split_prefix init_st (ops_of lca) (ops_of s1); //assert (exists l1. (v_of s1) == apply_log (v_of lca) l1);
-  split_prefix init_st (ops_of lca) pre1; //assert (exists l1. (v_of (inverse_st s1) == apply_log (v_of lca) l1);*)
   assert (v_of s2 == do (v_of (inverse_st s2)) last2);
   assert (v_of s1 == do (v_of (inverse_st s1)) last1);
   lem_inverse (ops_of lca) (ops_of s2);
@@ -375,25 +363,26 @@ let linearizable_gt0 (lca s1 s2:st)
                     fst last1 <> fst last2 /\
                     (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                     (exists l1. (v_of s1) == apply_log (v_of lca) l1) /\
-                    (last (resolve_conflict last1 last2) = last1 ==>
+                    (First? (resolve_conflict last1 last2) ==>
                        (exists l1. (v_of (inverse_st s1) == apply_log (v_of lca) l1))) /\
 
-                    (last (resolve_conflict last1 last2) <> last1 ==>
+                    (Second? (resolve_conflict last1 last2) ==>
                        (exists l2. (v_of (inverse_st s2) == apply_log (v_of lca) l2)))))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let _, last2 = un_snoc (ops_of s2) in
-                    (last (resolve_conflict last1 last2) = last1 ==>
+                    (First? (resolve_conflict last1 last2) ==>
                      eq (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
                         (concrete_merge (v_of lca) (v_of s1) (v_of s2))) /\
                  
-                    (last (resolve_conflict last1 last2) <> last1 ==>
+                    (Second? (resolve_conflict last1 last2) ==>
                      eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
                         (concrete_merge (v_of lca) (v_of s1) (v_of s2))))) = 
   let _, last1 = un_snoc (ops_of s1) in
   let _, last2 = un_snoc (ops_of s2) in
-  if last (resolve_conflict last1 last2) = last1 then
+  if First? (resolve_conflict last1 last2) then
     linearizable_gt0_s1 lca s1 s2
-  else linearizable_gt0_s2 lca s1 s2
+  else
+    linearizable_gt0_s2 lca s1 s2
 
 let interleaving_helper_inv1 (lca s1 s2 l':log)
   : Lemma
@@ -426,7 +415,7 @@ let interleaving_s1_inv (lca s1 s2:st) (l':log)
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) = last1) /\
+                     First? (resolve_conflict last1 last2)) /\
                      (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                      (exists l1. (v_of s1) == apply_log (v_of lca) l1) /\
                      (exists l1. (v_of (inverse_st s1) == apply_log (v_of lca) l1)))
@@ -435,9 +424,6 @@ let interleaving_s1_inv (lca s1 s2:st) (l':log)
                     interleaving_predicate l lca s1 s2 /\
                     (exists l. interleaving_predicate l lca s1 s2))) = 
   let pre1, last1 = un_snoc (ops_of s1) in
-  //split_prefix init_st (ops_of lca) (ops_of s2); //assert (exists l2. (v_of s2) == apply_log (v_of lca) l2);
-  //split_prefix init_st (ops_of lca) (ops_of s1); //assert (exists l1. (v_of s1) == apply_log (v_of lca) l1);
-  //split_prefix init_st (ops_of lca) pre1; //assert (exists l1. (v_of (inverse_st s1) == apply_log (v_of lca) l1);
   let l = Seq.snoc l' last1 in
   interleaving_helper_inv1 (ops_of lca) (ops_of s1) (ops_of s2) l'; 
   linearizable_gt0 lca s1 s2; 
@@ -457,7 +443,7 @@ let interleaving_s2_inv (lca s1 s2:st) (l':log)
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) <> last1) /\
+                     Second? (resolve_conflict last1 last2)) /\
                      (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
                      (exists l1. (v_of s1) == apply_log (v_of lca) l1) /\
                      (exists l2. (v_of (inverse_st s2) == apply_log (v_of lca) l2)))
@@ -466,9 +452,6 @@ let interleaving_s2_inv (lca s1 s2:st) (l':log)
                     interleaving_predicate l lca s1 s2 /\
                     (exists l. interleaving_predicate l lca s1 s2))) = 
   let pre2, last2 = un_snoc (ops_of s2) in
-  //split_prefix init_st (ops_of lca) (ops_of s2); //assert (exists l2. (v_of s2) == apply_log (v_of lca) l2);
-  //split_prefix init_st (ops_of lca) (ops_of s1); //assert (exists l1. (v_of s1) == apply_log (v_of lca) l1);
-  //split_prefix init_st (ops_of lca) pre2; //assert (exists l2. (v_of (inverse_st s2) == apply_log (v_of lca) l2);
   let l = Seq.snoc l' last2 in
   interleaving_helper_inv2 (ops_of lca) (ops_of s1) (ops_of s2) l'; 
   linearizable_gt0 lca s1 s2;
@@ -486,7 +469,7 @@ let linearizable_s1_gt0_pre (lca s1 s2:st)
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) = last1))
+                     First? (resolve_conflict last1 last2)))
           (ensures (let inv1 = inverse_st s1 in 
                     is_prefix (ops_of lca) (ops_of inv1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv1) (ops_of lca)) ==> lt id id1) /\
@@ -502,7 +485,7 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) <> last1))
+                     Second? (resolve_conflict last1 last2)))
           (ensures (let inv2 = inverse_st s2 in 
                     is_prefix (ops_of lca) (ops_of inv2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1) /\
@@ -542,7 +525,7 @@ let rec linearizable (lca s1 s2:st)
         let inv1 = inverse_st s1 in 
         let inv2 = inverse_st s2 in 
 
-        if last (resolve_conflict last1 last2) = last1 then
+        if First? (resolve_conflict last1 last2) then
         begin 
           linearizable_s1_gt0_pre lca s1 s2;
           split_prefix init_st (ops_of lca) pre1;

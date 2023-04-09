@@ -149,10 +149,7 @@ let linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
 
 let linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires consistent_branches lca s1 s2 /\
-                    ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
-                    (exists l1. (v_of s1) == apply_log (v_of lca) l1))
+  : Lemma (requires ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
 

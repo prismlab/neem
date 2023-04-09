@@ -3,6 +3,7 @@ module Utils
 open FStar.Seq
 open FStar.Ghost
 open App
+open SeqUtils
 
 let rec inverse_helper (s:concrete_st) (l':log) (op:op_t)
   : Lemma (ensures (let l = Seq.snoc l' op in 
@@ -21,7 +22,6 @@ let rec lem_un_snoc_id (a b:log)
   |0 -> ()
   |_ -> lem_un_snoc_id (tail a) (tail b)
     
-#push-options "--z3rlimit 200" 
 let lem_diff (s1 l:log)
   : Lemma (requires distinct_ops s1 /\ is_prefix l s1)
           (ensures distinct_ops (diff s1 l) /\ (forall id. mem_id id (diff s1 l) <==> mem_id id s1 /\ not (mem_id id l)) /\
@@ -34,7 +34,7 @@ let lem_diff (s1 l:log)
                        diff s1' l == fst (un_snoc (diff s1 l)))))
   = let s = snd (split s1 (length l)) in
     lemma_split s1 (length l);
-    lemma_append_count_id l s
+    lemma_append_count_assoc_fst l s
 
 let lem_diff_lastop (s1 l:log)
   : Lemma (requires distinct_ops s1 /\ is_prefix l s1 /\ length s1 > length l)
@@ -65,12 +65,6 @@ let rec split_prefix (s:concrete_st) (l:log) (a:log)
     |0 -> ()
     |1 -> ()
     |_ -> split_prefix (do s (head l)) (tail l) (tail a)
-         
-let lem_inverse (lca s1:log)
-  : Lemma (requires is_prefix lca s1 /\
-                    Seq.length s1 > Seq.length lca)
-          (ensures (is_prefix lca (fst (un_snoc s1)))) 
-  = lemma_split (fst (un_snoc s1)) (length lca)
 
 let un_snoc_prop (a:log)
   : Lemma (requires distinct_ops a /\ length a > 0)
@@ -80,7 +74,7 @@ let un_snoc_prop (a:log)
                     mem_id (fst l) a) /\ distinct_ops (fst (un_snoc a))) =
   let p, l = un_snoc a in
   lemma_split a (length a - 1);
-  lemma_append_count_id p (snd (split a (length a - 1)));
+  lemma_append_count_assoc_fst p (snd (split a (length a - 1)));
   distinct_invert_append p (snd (split a (length a - 1)))
 
 let lastop_diff (l a:log)
@@ -151,4 +145,3 @@ let lastop_neq (l a b:log)
                     fst la <> fst lb)) =
   lastop_diff l a;
   lastop_diff l b
-#pop-options
