@@ -1,9 +1,5 @@
 module App
 
-open FStar.Seq
-open FStar.Ghost
-module L = FStar.List.Tot
-
 #set-options "--query_stats"
 // the concrete state type
 // It is a pair of timestamp and value
@@ -48,7 +44,7 @@ let concrete_merge (lca s1 s2:concrete_st)
   : Pure concrete_st
          (requires (exists l1 l2. apply_log lca l1 == s1 /\ apply_log lca l2 == s2))
          (ensures (fun _ -> True)) =
-  if lt (fst s1) (fst s2) then s2 else s1
+  if fst s1 < fst s2 then s2 else s1
 
 let linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2' /\
@@ -93,9 +89,11 @@ let linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
                     eq (do (v_of inv2) last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of inv2) last2))))
         
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
-          
+
 let linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
+  : Lemma (requires (exists l1. v_of s1 == apply_log (v_of lca) l1) /\
+                    (exists l2. v_of s2 == apply_log (v_of lca) l2) /\
+                    ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
 
@@ -161,6 +159,8 @@ let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
 let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches_s2_gt0 lca s1 s2 /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
                     (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (let s2' = inverse_st s2 in
@@ -187,6 +187,8 @@ let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
 let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches_s1_gt0 lca s1 s2 /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
                     (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (let s1' = inverse_st s1 in

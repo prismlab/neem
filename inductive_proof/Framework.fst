@@ -3,8 +3,6 @@ module Framework
 open FStar.Seq
 open App
 open SeqUtils
-open Utils
-open FStar.Ghost
 
 #set-options "--query_stats"
 
@@ -38,16 +36,6 @@ let rec is_interleaving (l l1 l2:log)
     (exists l'.
           is_interleaving l' prefix1 l2 /\
           l == Seq.snoc l' last1)))
-
-let rec split_prefix (s:concrete_st) (l:log) (a:log)
-  : Lemma (requires is_prefix l a)
-          (ensures (apply_log s a == apply_log (apply_log s l) (diff a l)))
-          (decreases length l)
-          //[SMTPat (apply_log (apply_log s l) (diff a l))]
-  = match Seq.length l with
-    |0 -> ()
-    |1 -> ()
-    |_ -> split_prefix (do s (head l)) (tail l) (tail a)
 
 let add_lastop (lca s1:st) (last1:op_t)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1) /\
@@ -210,6 +198,8 @@ let rec linearizable_gt0_s2'_s10 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 = ops_of lca /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     Second? (resolve_conflict last1 last2))                   
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
@@ -228,12 +218,18 @@ let rec linearizable_gt0_s2'_s10 (lca s1 s2:st) (last1 last2:op_t)
      lem_inverse (ops_of lca) (ops_of s2);
      lastop_diff (ops_of lca) (ops_of s2);
      inverse_diff_id_s2' (ops_of lca) (ops_of s1) (ops_of s2);
+     lemma_append_count_assoc_fst (ops_of s2) (create 1 last2);
+     let pre, lastop = un_snoc (ops_of s2) in
+     lemma_append_count_assoc_fst pre (create 1 lastop);
+     distinct_append pre (create 1 last2);
      linearizable_gt0_s2'_s10 lca s1 s2' last1 last2;
      linearizable_gt0_ind lca s1 s2 last1 last2)
 
 let rec linearizable_gt0_s2' (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     Second? (resolve_conflict last1 last2))
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
@@ -255,6 +251,10 @@ let rec linearizable_gt0_s2' (lca s1 s2:st) (last1 last2:op_t)
         lem_inverse (ops_of lca) (ops_of s1);
         lastop_diff (ops_of lca) (ops_of s1);
         inverse_diff_id_s1' (ops_of lca) (ops_of s1) (ops_of s2);
+        lemma_append_count_assoc_fst (ops_of s1) (create 1 last1);
+        let pre, lastop = un_snoc (ops_of s1) in
+        lemma_append_count_assoc_fst pre (create 1 lastop);
+        distinct_append pre (create 1 last1);
         linearizable_gt0_s2' lca s1' s2 last1 last2;
         linearizable_gt0_ind1 lca s1 s2 last1 last2)  
 
@@ -285,6 +285,8 @@ let rec linearizable_gt0_s1'_s20 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s2 = ops_of lca /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     First? (resolve_conflict last1 last2))
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l1. (v_of s1) == apply_log (v_of lca) l1) /\
@@ -303,12 +305,18 @@ let rec linearizable_gt0_s1'_s20 (lca s1 s2:st) (last1 last2:op_t)
      lem_inverse (ops_of lca) (ops_of s1);
      lastop_diff (ops_of lca) (ops_of s1);
      inverse_diff_id_s1' (ops_of lca) (ops_of s1) (ops_of s2);
+     lemma_append_count_assoc_fst (ops_of s1) (create 1 last1);
+     let pre, lastop = un_snoc (ops_of s1) in
+     lemma_append_count_assoc_fst pre (create 1 lastop);
+     distinct_append pre (create 1 last1);
      linearizable_gt0_s1'_s20 lca s1' s2 last1 last2;
      linearizable_gt0_ind1 lca s1 s2 last1 last2)
 
 let rec linearizable_gt0_s1' (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     First? (resolve_conflict last1 last2))
           (ensures (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                    (exists l2. (v_of s2) == apply_log (v_of lca) l2) /\
@@ -330,6 +338,10 @@ let rec linearizable_gt0_s1' (lca s1 s2:st) (last1 last2:op_t)
         lem_inverse (ops_of lca) (ops_of s2);
         lastop_diff (ops_of lca) (ops_of s2);
         inverse_diff_id_s2' (ops_of lca) (ops_of s1) (ops_of s2);
+        lemma_append_count_assoc_fst (ops_of s2) (create 1 last2);
+        let pre, lastop = un_snoc (ops_of s2) in
+        lemma_append_count_assoc_fst pre (create 1 lastop);
+        distinct_append pre (create 1 last2);
         linearizable_gt0_s1' lca s1 s2' last1 last2;
         linearizable_gt0_ind lca s1 s2 last1 last2) 
 

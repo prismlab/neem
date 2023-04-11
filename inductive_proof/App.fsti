@@ -2,12 +2,9 @@ module App
 
 open FStar.Seq
 open FStar.Ghost
-
 open SeqUtils
 
 #set-options "--query_stats"
-
-let lt (a b:nat) : bool = a < b
 
 // the concrete state type
 val concrete_st : Type0
@@ -114,14 +111,30 @@ let inverse_st (s:st{Seq.length (ops_of s) > 0})
   distinct_invert_append p (snd (split (ops_of s) (length (ops_of s) - 1)));
   (r, hide p)
 
+//currently present in App.fsti as Log MRDT needs it
+let rec inverse_helper (s:concrete_st) (l':log) (op:op_t)
+  : Lemma (ensures (let l = Seq.snoc l' op in 
+                   (apply_log s l == do (apply_log s l') op))) 
+          (decreases length l')
+  = Seq.un_snoc_snoc l' op;
+    match length l' with
+    |0 -> ()
+    |_ -> inverse_helper (do s (head l')) (tail l') op
+
+//currently present in App.fsti as Log MRDT needs it
+let rec split_prefix (s:concrete_st) (l:log) (a:log)
+  : Lemma (requires is_prefix l a)
+          (ensures (apply_log s a == apply_log (apply_log s l) (diff a l)) /\
+                   (forall e. mem e l ==> mem e a) /\
+                   (Seq.length a > Seq.length l ==> (last a) == (last (diff a l))))
+          (decreases Seq.length l)
+  = match Seq.length l with
+    |0 -> ()
+    |_ -> split_prefix (do s (head l)) (tail l) (tail a)
+    
 //
 // AR: This is not used in the interface, move it out?
 //
-let rec mem_ele_id (op:op_t) (l:log)
-  : Lemma (requires mem op l)
-          (ensures mem_id (fst op) l) (decreases length l) =
-  if head l = op then ()
-    else mem_ele_id op (tail l)
 
 let consistent_branches (lca s1 s2:st) =
   is_prefix (ops_of lca) (ops_of s1) /\
@@ -214,7 +227,9 @@ val linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
 //     is not sufficient?
 //
 val linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
+  : Lemma (requires (exists l1. v_of s1 == apply_log (v_of lca) l1) /\
+                    (exists l2. v_of s2 == apply_log (v_of lca) l2) /\
+                    ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2)))
 
@@ -286,6 +301,8 @@ val linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
 val linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches_s2_gt0 lca s1 s2 /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
                     (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (let s2' = inverse_st s2 in
@@ -312,6 +329,8 @@ val linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
 val linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches_s1_gt0 lca s1 s2 /\
                     fst last1 <> fst last2 /\
+                    distinct_ops (snoc (ops_of s1) last1) /\
+                    distinct_ops (snoc (ops_of s2) last2) /\
                     (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
                     (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
                     (let s1' = inverse_st s1 in
