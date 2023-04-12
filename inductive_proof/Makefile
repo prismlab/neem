@@ -9,7 +9,7 @@ framework: App.fsti SeqUtils.fst
 	fstar.exe Framework.fst
 
 app.fst: App.fsti Framework.fst SeqUtils.fst
-	fstar.exe $(filter-out Append-only_log/App.fst,${app})
+	fstar.exe $(app)
 
 clean:
 	rm -f *~	
