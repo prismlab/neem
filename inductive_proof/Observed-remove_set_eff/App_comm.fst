@@ -52,30 +52,23 @@ let lem_do (a b:concrete_st) (op:op_t)
            (ensures eq (do a op) (do b op)) = ()
 
 //conflict resolution
-let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : (l:log{(forall e. mem e l <==> (e == x \/ e == y))}) =
+let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res =
   if (get_ele x = get_ele y && Add? (snd x) && Rem? (snd y)) ||    
-     (get_ele x = get_ele y && Add? (snd x) && Add? (snd y) && (fst y < fst x)) then  
-    cons y (cons x empty) else
-      cons x (cons y empty)
+     (get_ele x = get_ele y && Add? (snd x) && Add? (snd y) && (fst y < fst x)) then First
+  else Second
 
 let resolve_conflict_prop (x y:op_t) 
   : Lemma (requires fst x <> fst y)
-          (ensures Seq.length (resolve_conflict x y) = 2 /\
-                   (last (resolve_conflict x y) = x <==> (Add? (snd x) /\ Rem? (snd y) /\ get_ele x = get_ele y) \/
+          (ensures (First? (resolve_conflict x y) <==> (Add? (snd x) /\ Rem? (snd y) /\ get_ele x = get_ele y) \/
                                           (Add? (snd x) /\ Add? (snd y) /\ get_ele x = get_ele y /\ (fst y) < (fst x))) /\
-                   (last (resolve_conflict x y) <> x <==> last (resolve_conflict x y) = y) /\
-                  
-                   (last (resolve_conflict x y) = y <==> ((Add? (snd x) /\ Rem? (snd y) /\ get_ele x <> get_ele y) \/
+                   (Second? (resolve_conflict x y) <==> ((Add? (snd x) /\ Rem? (snd y) /\ get_ele x <> get_ele y) \/
                                                         (Add? (snd x) /\ Add? (snd y) /\ get_ele x <> get_ele y) \/
                                                         (Rem? (snd x) /\ Rem? (snd y)) \/
                                                         (Rem? (snd x) /\ Add? (snd y)) \/
                                           (Add? (snd x) /\ Add? (snd y) /\ get_ele x = get_ele y /\ (fst y > fst x)))))
-          [SMTPat (resolve_conflict x y)]
   = ()
 
-let concrete_merge_pre (l a b:concrete_st) : prop = True
-
-let concrete_merge (l a:concrete_st) (b:concrete_st{concrete_merge_pre l a b}) : concrete_st =
+let concrete_merge (l a b:concrete_st) : concrete_st =
   let i_la = S.intersect l a in
   let i_lab = S.intersect i_la b in
   let da = S.remove_if a (fun e -> S.mem e l) in
@@ -541,11 +534,11 @@ let rem_add_lastop_neq_ele (lca s1 s2:st)
            (Add? (snd last2) /\ get_ele last1 = get_ele last2 /\ fst last1 > fst last2)) ==> not (commutative last1 last2));
   assert (((Rem? (snd last2) /\ get_ele last1 = get_ele last2) \/
            (Add? (snd last2) /\ get_ele last1 = get_ele last2 /\ fst last1 > fst last2)) 
-             ==> last (resolve_conflict last1 last2) = last1); 
+             ==> First? (resolve_conflict last1 last2)); 
   assert (((Rem? (snd last2) /\ get_ele last1 = get_ele last2) \/
            (Add? (snd last2) /\ get_ele last1 = get_ele last2 /\ fst last1 > fst last2))
              ==> (not (commutative last1 last2) /\
-                 last (resolve_conflict last1 last2) = last1 /\
+                 First? (resolve_conflict last1 last2) /\
                  commutative_seq last1 suf));
   assert (((Rem? (snd last2) /\ get_ele last1 = get_ele last2) \/
            (Add? (snd last2) /\ get_ele last1 = get_ele last2 /\ fst last1 > fst last2))
@@ -698,10 +691,10 @@ let not_add_eq (lca s1 s2:st)
   assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> not (commutative last1 last2));
   resolve_conflict_prop last2 last1;
   assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> 
-                last (resolve_conflict last2 last1) = last1);
+                First? (resolve_conflict last2 last1));
   assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> 
                 not (commutative last2 last1) /\
-                last (resolve_conflict last2 last1) = last1 /\
+                First? (resolve_conflict last2 last1) /\
                 commutative_seq last1 suf);
   assert ((Add? (snd last1) /\ get_ele last1 = get_ele last2) ==> exists_triple last2 (diff (ops_of s1) (ops_of lca)));
   assert (~ (Add? (snd last1) /\ get_ele last1 = get_ele last2)); ()
@@ -983,7 +976,7 @@ let lem_l2r (lca s1 s2:st)
                      Rem? (snd last2) /\
                      not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
                      not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                     last (resolve_conflict last1 last2) = last2 /\
+                     Second? (resolve_conflict last1 last2) /\
                      is_prefix (ops_of lca) (ops_of (inverse_st s2))))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
                     eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
@@ -1029,10 +1022,10 @@ let rem_add_lastop_neq_ele' (lca s1 s2:st)
   
   assert (Rem? (snd last1) /\ get_ele last1 = get_ele last2 ==> commutative_seq last2 suf); 
   assert (Rem? (snd last1) /\ get_ele last1 = get_ele last2 ==> not (commutative last2 last1));
-  assert (Rem? (snd last1) /\ get_ele last1 = get_ele last2 ==> last (resolve_conflict last2 last1) = last2);
+  assert (Rem? (snd last1) /\ get_ele last1 = get_ele last2 ==> Second? (resolve_conflict last2 last1));
   assert (Rem? (snd last1) /\ get_ele last1 = get_ele last2 ==> 
           (not (commutative last2 last1) /\
-          last (resolve_conflict last2 last1) = last2 /\
+          Second? (resolve_conflict last2 last1) /\
           commutative_seq last2 suf));
   assert (Rem? (snd last1) /\ get_ele last1 = get_ele last2 ==> 
            exists_triple last1 (diff (ops_of s2) (ops_of lca)));
@@ -1365,7 +1358,7 @@ let lem_l2a_last (lca s1 s2:st)
                       
                      not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
                      not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                     last (resolve_conflict last1 last2) = last2 /\
+                     Second? (resolve_conflict last1 last2) /\
                      is_prefix (ops_of lca) (ops_of (inverse_st s2))))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
                     eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
@@ -1413,6 +1406,7 @@ let linearizable_gt0_s2'_op (lca s1 s2:st)
   let _, last1 = un_snoc (ops_of s1) in
   let pre2, op2, suf2 = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
   let s2' = inverse_st_op s2 op2 in
+  resolve_conflict_prop last1 op2;
   lem_exists last1 (diff (ops_of s2) (ops_of lca));
   lem_inverse (ops_of lca) (ops_of s1);
   lem_diff (ops_of s1) (ops_of lca);
@@ -1439,6 +1433,7 @@ let linearizable_gt0_s1'_op (lca s1 s2:st)
   let _, last2 = un_snoc (ops_of s2) in
   let pre1, op1, suf1 = find_triple last2 (diff (ops_of s1) (ops_of lca)) in
   let s1' = inverse_st_op s1 op1 in
+  resolve_conflict_prop last2 op1;
   lem_exists last2 (diff (ops_of s1) (ops_of lca));
   lem_inverse (ops_of lca) (ops_of s2);
   lem_diff (ops_of s2) (ops_of lca);
@@ -1455,7 +1450,7 @@ let linearizable_gt0_s1' (lca s1 s2:st)
                      fst last1 <> fst last2 /\
                      not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
                      not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                     last (resolve_conflict last1 last2) = last1 /\
+                     First? (resolve_conflict last1 last2) /\
                      is_prefix (ops_of lca) (ops_of (inverse_st s1))))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     eq (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
@@ -1480,15 +1475,12 @@ let linearizable_gt0_s2' (lca s1 s2:st)
                      fst last1 <> fst last2 /\
                      not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
                      not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
-                     last (resolve_conflict last1 last2) <> last1 /\
+                     Second? (resolve_conflict last1 last2) /\
                      is_prefix (ops_of lca) (ops_of (inverse_st s2))))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
                     eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
                        (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = 
-  let _, last1 = un_snoc (ops_of s1) in
   let _, last2 = un_snoc (ops_of s2) in
-  resolve_conflict_prop last1 last2;
-  assert (last (resolve_conflict last1 last2) = last2);
   if Add? (snd last2) then
     (rem_add_lastop_neq_ele' lca s1 s2; 
      lem_l2a_last lca s1 s2)

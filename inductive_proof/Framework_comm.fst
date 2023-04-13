@@ -2,7 +2,6 @@ module Framework_comm
 
 open FStar.Seq
 open App_comm
-open FStar.Ghost
 
 #set-options "--query_stats"
 
@@ -107,10 +106,10 @@ let linearizable_gt0 (lca s1 s2:st)
                      ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
                        not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
                          fst last1 <> fst last2 /\
-                         (last (resolve_conflict last1 last2) == last1 ==>
+                         (First? (resolve_conflict last1 last2) ==>
                           is_prefix (ops_of lca) (ops_of (inverse_st s1))) /\
                            
-                         (last (resolve_conflict last1 last2) <> last1 ==>
+                         (Second? (resolve_conflict last1 last2) ==>
                           is_prefix (ops_of lca) (ops_of (inverse_st s2))))))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let _, last2 = un_snoc (ops_of s2) in
@@ -135,11 +134,11 @@ let linearizable_gt0 (lca s1 s2:st)
                     ((not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
                       not (exists_triple last2 (diff (ops_of s1) (ops_of lca)))) ==>
                     
-                    (last (resolve_conflict last1 last2) = last1 ==>                    
+                    (First? (resolve_conflict last1 last2) ==>                    
                       eq (do (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2)) last1)
                          (concrete_merge (v_of lca) (v_of s1) (v_of s2))) /\                                  
                    
-                    (last (resolve_conflict last1 last2) <> last1 ==>                   
+                    (Second? (resolve_conflict last1 last2) ==>                   
                       eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
                          (concrete_merge (v_of lca) (v_of s1) (v_of s2)))))) =
   let _, last1 = un_snoc (ops_of s1) in
@@ -151,7 +150,7 @@ let linearizable_gt0 (lca s1 s2:st)
      linearizable_gt0_s1'_op lca s1 s2
   else if not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) &&
           not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) &&
-          last (resolve_conflict last1 last2) = last1 then
+          First? (resolve_conflict last1 last2) then
      linearizable_gt0_s1' lca s1 s2
   else linearizable_gt0_s2' lca s1 s2
 
@@ -164,7 +163,7 @@ let interleaving_s1_inv (lca s1 s2:st) (l':log)
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) == last1))
+                     First? (resolve_conflict last1 last2)))
           (ensures (let _, last1 = un_snoc (ops_of s1) in
                     let l = Seq.snoc l' last1 in
                     interleaving_predicate l lca s1 s2 /\
@@ -197,7 +196,7 @@ let interleaving_s2_inv (lca s1 s2:st) (l':log)
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) <> last1))
+                     Second? (resolve_conflict last1 last2)))
           (ensures (let _, last2 = un_snoc (ops_of s2) in
                     let l = Seq.snoc l' last2 in
                     interleaving_predicate l lca s1 s2 /\
@@ -235,7 +234,7 @@ let interleaving_s2_inv_comm (lca s1 s2:st) (l':log)
                     (let _, last1 = un_snoc (ops_of s1) in
                      let _, last2 = un_snoc (ops_of s2) in
                      fst last1 <> fst last2 /\
-                    exists_triple last1 (diff (ops_of s2) (ops_of lca)) /\
+                     exists_triple last1 (diff (ops_of s2) (ops_of lca)) /\
                     (let (pre2, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in
                      lem_suf_equal (ops_of lca) (ops_of s2) op2;
                   
@@ -340,15 +339,21 @@ let linearizable_s2_gt0_pre_comm (lca s1 s2:st)
                     is_prefix (ops_of lca) (ops_of inv2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1) /\
                     (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca))))))))
-  = admit();let _, last1 = un_snoc (ops_of s1) in
-    let (_, op2, _) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in 
+  = let _, last1 = un_snoc (ops_of s1) in
+    let (pre2, op2, suf2) = find_triple last1 (diff (ops_of s2) (ops_of lca)) in 
     lem_suf_equal (ops_of lca) (ops_of s2) op2;
     let inv2 = inverse_st_op s2 op2 in
     lem_inverse_op (ops_of lca) (ops_of s2) op2;
     assert (is_prefix (ops_of lca) (ops_of inv2)); 
     lem_diff (ops_of inv2) (ops_of lca); 
-    assert (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1);
-    assert (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca))));
+    append_assoc (ops_of lca) pre2 suf2;
+    lem_is_diff (ops_of inv2) (ops_of lca) (pre2 ++ suf2);
+    assert (diff (ops_of inv2) (ops_of lca) == pre2 ++ suf2);
+    inverse_diff_id_inv2' (ops_of lca) (ops_of s1) (ops_of s2);
+    lemma_append_count_id pre2 suf2;
+    assert (forall id. mem_id id (diff (ops_of inv2) (ops_of lca)) ==> mem_id id (diff (ops_of s2) (ops_of lca))); 
+    assert ((forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1) /\
+            (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of inv2) (ops_of lca)))));
     ()
 
 let linearizable_s1_gt0_pre_comm (lca s1 s2:st)
@@ -364,15 +369,21 @@ let linearizable_s1_gt0_pre_comm (lca s1 s2:st)
                     is_prefix (ops_of lca) (ops_of inv1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv1) (ops_of lca)) ==> lt id id1) /\
                     (forall id. mem_id id (diff (ops_of inv1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))))))) 
-  = admit();let _, last2 = un_snoc (ops_of s2) in
-    let (_, op1, _) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in 
+  = let _, last2 = un_snoc (ops_of s2) in
+    let (pre1, op1, suf1) = find_triple last2 (diff (ops_of s1) (ops_of lca)) in 
     lem_suf_equal (ops_of lca) (ops_of s1) op1;
     let inv1 = inverse_st_op s1 op1 in
     lem_inverse_op (ops_of lca) (ops_of s1) op1;
     assert (is_prefix (ops_of lca) (ops_of inv1));
     lem_diff (ops_of inv1) (ops_of lca); 
-    assert (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv1) (ops_of lca)) ==> lt id id1);
-    assert (forall id. mem_id id (diff (ops_of inv1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))));
+    append_assoc (ops_of lca) pre1 suf1;
+    lem_is_diff (ops_of inv1) (ops_of lca) (pre1 ++ suf1);
+    assert (diff (ops_of inv1) (ops_of lca) == pre1 ++ suf1);
+    inverse_diff_id_inv1' (ops_of lca) (ops_of s1) (ops_of s2);
+    lemma_append_count_id pre1 suf1;
+    assert (forall id. mem_id id (diff (ops_of inv1) (ops_of lca)) ==> mem_id id (diff (ops_of s1) (ops_of lca)));
+    assert ((forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv1) (ops_of lca)) ==> lt id id1) /\
+            (forall id. mem_id id (diff (ops_of inv1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))));
     ()
 
 let linearizable_s1_gt0_pre (lca s1 s2:st)
@@ -382,7 +393,7 @@ let linearizable_s1_gt0_pre (lca s1 s2:st)
                      not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
                      not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) == last1))
+                     First? (resolve_conflict last1 last2)))
           (ensures (let inv1 = inverse_st s1 in 
                     is_prefix (ops_of lca) (ops_of inv1) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv1) (ops_of lca)) ==> lt id id1) /\
@@ -398,7 +409,7 @@ let linearizable_s2_gt0_pre (lca s1 s2:st)
                      not (exists_triple (snd (un_snoc (ops_of s1))) (diff (ops_of s2) (ops_of lca))) /\
                      not (exists_triple (snd (un_snoc (ops_of s2))) (diff (ops_of s1) (ops_of lca))) /\
                      fst last1 <> fst last2 /\
-                     last (resolve_conflict last1 last2) <> last1))
+                     Second? (resolve_conflict last1 last2)))
           (ensures (let inv2 = inverse_st s2 in 
                     is_prefix (ops_of lca) (ops_of inv2) /\
                     (forall id id1. mem_id id (ops_of lca) /\ mem_id id1 (diff (ops_of inv2) (ops_of lca)) ==> lt id id1) /\
@@ -481,7 +492,7 @@ let rec linearizable (lca s1 s2:st)
 
         else if not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) &&
                 not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) &&
-                last (resolve_conflict last1 last2) = last1 then
+                First? (resolve_conflict last1 last2) then
         begin
           linearizable_s1_gt0_pre lca s1 s2;
           linearizable lca inv1 s2;
@@ -499,7 +510,7 @@ let rec linearizable (lca s1 s2:st)
         
         else 
         begin 
-          assert (last (resolve_conflict last1 last2) <> last1);
+          assert (Second? (resolve_conflict last1 last2));
           linearizable_s2_gt0_pre lca s1 s2;
           linearizable lca s1 inv2;
           eliminate exists l'. interleaving_predicate l' lca s1 inv2
@@ -514,5 +525,4 @@ let rec linearizable (lca s1 s2:st)
           end
         end
       end
-
 #pop-options
