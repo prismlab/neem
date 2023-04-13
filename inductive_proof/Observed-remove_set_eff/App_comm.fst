@@ -1,22 +1,10 @@
 module App_comm
 
-open FStar.Seq
-open FStar.Ghost
 module S = Set_extended
-
-let mem_ele (ele:nat) (s:S.set (nat * nat))
-  = S.exists_s s (fun e -> snd e = ele)
-
-let mem_id_s (id:nat) (s:S.set (nat * nat))
-  = S.exists_s s (fun e -> fst e = id)
-
-let unique_ele (s:S.set (nat * nat)) =
-  (forall e. S.mem e s ==> 
-        not (S.exists_s s (fun e1 -> snd e = snd e1 && fst e <> fst e1)))
 
 #set-options "--query_stats"
 // the concrete state type
-type concrete_st = s:S.set (nat * nat){unique_ele s}
+type concrete_st = S.set (nat * nat)
 
 let init_st = S.empty
 
@@ -46,6 +34,12 @@ let get_ele (o:op_t) : nat =
   |Add e -> e
   |Rem e -> e
 
+let mem_ele (ele:nat) (s:S.set (nat * nat))
+  = S.exists_s s (fun e -> snd e = ele)
+
+let mem_id_s (id:nat) (s:S.set (nat * nat))
+  = S.exists_s s (fun e -> fst e = id)
+
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
@@ -59,11 +53,8 @@ let lem_do (a b:concrete_st) (op:op_t)
 
 //conflict resolution
 let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : (l:log{(forall e. mem e l <==> (e == x \/ e == y))}) =
- 
-  if (get_ele x = get_ele y && Add? (snd x) && Rem? (snd y)) ||
-    
-     (get_ele x = get_ele y && Add? (snd x) && Add? (snd y) && (fst y < fst x)) then 
- 
+  if (get_ele x = get_ele y && Add? (snd x) && Rem? (snd y)) ||    
+     (get_ele x = get_ele y && Add? (snd x) && Add? (snd y) && (fst y < fst x)) then  
     cons y (cons x empty) else
       cons x (cons y empty)
 
