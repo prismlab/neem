@@ -4,7 +4,7 @@ module App
 // the concrete state type
 // It is a sequence of pairs of timestamp and message.
 // As the sequence is sorted based on timestamps we ignore the message
-type concrete_st = seq nat
+type concrete_st = seq (pos & string)
 
 // init state
 let init_st = empty
@@ -27,8 +27,8 @@ let eq_is_equiv (a b:concrete_st)
           (ensures eq a b) = ()
 
 // operation type
-// (the only operation is append, so unit is fine)
-type app_op_t:eqtype = unit
+// (the only operation is write a message)
+type app_op_t:eqtype = string
 
 let is_prefix_s (p l:concrete_st) : Tot prop =
   Seq.length l >= Seq.length p /\ Seq.equal p (Seq.slice l 0 (Seq.length p))
@@ -38,7 +38,7 @@ let is_suffix_s (s l:concrete_st) : Tot prop =
 
 // apply an operation to a state
 let do (s:concrete_st) (op:op_t) : concrete_st =
-  cons (fst op) s 
+  cons op s 
 
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b)
@@ -55,7 +55,7 @@ let rec union_s (l1 l2:concrete_st)
   |0, 0 -> empty
   |0, _ -> l2
   |_, 0 -> l1
-  |_, _ ->  if (head l1 >= head l2) 
+  |_, _ ->  if (fst (head l1) >= fst (head l2) )
              then (mem_cons (head l1) (union_s (tail l1) l2);
                    cons (head l1) (union_s (tail l1) l2))
              else (mem_cons (head l2) (union_s l1 (tail l2));
@@ -200,11 +200,11 @@ let linearizable_gt0_base_last1 (lca s1 s2:st) (last1 last2:op_t)
           (ensures (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) =
   assert (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1 ==
-          cons (fst last1) (cons (fst last2) (v_of lca)));
-  lemma_mem_append (create 1 (fst last2)) (v_of lca);
-  append_assoc (create 1 (fst last1)) (create 1 (fst last2)) (v_of lca);
-  assert (cons (fst last1) (cons (fst last2) (v_of lca)) ==
-          Seq.append (cons (fst last1) (cons (fst last2) empty)) (v_of lca));
+          cons last1 (cons last2 (v_of lca)));
+  lemma_mem_append (create 1 last2) (v_of lca);
+  append_assoc (create 1 last1) (create 1 last2) (v_of lca);
+  assert (cons last1 (cons last2 (v_of lca)) ==
+          Seq.append (cons last1 (cons last2 empty)) (v_of lca));
   ()
 
 let linearizable_gt0_base_last2 (lca s1 s2:st) (last1 last2:op_t)
@@ -218,11 +218,11 @@ let linearizable_gt0_base_last2 (lca s1 s2:st) (last1 last2:op_t)
           (ensures (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) =
   assert (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2 ==
-          cons (fst last2) (cons (fst last1) (v_of lca)));
-  lemma_mem_append (create 1 (fst last1)) (v_of lca);
-  append_assoc (create 1 (fst last2)) (create 1 (fst last1)) (v_of lca);
-  assert (cons (fst last2) (cons (fst last1) (v_of lca)) ==
-          Seq.append (cons (fst last2) (cons (fst last1) empty)) (v_of lca));
+          cons last2 (cons last1 (v_of lca)));
+  lemma_mem_append (create 1 last1) (v_of lca);
+  append_assoc (create 1 last2) (create 1 last1) (v_of lca);
+  assert (cons last2 (cons last1 (v_of lca)) ==
+          Seq.append (cons last2 (cons last1 empty)) (v_of lca));
   ()
   
 let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
@@ -258,12 +258,12 @@ let lem_diff_s (s1 l:concrete_st)
 
 let lem_unionb (a b:concrete_st)
   : Lemma (requires length a > 0 /\ length b > 0 /\
-                    head b > head a)
+                    fst (head b) > fst (head a))
           (ensures union_s a b == cons (head b) (union_s a (tail b))) = ()
 
 let lem_uniona (a b:concrete_st)
   : Lemma (requires length a > 0 /\ length b > 0 /\
-                    head a > head b)
+                    fst (head a) > fst (head b))
           (ensures union_s a b == cons (head a) (union_s (tail a) b)) = ()
 
 let linearizable_gt0_ind_c2 (lca s1 s2:st) (last1 last2:op_t)
@@ -287,12 +287,12 @@ let linearizable_gt0_ind_c2 (lca s1 s2:st) (last1 last2:op_t)
   let db = (diff_s s2v (v_of lca)) in
   let db' = (diff_s (v_of s2) (v_of lca)) in
   let da' = (diff_s (v_of s1) (v_of lca)) in
-  lemma_tl (fst last2) (v_of s2); 
+  lemma_tl last2 (v_of s2); 
   lem_diff_s s2v (v_of lca);
-  lemma_tl (fst last1) (v_of s1); 
+  lemma_tl last1 (v_of s1); 
   lem_diff_s s1v (v_of lca);
   lem_unionb da db;
-  append_assoc (create 1 (fst last2)) (union_s da db') (v_of lca)
+  append_assoc (create 1 last2) (union_s da db') (v_of lca)
 
 let linearizable_gt0_ind1_c1 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
@@ -315,12 +315,12 @@ let linearizable_gt0_ind1_c1 (lca s1 s2:st) (last1 last2:op_t)
   let db = (diff_s s2v (v_of lca)) in
   let da' = (diff_s (v_of s1) (v_of lca)) in
   let db' = (diff_s (v_of s2) (v_of lca)) in
-  lemma_tl (fst last1) (v_of s1);
+  lemma_tl last1 (v_of s1);
   lem_diff_s s1v (v_of lca);
-  lemma_tl (fst last2) (v_of s2);
+  lemma_tl last2 (v_of s2);
   lem_diff_s s2v (v_of lca);
   lem_uniona da db; 
-  append_assoc (create 1 (fst last1)) (union_s da' db) (v_of lca)
+  append_assoc (create 1 last1) (union_s da' db) (v_of lca)
 
 let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches_s2_gt0 lca s1 s2 /\
@@ -382,16 +382,18 @@ let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
 //// Sequential implementation //////
 
 // the concrete state 
-type concrete_st_s = seq nat
+type concrete_st_s = seq string
 
 // init state 
 let init_st_s = empty
 
 // apply an operation to a state 
-let do_s (s:concrete_st_s) (op:op_t) : concrete_st_s = cons (fst op) s
+let do_s (s:concrete_st_s) (op:op_t) : concrete_st_s = cons (snd op) s
 
 //equivalence relation between the concrete states of sequential type and MRDT
-let eq_sm (st_s:concrete_st_s) (st:concrete_st) = st_s == st
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
+  length st_s = length st /\
+  (forall (i:nat). i < length st_s ==> index st_s i == snd (index st i))
 
 //initial states are equivalent
 let initial_eq _
@@ -400,7 +402,6 @@ let initial_eq _
 //equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
-          (ensures eq_sm (do_s st_s op) (do st op)) 
-  = ()
-
+          (ensures eq_sm (do_s st_s op) (do st op)) =
+  ()
 ////////////////////////////////////////////////////////////////
