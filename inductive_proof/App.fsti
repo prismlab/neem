@@ -30,7 +30,7 @@ val eq_is_equiv (a b:concrete_st)
 // operation type
 val app_op_t : eqtype
 
-type timestamp_t = pos 
+type timestamp_t = nat 
 
 type op_t = timestamp_t & app_op_t
 
@@ -156,6 +156,13 @@ let consistent_branches_s1s2_gt0 (lca s1 s2:st) =
   length (ops_of s1) > length (ops_of lca) /\
   length (ops_of s2) > length (ops_of lca)
 
+// Prove that merge is commutative
+val merge_is_comm (lca s1 s2:st)
+  : Lemma (requires consistent_branches lca s1 s2 /\
+                    (exists l1 l2. apply_log (v_of lca) l1 == (v_of s1) /\ apply_log (v_of lca) l2 == (v_of s2)))
+          (ensures (eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
+                       (concrete_merge (v_of lca) (v_of s2) (v_of s1)))) 
+                       
 //
 // AR: Can we simplify this lemma, a couple of observations:
 //     - from consistent_branches, we know is_prefix (ops_of lca) (ops_of s2'),
@@ -232,52 +239,6 @@ val linearizable_s1_0_s2_0_base (lca s1 s2:st)
                     ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2)))
-
-//
-// AR: The following seem counterparts of s2 cases above?
-//     Can we require the client to prove that concrete_merge is commutative?
-//     If so, we can remove the following lemmas?
-//
-val linearizable_s2_0''_base_base (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires consistent_branches lca s1' s2 /\
-                    is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
-                    ops_of s1' = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    length (ops_of lca) = 0 /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)))
-         
-          (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)))
-
-val linearizable_s2_0''_base_ind (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires consistent_branches lca s1' s2 /\
-                    is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
-                    ops_of s1' = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    length (ops_of lca) > 0 /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)) /\
-
-                    (let l' = inverse_st lca in
-                    let s1'' = inverse_st s1' in
-                    let s2' = inverse_st s2 in
-                    consistent_branches l' s1'' s2' /\
-                    is_prefix (ops_of l') (snoc (ops_of s1'') last1) /\
-                    ops_of s1'' = ops_of l' /\ ops_of s2' = ops_of l' /\
-                    eq (do (v_of s1'') last1) (concrete_merge (v_of l') (do (v_of s1'') last1) (v_of s2'))))
-
-          (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)))
-
-val linearizable_s2_0''_ind (lca s1' s2:st) (last1:op_t)
-  : Lemma (requires consistent_branches_s1_gt0 lca s1' s2 /\
-                    is_prefix (ops_of lca) (snoc (ops_of s1') last1) /\
-                    ops_of s2 = ops_of lca /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)) /\
-
-                    (let inv1 = inverse_st s1' in
-                    consistent_branches lca inv1 s2 /\
-                    is_prefix (ops_of lca) (snoc (ops_of inv1) last1) /\
-                    (exists l1. (do (v_of inv1) last1 == apply_log (v_of lca) l1)) /\
-                    (exists l1. (do (v_of s1') last1 == apply_log (v_of lca) l1)) /\
-                    eq (do (v_of inv1) last1) (concrete_merge (v_of lca) (do (v_of inv1) last1) (v_of s2))))
-         
-          (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)))
 
 //
 // AR: the exists preconditions seem unnecessary to me, why is l2 not just Seq.singleton last2, for example?
