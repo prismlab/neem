@@ -339,12 +339,12 @@ let lem_diff_s1 (s1 l:concrete_st)
 
 let lem_unionb (a b:concrete_st)
   : Lemma (requires length a > 0 /\ length b > 0 /\
-                    fst (head b) > fst (head a))
+                    lt (fst (head a)) (fst (head b)))
           (ensures union_s a b == cons (fst (head b), snd (head b)) (union_s a (tail b))) = ()
 
 let lem_uniona (a b:concrete_st)
   : Lemma (requires length a > 0 /\ length b > 0 /\
-                    fst (head a) > fst (head b))
+                    lt (fst (head b)) (fst (head a)))
           (ensures union_s a b == cons (fst (head a), snd (head a)) (union_s (tail a) b)) = ()
 
 let linearizable_gt0_ind_c2 (lca s1 s2:st) (last1 last2:op_t)
@@ -374,7 +374,8 @@ let linearizable_gt0_ind_c2 (lca s1 s2:st) (last1 last2:op_t)
   lem_diff_s1 s2v (v_of lca); 
   lemma_tl l1 (v_of s1); 
   lem_diff_s1 s1v (v_of lca);
-  assume (fst (head db) > fst (head da)); //todo
+  assert (lt (fst last1) (fst (last2)));
+  assert (lt (fst (head da)) (fst (head db))); 
   lem_unionb da db;
   append_assoc (create 1 l2) (union_s da db') (v_of lca)
   
@@ -405,7 +406,8 @@ let linearizable_gt0_ind1_c1 (lca s1 s2:st) (last1 last2:op_t)
   lem_diff_s1 s1v (v_of lca);
   lemma_tl l2 (v_of s2);
   lem_diff_s1 s2v (v_of lca);
-  assume (fst (head da) > fst (head db)); //todo
+  assert (lt (fst last2) (fst (last1)));
+  assert (lt (fst (head db)) (fst (head da)));
   lem_uniona da db; 
   append_assoc (create 1 l1) (union_s da' db) (v_of lca)
 
