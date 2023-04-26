@@ -71,6 +71,16 @@ let diff (#a:eqtype) (s1:Seq.seq a) (lca:Seq.seq a{is_prefix lca s1})
   lemma_mem_append lca s;
   s
 
+let diff_suf (#t1 #t2:eqtype) (s1:seq_assoc t1 t2) (lca:seq_assoc t1 t2{is_suffix lca s1})
+  : Tot (d:seq_assoc t1 t2{(s1 == d ++ lca) /\ is_prefix d s1 /\
+                           (length s1 == length lca + length d) /\
+                           (forall id. mem_assoc_fst id s1 <==> mem_assoc_fst id d \/ mem_assoc_fst id lca)}) =
+  let s = fst (split s1 (length s1 - length lca)) in
+  lemma_split s1 (length s1 - length lca);
+  lemma_mem_append s lca;
+  lemma_append_count_assoc_fst s lca;
+  s
+  
 let lem_inverse (#a:eqtype) (lca s1:Seq.seq a)
   : Lemma (requires is_prefix lca s1 /\
                     Seq.length s1 > Seq.length lca)
@@ -90,6 +100,9 @@ let rec lem_un_snoc_id (#t1 #t2:eqtype) (a b:seq_assoc t1 t2)
   |0 -> ()
   |_ -> lem_un_snoc_id (tail a) (tail b)
 
+let one_is_unique (#t1 #t2:eqtype) (s:(t1 & t2))
+  : Lemma (ensures distinct_assoc_fst (create 1 s)) = ()
+
 let lem_diff (#t1 #t2:eqtype) (s1 l:seq_assoc t1 t2)
   : Lemma (requires distinct_assoc_fst s1 /\ is_prefix l s1)
           (ensures distinct_assoc_fst (diff s1 l) /\ 
@@ -101,10 +114,26 @@ let lem_diff (#t1 #t2:eqtype) (s1 l:seq_assoc t1 t2)
                       l1 = ld) /\
                      (let s1',lastop = un_snoc s1 in 
                        diff s1' l == fst (un_snoc (diff s1 l)))))
-  = let s = snd (split s1 (length l)) in
-    lemma_split s1 (length l);
-    lemma_append_count_assoc_fst l s
-    
+  = lemma_append_count_assoc_fst l (diff s1 l)
+
+let lem_diff_suf (#t1 #t2:eqtype) (s1 l:seq_assoc t1 t2)
+  : Lemma (requires is_suffix l s1)
+          (ensures (forall id. mem_assoc_fst id s1 <==> mem_assoc_fst id l \/ mem_assoc_fst id (diff_suf s1 l)) /\
+                   (Seq.length s1 > Seq.length l ==> (head s1 == head (diff_suf s1 l) /\ Seq.length (diff_suf s1 l) > 0) /\
+                     (let h1 = head s1 in
+                      let hd = head (diff_suf s1 l) in
+                      h1 = hd) /\
+                     (let s1' = tail s1 in 
+                       is_suffix l s1' /\
+                       diff_suf s1' l == tail (diff_suf s1 l))))
+  = lemma_append_count_assoc_fst (diff_suf s1 l) l
+
+let lem_diff_suf_uni (#t1 #t2:eqtype) (s1 l:seq_assoc t1 t2)
+  : Lemma (requires (distinct_assoc_fst s1 /\ is_suffix l s1))
+          (ensures distinct_assoc_fst (diff_suf s1 l) /\ 
+                   (forall id. mem_assoc_fst id (diff_suf s1 l) <==> mem_assoc_fst id s1 /\ not (mem_assoc_fst id l))) 
+  = lemma_append_count_assoc_fst (diff_suf s1 l) l
+
 let lem_diff_lastop (#t1 #t2:eqtype) (s1 l:seq_assoc t1 t2)
   : Lemma (requires distinct_assoc_fst s1 /\ is_prefix l s1 /\ length s1 > length l)
           (ensures (let s1',lastop = un_snoc s1 in 
@@ -125,7 +154,7 @@ let un_snoc_prop (#t1 #t2:eqtype) (a:seq_assoc t1 t2)
   lemma_append_count_assoc_fst p (snd (split a (length a - 1)));
   distinct_invert_append p (snd (split a (length a - 1)))
   
-let lem_lt_lastop_id_lca (#t2:eqtype) (lca s1:seq_assoc nat t2)
+let lem_lt_lastop_id_lca (#t:eqtype) (lca s1:seq_assoc nat t)
   : Lemma (requires is_prefix lca s1 /\ length (diff s1 lca) > 0 /\ distinct_assoc_fst s1 /\
                     (forall id id1. mem_assoc_fst id lca /\ mem_assoc_fst id1 (diff s1 lca) ==> lt id id1))
           (ensures (let _, lastop = un_snoc s1 in
@@ -135,7 +164,7 @@ let lem_lt_lastop_id_lca (#t2:eqtype) (lca s1:seq_assoc nat t2)
     lem_diff s1 lca;
     mem_ele_id lst (diff s1 lca)
 
-let lastop_diff (#t2:eqtype) (l a:seq_assoc nat t2)
+let lastop_diff (#t:eqtype) (l a:seq_assoc nat t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ is_prefix l a /\
                     (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
                     length a > length l)
@@ -148,7 +177,7 @@ let lastop_diff (#t2:eqtype) (l a:seq_assoc nat t2)
     un_snoc_prop (diff a l);
     lem_inverse l a
 
-let inverse_diff_id_s1' (#t2:eqtype) (l a b:seq_assoc nat t2)
+let inverse_diff_id_s1' (#t:eqtype) (l a b:seq_assoc nat t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ 
@@ -161,7 +190,7 @@ let inverse_diff_id_s1' (#t2:eqtype) (l a b:seq_assoc nat t2)
     lem_inverse l a;
     lem_diff (fst (un_snoc a)) l
 
-let inverse_diff_id_s2' (#t2:eqtype) (l a b:seq_assoc nat t2)
+let inverse_diff_id_s2' (#t:eqtype) (l a b:seq_assoc nat t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length b > length l /\
@@ -174,7 +203,7 @@ let inverse_diff_id_s2' (#t2:eqtype) (l a b:seq_assoc nat t2)
     lem_inverse l b;
     lem_diff (fst (un_snoc b)) l
 
-let inverse_diff_id_s1'_s2' (#t2:eqtype) (l a b:seq_assoc nat t2)
+let inverse_diff_id_s1'_s2' (#t:eqtype) (l a b:seq_assoc nat t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ length b > length l /\
@@ -191,7 +220,7 @@ let inverse_diff_id_s1'_s2' (#t2:eqtype) (l a b:seq_assoc nat t2)
     lem_inverse l b;
     lem_diff (fst (un_snoc b)) l
     
-let lastop_neq (#t2:eqtype) (l a b:seq_assoc nat t2)
+let lastop_neq (#t:eqtype) (l a b:seq_assoc nat t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ length b > length l /\
@@ -205,8 +234,8 @@ let lastop_neq (#t2:eqtype) (l a b:seq_assoc nat t2)
   lastop_diff l b
 
 #push-options "--z3rlimit 50"
-let rec remove_id (#t2:eqtype) (a:seq_assoc nat t2) (id:nat)
-  : Tot (r:seq_assoc nat t2 {(forall id1. mem_assoc_fst id1 r <==> mem_assoc_fst id1 a /\ id <> id1) /\
+let rec remove_id (#t1 #t2:eqtype) (a:seq_assoc t1 t2) (id:t1)
+  : Tot (r:seq_assoc t1 t2 {(forall id1. mem_assoc_fst id1 r <==> mem_assoc_fst id1 a /\ id <> id1) /\
                            count_assoc_fst id r = 0 /\
                            (forall id1. id1 <> id ==> count_assoc_fst id1 a = count_assoc_fst id1 r)})
         (decreases length a) =
@@ -220,7 +249,7 @@ let rec remove_id (#t2:eqtype) (a:seq_assoc nat t2) (id:nat)
              lemma_append_count_assoc_fst (create 1 (head a)) rl;
              cons (head a) (remove_id (tail a) id))
 
-let rec remove_is_uni (#t2:eqtype) (a:seq_assoc nat t2) (id:nat)
+let rec remove_is_uni (#t1 #t2:eqtype) (a:seq_assoc t1 t2) (id:t1)
   : Lemma (requires mem_assoc_fst id a /\ distinct_assoc_fst a)
           (ensures length (remove_id a id) = length a - 1 /\ distinct_assoc_fst (remove_id a id))
           (decreases length a) = 
@@ -237,3 +266,22 @@ let rec remove_is_uni (#t2:eqtype) (a:seq_assoc nat t2) (id:nat)
               assert (distinct_assoc_fst (tail a));
               assert (mem_assoc_fst id (tail a));
               remove_is_uni (tail a) id)
+
+let rec lem_not_mem_id (#t1 #t2:eqtype) (a b al bl:seq_assoc t1 t2)
+  : Lemma (requires (forall id. mem_assoc_fst id a <==> mem_assoc_fst id al) /\
+                    (forall id. mem_assoc_fst id b <==> mem_assoc_fst id bl) /\
+                    (forall id. mem_assoc_fst id al ==> not (mem_assoc_fst id bl)) /\
+                    distinct_assoc_fst al /\ distinct_assoc_fst bl /\
+                    distinct_assoc_fst a /\ distinct_assoc_fst b /\
+                    length al = length a /\
+                    length bl = length b)
+          (ensures (forall id. mem_assoc_fst id a ==> not (mem_assoc_fst id b)))
+          (decreases %[length al]) =
+  match length al with
+  |0 -> ()
+  |_ -> remove_is_uni a (fst (head al));
+       remove_is_uni al (fst (head al));
+       let ras = (remove_id a (fst (head al))) in
+       let ra = (remove_id al (fst (head al))) in
+       lem_not_mem_id ras b ra bl
+       
