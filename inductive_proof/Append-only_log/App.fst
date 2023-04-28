@@ -6,7 +6,7 @@ open SeqUtils
 // the concrete state type
 // It is a sequence of pairs of timestamp and message.
 // As the sequence is sorted based on timestamps we ignore the message
-type concrete_st = seq (nat & string)
+type concrete_st = seq (pos & string)
 
 // init state
 let init_st = empty
@@ -125,10 +125,8 @@ let valid_is_unique (s:st0)
           (ensures distinct_assoc_fst (v_of s) /\ length (v_of s) = length (ops_of s)) =
   lem_foldl_uni init_st (ops_of s)
 
-#push-options "--z3rlimit 50"
 let merge_is_comm (lca s1 s2:st)
-  : Lemma (requires consistent_branches lca s1 s2 /\
-                    (exists l1 l2. apply_log (v_of lca) l1 == (v_of s1) /\ apply_log (v_of lca) l2 == (v_of s2)))
+  : Lemma (requires consistent_branches lca s1 s2)
           (ensures (eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
                        (concrete_merge (v_of lca) (v_of s2) (v_of s1)))) = 
   lem_foldl init_st (ops_of lca);
@@ -140,6 +138,8 @@ let merge_is_comm (lca s1 s2:st)
   lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
   let la = diff_suf (v_of s1) (v_of lca) in
   let lb = diff_suf (v_of s2) (v_of lca) in
+  let da = (diff (ops_of s1) (ops_of lca)) in
+  let db = (diff (ops_of s2) (ops_of lca)) in
   let u1 = union_s la lb in 
   let u2 = union_s lb la in
   valid_is_unique lca;
@@ -148,81 +148,70 @@ let merge_is_comm (lca s1 s2:st)
   lem_diff_suf_uni (v_of s1) (v_of lca);
   lem_diff_suf_uni (v_of s2) (v_of lca); 
   assert (forall id. mem_assoc_fst id (v_of lca) <==> mem_id id (ops_of lca));
-  assert (forall id. mem_assoc_fst id (v_of s1) <==> mem_assoc_fst id (v_of lca) \/ mem_id id (diff (ops_of s1) (ops_of lca)));
-  assert (forall id. mem_assoc_fst id (v_of s2) <==> mem_assoc_fst id (v_of lca) \/ mem_id id (diff (ops_of s2) (ops_of lca)));
+  assert (forall id. mem_assoc_fst id (v_of s1) <==> mem_assoc_fst id (v_of lca) \/ mem_id id da);
+  assert (forall id. mem_assoc_fst id (v_of s2) <==> mem_assoc_fst id (v_of lca) \/ mem_id id db);
   assert (forall id. mem_assoc_fst id (v_of s1) <==> mem_assoc_fst id (v_of lca) \/ mem_assoc_fst id (diff_suf (v_of s1) (v_of lca)));
   assert (forall id. mem_assoc_fst id (v_of s2) <==> mem_assoc_fst id (v_of lca) \/ mem_assoc_fst id (diff_suf (v_of s2) (v_of lca)));
   assert (forall id. (mem_assoc_fst id (v_of s1) /\ not (mem_assoc_fst id (v_of lca))) <==> (mem_assoc_fst id la)); 
   assert (forall id. (mem_assoc_fst id (v_of s2) /\ not (mem_assoc_fst id (v_of lca))) <==> (mem_assoc_fst id lb));
   lem_diff (ops_of s1) (ops_of lca);
   lem_diff (ops_of s2) (ops_of lca);
-  lem_foldl_uni (v_of lca) (diff (ops_of s1) (ops_of lca));
-  lem_foldl_uni (v_of lca) (diff (ops_of s2) (ops_of lca));
-  assert (forall id. mem_assoc_fst id la <==> mem_id id (diff (ops_of s1) (ops_of lca)));
-  assert (forall id. mem_assoc_fst id lb <==> mem_id id (diff (ops_of s2) (ops_of lca)));
-  assert (forall id. mem_assoc_fst id la <==> mem_id id (diff (ops_of s1) (ops_of lca))); 
-  assert (forall id. mem_assoc_fst id lb <==> mem_id id (diff (ops_of s2) (ops_of lca))); 
-  assert (forall id. mem_id id (diff (ops_of s1) (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca))));
-  lem_not_mem_id la lb (diff (ops_of s1) (ops_of lca)) (diff (ops_of s2) (ops_of lca)); 
-  assert (forall id. mem_assoc_fst id la ==> not (mem_assoc_fst id lb)); 
+  lem_foldl_uni (v_of lca) da;
+  lem_foldl_uni (v_of lca) db;
+  assert (forall id. mem_assoc_fst id la <==> mem_id id da);
+  assert (forall id. mem_assoc_fst id lb <==> mem_id id db);
+  assert (forall id. mem_assoc_fst id la <==> mem_id id da); 
+  assert (forall id. mem_assoc_fst id lb <==> mem_id id db);
+  assert (forall id. mem_id id da ==> not (mem_id id db));
+  lem_not_mem_id la lb da db; 
+  assert (forall id. mem_assoc_fst id la ==> not (mem_assoc_fst id lb));  
   lem_union_comm la lb;
   assert (union_s la lb == union_s lb la);
   ()
 
 let linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2' /\
-                    is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
+  : Lemma (requires consistent_branches lca s1 (do_st s2' last2) /\
                     ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
-                    length (ops_of lca) = 0 /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)))
+                    length (ops_of lca) = 0)
         
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
 
 let linearizable_s1_0''_base_ind (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2' /\
-                    is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
+  : Lemma (requires consistent_branches lca s1 (do_st s2' last2) /\
                     ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
                     length (ops_of lca) > 0 /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)) /\
 
                     (let l' = inverse_st lca in
                     let s1' = inverse_st s1 in
                     let s2'' = inverse_st s2' in
-                    consistent_branches l' s1' s2'' /\
-                    is_prefix (ops_of l') (snoc (ops_of s2'') last2) /\
+                    consistent_branches l' s1' (do_st s2'' last2) /\
                     ops_of s1' = ops_of l' /\ ops_of s2'' = ops_of l' /\
                     eq (do (v_of s2'') last2) (concrete_merge (v_of l') (v_of s1') (do (v_of s2'') last2))))
 
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
 
 let linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires consistent_branches_s2_gt0 lca s1 s2' /\
-                    is_prefix (ops_of lca) (snoc (ops_of s2') last2) /\
+  : Lemma (requires consistent_branches lca s1 (do_st s2' last2) /\
                     ops_of s1 = ops_of lca /\
-                    (forall id. mem_id id (ops_of lca) ==> lt id (fst last2)) /\
+                    length (ops_of s2') > length (ops_of lca) /\
 
                     (let inv2 = inverse_st s2' in
-                    consistent_branches lca s1 inv2 /\
-                    is_prefix (ops_of lca) (snoc (ops_of inv2) last2) /\
-                    (exists l2. do (v_of inv2) last2 == apply_log (v_of lca) l2) /\
-                    (exists l2. do (v_of s2') last2 == apply_log (v_of lca) l2) /\                    
+                    consistent_branches lca s1 (do_st inv2 last2) /\
                     eq (do (v_of inv2) last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of inv2) last2))))
         
           (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
 
 let linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires (exists l1. v_of s1 == apply_log (v_of lca) l1) /\
-                    (exists l2. v_of s2 == apply_log (v_of lca) l2) /\
+  : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
         
           (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
-          
+
+#push-options "--z3rlimit 10"
 let linearizable_gt0_base_last1 (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2 /\
+  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
                     ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    fst last1 <> fst last2 /\ 
-                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
-                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
+                    fst last1 <> fst last2 /\
                     First_then_second? (resolve_conflict last1 last2))
          
           (ensures (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
@@ -237,11 +226,9 @@ let linearizable_gt0_base_last1 (lca s1 s2:st) (last1 last2:op_t)
   ()
 
 let linearizable_gt0_base_last2 (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2 /\
+  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
                     ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    fst last1 <> fst last2 /\ 
-                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
-                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
+                    fst last1 <> fst last2 /\
                     Second_then_first? (resolve_conflict last1 last2))
          
           (ensures (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
@@ -254,13 +241,13 @@ let linearizable_gt0_base_last2 (lca s1 s2:st) (last1 last2:op_t)
   append_assoc (create 1 l2) (create 1 l1) (v_of lca);
   assert (cons l2 (cons l1 (v_of lca)) == Seq.append (cons l2 (cons l1 empty)) (v_of lca));
   ()
-  
+#pop-options
+
 let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2 /\
+  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
+                    consistent_branches lca s1 s2 /\
                     ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    fst last1 <> fst last2 /\ 
-                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
-                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)))
+                    fst last1 <> fst last2)
          
           (ensures (First_then_second? (resolve_conflict last1 last2) ==>
                       (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
@@ -268,7 +255,7 @@ let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
 
                    (Second_then_first? (resolve_conflict last1 last2) ==>
                       (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
-                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))))) =
+                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))))) = 
   if First_then_second? (resolve_conflict last1 last2) then
     linearizable_gt0_base_last1 lca s1 s2 last1 last2
   else linearizable_gt0_base_last2 lca s1 s2 last1 last2
@@ -283,16 +270,13 @@ let lem_uniona (a b:concrete_st)
                     lt (fst (head b)) (fst (head a)))
           (ensures union_s a b == cons (fst (head a), snd (head a)) (union_s (tail a) b)) = ()
 
+#push-options "--z3rlimit 50"
 let linearizable_gt0_ind_c2 (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2 /\
+  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
+                    consistent_branches lca s1 s2 /\
+                    consistent_branches lca (do_st s1 last1) s2 /\
                     fst last1 <> fst last2 /\
-                    distinct_ops (snoc (ops_of s1) last1) /\
-                    distinct_ops (snoc (ops_of s2) last2) /\
-                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
-                    Second_then_first? (resolve_conflict last1 last2) /\
-                    (exists l1. (v_of s1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (v_of s2 == apply_log (v_of lca) l2)))
+                    Second_then_first? (resolve_conflict last1 last2))
        
           (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
@@ -306,25 +290,21 @@ let linearizable_gt0_ind_c2 (lca s1 s2:st) (last1 last2:op_t)
   let da' = (diff_suf (v_of s1) (v_of lca)) in
   let l1 = (fst last1, snd last1) in
   let l2 = (fst last2, snd last2) in 
-  lemma_tl l2 (v_of s2); 
+  lemma_tl l2 (v_of s2);
   lem_diff_suf s2v (v_of lca); 
   lemma_tl l1 (v_of s1);
   lem_diff_suf s1v (v_of lca);  
-  assert (lt (fst last1) (fst (last2)));
+  assert (lt (fst last1) (fst (last2))); 
   assert (lt (fst (head da)) (fst (head db))); 
   lem_unionb da db;
   append_assoc (create 1 l2) (union_s da db') (v_of lca)
   
-let linearizable_gt0_ind1_c1 (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2 /\
+let linearizable_gt0_ind1_c11 (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires consistent_branches lca s1 (do_st s2 last2) /\
+                    consistent_branches lca s1 s2 /\
+                    consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
                     fst last1 <> fst last2 /\
-                    distinct_ops (snoc (ops_of s1) last1) /\
-                    distinct_ops (snoc (ops_of s2) last2) /\ 
-                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
-                    First_then_second? (resolve_conflict last1 last2) /\
-                    (exists l1. (v_of s1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (v_of s2 == apply_log (v_of lca) l2)))
+                    First_then_second? (resolve_conflict last1 last2))
         
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
@@ -346,60 +326,61 @@ let linearizable_gt0_ind1_c1 (lca s1 s2:st) (last1 last2:op_t)
   assert (lt (fst (head db)) (fst (head da)));
   lem_uniona da db; 
   append_assoc (create 1 l1) (union_s da' db) (v_of lca)
+#pop-options
 
 let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches_s2_gt0 lca s1 s2 /\
-                    fst last1 <> fst last2 /\
-                    distinct_ops (snoc (ops_of s1) last1) /\
-                    distinct_ops (snoc (ops_of s2) last2) /\ 
-                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
-                    (let s2' = inverse_st s2 in
-                    (exists l2. (do (v_of s2') last2 == apply_log (v_of lca) l2)) /\
-                    (exists l2. (v_of s2' == apply_log (v_of lca) l2)) /\
-                    (exists l1. (v_of s1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (v_of s2 == apply_log (v_of lca) l2)) /\
-                    consistent_branches lca s1 s2'))
+  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
+                    consistent_branches lca s1 s2 /\
+                    length (ops_of s2) > length (ops_of lca) /\
+                    fst last1 <> fst last2)
        
           (ensures (let s2' = inverse_st s2 in
                    ((First_then_second? (resolve_conflict last1 last2) /\
+                    consistent_branches lca s1 (do_st s2' last2) /\
+                    consistent_branches lca (do_st s1 last1) (do_st s2' last2) /\
+                    consistent_branches lca s1 (do_st s2 last2) /\
                     eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
+                   
                     (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))) /\
                           
                    ((ops_of s1 = ops_of lca /\
                     Second_then_first? (resolve_conflict last1 last2) /\
+                    consistent_branches lca (do_st s1 last1) s2' /\
+                    consistent_branches lca (do_st s1 last1) (do_st s2' last2) /\
+                    consistent_branches lca (do_st s1 last1) s2 /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
+                   
                     (eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))) = ()
 
 let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches_s1_gt0 lca s1 s2 /\
-                    fst last1 <> fst last2 /\
-                    distinct_ops (snoc (ops_of s1) last1) /\
-                    distinct_ops (snoc (ops_of s2) last2) /\ 
-                    (exists l1. (do (v_of s1) last1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (do (v_of s2) last2 == apply_log (v_of lca) l2)) /\
-                    (let s1' = inverse_st s1 in
-                    (exists l1. (do (v_of s1') last1 == apply_log (v_of lca) l1)) /\
-                    (exists l1. (v_of s1' == apply_log (v_of lca) l1)) /\
-                    (exists l1. (v_of s1 == apply_log (v_of lca) l1)) /\
-                    (exists l2. (v_of s2 == apply_log (v_of lca) l2)) /\
-                    consistent_branches lca s1' s2))
-        
+  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
+                    consistent_branches lca s1 s2 /\
+                    length (ops_of s1) > length (ops_of lca) /\
+                    fst last1 <> fst last2)
+                           
           (ensures (let s1' = inverse_st s1 in
                    ((ops_of s2 = ops_of lca /\
-                   First_then_second? (resolve_conflict last1 last2) /\
-                   eq (do (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1)
-                      (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))) ==>
-                   eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
-                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) /\
+                    First_then_second? (resolve_conflict last1 last2) /\
+                    consistent_branches lca s1' (do_st s2 last2) /\
+                    consistent_branches lca (do_st s1' last1) (do_st s2 last2) /\
+                    consistent_branches lca s1 (do_st s2 last2) /\
+                    eq (do (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1)
+                       (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))) ==>
+                       
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
+                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) /\
 
                    ((Second_then_first? (resolve_conflict last1 last2) /\
+                    consistent_branches lca (do_st s1' last1) s2 /\
+                    consistent_branches lca (do_st s1' last1) (do_st s2 last2) /\
+                    consistent_branches lca (do_st s1 last1) s2 /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)) ==>
+                       
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))) = ()
 
@@ -427,7 +408,6 @@ let initial_eq _
 //equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
-          (ensures eq_sm (do_s st_s op) (do st op)) =
-  ()
+          (ensures eq_sm (do_s st_s op) (do st op)) = ()
   
 ////////////////////////////////////////////////////////////////
