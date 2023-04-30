@@ -398,21 +398,6 @@ let linearizable_gt0_s1's2'_noop_both (lca s1 s2:st)
  
 ///////////////////////////////////////////////////////////////
 
-let lin_gt0_s1's2'_dd_eq'_s1s2eq (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca s1 s2 /\
-                    distinct_ops (snoc (ops_of s1) last1) /\
-                    distinct_ops (snoc (ops_of s2) last2) /\
-                    ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    fst last1 <> fst last2 /\
-                    Dequeue? (fst (snd last1)) /\ Dequeue? (fst (snd last2)) /\ 
-                    v_of s1 <> [] /\ v_of s2 <> [] /\
-                    L.hd (v_of s1) == L.hd (v_of s2))
-          (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2)) last1)
-                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) =
-  valid_is_unique lca; 
-  valid_is_unique s1; 
-  valid_is_unique s2
-
 let lin_gt0_s1's2'_dd_eq' (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     distinct_ops (snoc (ops_of s1) last1) /\
@@ -428,15 +413,13 @@ let lin_gt0_s1's2'_dd_eq' (lca s1 s2:st) (last1 last2:op_t)
                     L.hd (v_of s1) == L.hd (v_of s2))
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
-          (decreases %[length (ops_of s2)]) = 
-  if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then
-    lin_gt0_s1's2'_dd_eq'_s1s2eq lca s1 s2 last1 last2
-  else if ops_of s1 = ops_of lca then
+          (decreases %[length (ops_of s1)]) = 
+  if ops_of s1 = ops_of lca then
     (valid_is_unique lca; 
      valid_is_unique s1; 
      valid_is_unique s2)
   else 
-    (admit())
+    admit()
 
 let lin_gt0_s1's2'_trial (lca s1 s2:st)
   : Lemma (requires consistent_branches_s1s2_gt0 lca s1 s2 /\ 
