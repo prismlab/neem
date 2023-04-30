@@ -494,6 +494,7 @@ let common (lca s1 s2:st)
                     (forall e. L.mem e i <==> (L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of s2))) /\
                     (forall e. L.mem e da <==> L.mem e (v_of s1) /\ not (L.mem e (v_of lca))) /\
                     (forall e. L.mem e db <==> L.mem e (v_of s2) /\ not (L.mem e (v_of lca))) /\
+                    (forall id. mem_id_s id i ==> (not (mem_id_s id da) /\ not (mem_id_s id db))) /\
                     (forall id id1. mem_id_s id (v_of lca) /\ mem_id_s id1 da ==> id < id1) /\
                     (forall id id1. mem_id_s id (v_of lca) /\ mem_id_s id1 db ==> id < id1) /\
                     (forall id. mem_id_s id da ==> not (mem_id_s id db)))) = admit()
@@ -536,6 +537,34 @@ let rec intersectionLemma1 (l a b: concrete_st)
                               assume (exists p s. L.append [x] xs == L.append (L.append (L.append [x] p) [L.hd a]) s); //todo
                               ()) else ())
 
+let rec inter (l a' b' a b: concrete_st)
+  : Lemma (requires (forall e. (L.mem e a' /\ L.mem e b') ==> L.mem e l) /\
+                    sorted l /\ sorted a /\ sorted b /\ sorted a' /\ sorted b' /\
+                    a' <> [] /\ b' <> [] /\ L.hd a' = L.hd b' /\
+                    a = L.tl a' /\ b = L.tl b')
+          (ensures (let i' = intersection l a' b' in
+                    let i = intersection l a b in
+                    i' <> [] /\
+                    L.tl i' = i)) =
+  match l, a', b' with
+  |[],_,_ |_,[],_ |_,_,[] -> ()
+  |x::xs,y::ys,z::zs -> if x = y || x = z then ()
+                    else (assert (x <> y /\ x <> z);
+                          if y = z then (inter xs a' b' a b) else ())
+                          
+let rec diff_lem (l a' a: concrete_st)
+  : Lemma (requires sorted l /\ sorted a /\ sorted a' /\
+                    a' <> [] /\ a = L.tl a')
+          (ensures (let da' = diff_s l a' in
+                    let da = diff_s l a in
+                    da' = da)) =
+  match a', l with
+  |[],_ -> ()
+  |_,[] -> ()
+  |x::xs,y::ys -> if x <> y then (admit(); diff_lem a' ys a)
+               else if xs <> [] then (admit();diff_lem xs ys (L.tl xs)) else admit()
+                          
+#push-options "--z3rlimit 100"
 let lin_gt0_s1's2'_dd_eq' (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     distinct_ops (snoc (ops_of s1) last1) /\
@@ -557,12 +586,24 @@ let lin_gt0_s1's2'_dd_eq' (lca s1 s2:st) (last1 last2:op_t)
      valid_is_unique s1; 
      valid_is_unique s2)
   else 
-    (admit();assert (length (ops_of s1) > length (ops_of lca));
+    (assert (length (ops_of s1) > length (ops_of lca));
      assert (L.hd (v_of s1) = L.hd (v_of s2));
-     assume (sorted (v_of lca) /\ sorted (v_of s1) /\ sorted (v_of s2));
+     assume (sorted (v_of lca) /\ sorted (v_of s1) /\ sorted (v_of s2)); //todo
      lem_s1s2_then_lca lca s1 s2;
      lem_inter (v_of lca) (v_of s1) (v_of s2);
-     admit())
+     intersectionLemma1 (v_of lca) (v_of s1) (v_of s2);
+     let i' = intersection (v_of lca) (v_of s1) (v_of s2) in
+     let i = intersection (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) in
+     let da' = diff_s (v_of s1) (v_of lca) in
+     let db' = diff_s (v_of s2) (v_of lca) in
+     let da = diff_s (do (v_of s1) last1) (v_of lca) in
+     let db = diff_s (do (v_of s2) last2) (v_of lca) in   
+     assert (L.hd i' = L.hd (v_of s1)); 
+     assert (do (v_of s1) last1 == L.tl (v_of s1) /\ do (v_of s2) last2 == L.tl (v_of s2));
+     inter (v_of lca) (v_of s1) (v_of s2) (do (v_of s1) last1) (do (v_of s2) last2);
+     assert (L.tl i' = i); 
+     assume (da = da' /\ db = db');
+     ())
 
 let lin_gt0_s1's2'_trial (lca s1 s2:st)
   : Lemma (requires consistent_branches_s1s2_gt0 lca s1 s2 /\ 
