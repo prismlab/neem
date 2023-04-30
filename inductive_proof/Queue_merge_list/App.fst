@@ -1,6 +1,6 @@
 module App
 
-//open SeqUtils
+open SeqUtils
 module L = FStar.List.Tot
 #set-options "--query_stats"
 // the concrete state type
@@ -77,11 +77,39 @@ let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res =
                                                  else if fst x < fst y then First_then_second
                                                       else Second_then_first
 
-let rec intersection (l a b:concrete_st) 
+val forallb : #a:eqtype
+            -> f:(a -> bool)
+            -> l:list a
+            -> Tot (b:bool{(forall e. L.mem e l ==> f e) <==> b = true})
+let rec forallb #a f l =
+  match l with
+  |[] -> true
+  |hd::tl -> if f hd then forallb f tl else false
+  
+val sorted: concrete_st -> Tot bool
+let rec sorted l = match l with
+    | [] | [_] -> true
+    | x::xs -> forallb (fun (e:(nat * nat)) -> fst x < fst e) xs  && sorted xs
+
+let rec diff_s (a:concrete_st) (l:concrete_st)
+  : Tot (d:concrete_st{(a == l ==> d = []) /\
+                       (exists d. a == L.append d l ==> d = [])})
+        (decreases %[a; l]) =
+  match a, l with
+  |[],_ -> []
+  |_,[] -> a
+  |x::xs,y::ys -> if x <> y then diff_s a ys else diff_s xs ys
+  
+  (*match a, l with
+  | x::xs, y::ys -> if (fst y) < (fst x) then diff_s a ys else (diff_s xs ys)
+  | [], y::ys -> []
+  | _, [] -> a*)
+
+let rec intersection (l a b:concrete_st)
   : Tot (i:concrete_st{((l == a /\ l == b) ==> i == l) /\
                        (l == a /\ (exists d. b == L.append l d) ==> i == l) /\
                        (l == b /\ (exists d. a == L.append l d) ==> i == l) /\
-                        (l <> [] /\ a <> [] /\ b <> [] /\ L.hd l = L.hd a /\ L.hd l = L.hd b ==>
+                       (l <> [] /\ a <> [] /\ b <> [] /\ L.hd l = L.hd a /\ L.hd l = L.hd b ==>
                            i <> [] /\ L.hd i = L.hd l)})
   (decreases %[l;a;b]) =
   match l, a, b with
@@ -93,15 +121,14 @@ let rec intersection (l a b:concrete_st)
                     else if x = z then
                       intersection xs a zs
                     else intersection xs a b
-
-let rec diff_s (a:concrete_st) (l:concrete_st)
-  : Tot (d:concrete_st{(a == l ==> d = []) /\
-                       (exists d. a == L.append d l ==> d = [])})
-        (decreases %[a; l]) =
-  match a, l with
-  |[],_ -> []
-  |_,[] -> a
-  |x::xs,y::ys -> if x <> y then diff_s a ys else diff_s xs ys
+  (*match l, a, b with
+  | x::xs, y::ys, z::zs -> if (((fst x) < (fst y) || (fst x) < (fst z))) then 
+                          intersection xs a b
+                       else ((*assert (fst x = fst y /\ fst x = fst z);*) x::(intersection xs ys zs))
+  | x::xs, [], z::zs -> []
+  | x::xs, y::ys, [] -> []
+  | x::xs, [], [] -> []
+  | [], _, _ -> []*)
 
 let rec sorted_union (l1 l2:concrete_st) 
   : Tot (u:concrete_st {(l1 = [] /\ l2 = [] ==> u = []) /\
@@ -115,19 +142,23 @@ let rec sorted_union (l1 l2:concrete_st)
   |_,[] -> l1
   |x::xs,y::ys -> if fst x < fst y then x::sorted_union xs l2 else y::sorted_union l1 ys
 
-let concrete_merge (lca s1 s2:concrete_st) 
-  : Pure concrete_st
-         (requires (exists l1 l2. apply_log lca l1 == s1 /\ apply_log lca l2 == s2))
-         (ensures (fun _ -> True)) =
+let concrete_merge1 (lca s1 s2:concrete_st) : concrete_st =
   let i = intersection lca s1 s2 in
   let da = diff_s s1 lca in
   let db = diff_s s2 lca in 
   let union_ab = sorted_union da db in
   L.append i union_ab
 
+let concrete_merge (lca s1 s2:concrete_st) 
+  : Pure concrete_st
+         (requires (exists l1 l2. apply_log lca l1 == s1 /\ apply_log lca l2 == s2))
+         (ensures (fun _ -> True)) =
+  concrete_merge1 lca s1 s2
+  
 let rec append_id (l1 l2:concrete_st)
   : Lemma (ensures (forall id. mem_id_s id (L.append l1 l2) <==> mem_id_s id l1 \/ mem_id_s id l2) /\
-                   (unique_st l1 /\ unique_st l2 /\ (forall id. mem_id_s id l2 ==> not (mem_id_s id l1)) ==> unique_st (L.append l1 l2)))
+                   (unique_st l1 /\ unique_st l2 /\ (forall id. mem_id_s id l2 ==> not (mem_id_s id l1)) ==> 
+                   unique_st (L.append l1 l2)))
   = match l1 with
   | [] -> ()
   | hd::tl -> append_id tl l2
@@ -139,6 +170,16 @@ let do_is_unique (s:concrete_st) (op:op_t)
   |(id, (Enqueue x, _)) -> append_id s [id, x]
   |(_, (Dequeue, _)) -> ()
 
+let rec lem_foldl (s:concrete_st) (l:log)
+  : Lemma (requires true)
+          (ensures (forall id. mem_id_s id (apply_log s l) ==> mem_id_s id s \/ mem_id id l))
+          (decreases length l) =
+  match length l with
+  |0 -> ()
+  |_ -> (if Enqueue? (fst (snd (head l))) then append_id s [fst (head l), get_ele (head l)] else ());
+       mem_cons (head l) (tail l);
+       lem_foldl (do s (head l)) (tail l)
+       
 let rec lem_foldl1 (s:concrete_st) (l:log)
   : Lemma (requires unique_st s /\ distinct_ops l /\
                     (forall id. mem_id_s id s ==> not (mem_id id l)))
@@ -161,7 +202,7 @@ let last_deq (s:concrete_st) (op:op_t)
   : Lemma (requires Dequeue? (fst (snd op)) /\ Some? (ret_of op) /\ return s op == ret_of op)
           (ensures s <> [] /\ Some (L.hd s) == ret_of op) = ()
 
-let rec lem_inter_tail (l a b:concrete_st) 
+(*let rec lem_inter_tail (l a b:concrete_st) 
   : Lemma (ensures ((l <> [] /\ ((a = l /\ b = L.tl l) \/ (b = l /\ a = L.tl l))) ==> 
                          (intersection l a b = L.tl l)))
           (decreases l) =
@@ -169,7 +210,7 @@ let rec lem_inter_tail (l a b:concrete_st)
   |[],_,_ |_,[],_ |_,_,[] -> ()
   |x::xs,y::ys,z::zs -> if x = y && x = z then
                        lem_inter_tail xs ys zs
-                    else lem_inter_tail xs a b
+                    else lem_inter_tail xs a b*)
            
 let linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2' /\
@@ -230,7 +271,7 @@ let linearizable_s2_0''_base_base (lca s1' s2:st) (last1:op_t)
                     length (ops_of lca) = 0 /\
                     (forall id. mem_id id (ops_of lca) ==> lt id (fst last1)))
          
-          (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2))) = ()
+          (ensures eq (do (v_of s1') last1) (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2))) = admit()
 
 let linearizable_s2_0''_base_ind (lca s1' s2:st) (last1:op_t)
   : Lemma (requires consistent_branches lca s1' s2 /\
@@ -363,8 +404,7 @@ let linearizable_gt0_s1'_noop (lca s1 s2:st)
                      is_prefix (ops_of lca) (ops_of (inverse_st s1))))
           (ensures eq (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of s2))
                       (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = 
-  lem_apply_log init_st (ops_of s1);
-  lem_apply_log init_st (ops_of s2)
+  lem_apply_log init_st (ops_of s1)
 
 let linearizable_gt0_s2'_noop (lca s1 s2:st)
   : Lemma (requires consistent_branches_s1s2_gt0 lca s1 s2 /\ 
@@ -394,9 +434,107 @@ let linearizable_gt0_s1's2'_noop_both (lca s1 s2:st)
                      is_prefix (ops_of lca) (ops_of (inverse_st s1))))
           (ensures eq (concrete_merge (v_of lca) (v_of (inverse_st s1)) (v_of (inverse_st s2)))
                       (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = 
-  lem_apply_log init_st (ops_of s1)
+  lem_apply_log init_st (ops_of s1);
+  lem_apply_log init_st (ops_of s2)
  
 ///////////////////////////////////////////////////////////////
+
+let rec not_id_not_ele (id:nat) (ele:nat) (s:concrete_st)
+  : Lemma (requires not (mem_id_s id s))
+          (ensures not (L.mem (id, ele) s)) 
+          (decreases s) =
+  match s with
+  |[] -> ()
+  |x::xs -> not_id_not_ele id ele xs
+    
+#push-options "--z3rlimit 50"
+let rec lem_s1s2_then_lca (lca s1 s2:st)
+  : Lemma (requires consistent_branches lca s1 s2)
+          (ensures (forall e. L.mem e (v_of s1) /\ L.mem e (v_of s2) ==> L.mem e (v_of lca)))
+          (decreases %[(length (ops_of s1))]) =
+  if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then ()
+  else if ops_of s1 = ops_of lca then ()
+  else (let s1' = inverse_st s1 in
+        let pre1, last1 = un_snoc (ops_of s1) in
+        lemma_mem_snoc pre1 last1;
+        distinct_invert_append pre1 (create 1 last1);
+        lem_inverse (ops_of lca) (ops_of s1); 
+        lastop_diff (ops_of lca) (ops_of s1);
+        inverse_diff_id_s1' (ops_of lca) (ops_of s1) (ops_of s2);
+        if Dequeue? (fst (snd last1)) then
+          (lem_s1s2_then_lca lca s1' s2;
+           valid_is_unique lca; valid_is_unique s1; valid_is_unique s2; valid_is_unique s1')
+        else (lem_s1s2_then_lca lca s1' s2;
+              valid_is_unique lca; valid_is_unique s1; valid_is_unique s2; valid_is_unique s1';
+              lem_foldl init_st (ops_of lca); lem_foldl init_st (ops_of s1); lem_foldl init_st (ops_of s2); 
+              split_prefix init_st (ops_of lca) (ops_of s1); 
+              lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
+              split_prefix init_st (ops_of lca) (ops_of s2);
+              lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
+              lem_diff (ops_of s1) (ops_of lca); 
+              lastop_diff (ops_of lca) (ops_of s1); 
+              
+              assert (not (mem_id (fst last1) (ops_of lca))); 
+              L.append_mem_forall (v_of s1') [(fst last1, get_ele last1)];
+              assert (L.mem (fst last1, get_ele last1) (v_of s1));
+              assert (forall id. mem_id_s id (v_of lca) ==> mem_id id (ops_of lca));
+              assert (not (mem_id_s (fst last1) (v_of lca)));
+              not_id_not_ele (fst last1) (get_ele last1) (v_of lca);
+              not_id_not_ele (fst last1) (get_ele last1) (v_of s2);
+              assert (not (L.mem (fst last1, get_ele last1) (v_of lca)));
+              ()))
+
+let common (lca s1 s2:st)
+  : Lemma (requires consistent_branches lca s1 s2 /\
+                    sorted (v_of lca) /\ sorted (v_of s1) /\ sorted (v_of s2))
+          (ensures (let i = intersection (v_of lca) (v_of s1) (v_of s2) in
+                    let da = diff_s (v_of s1) (v_of lca) in
+                    let db = diff_s (v_of s2) (v_of lca) in
+                    (forall e. L.mem e (v_of s1) /\ L.mem e (v_of s2) ==> L.mem e (v_of lca)) /\
+                    (forall e. L.mem e i <==> (L.mem e (v_of lca) /\ L.mem e (v_of s1) /\ L.mem e (v_of s2))) /\
+                    (forall e. L.mem e da <==> L.mem e (v_of s1) /\ not (L.mem e (v_of lca))) /\
+                    (forall e. L.mem e db <==> L.mem e (v_of s2) /\ not (L.mem e (v_of lca))) /\
+                    (forall id id1. mem_id_s id (v_of lca) /\ mem_id_s id1 da ==> id < id1) /\
+                    (forall id id1. mem_id_s id (v_of lca) /\ mem_id_s id1 db ==> id < id1) /\
+                    (forall id. mem_id_s id da ==> not (mem_id_s id db)))) = admit()
+
+let rec lem_inter (l a b:concrete_st)
+  : Lemma (requires (forall e. (L.mem e a /\ L.mem e b) ==> L.mem e l) /\
+                    sorted l /\ sorted a /\ sorted b)
+          (ensures (a <> [] /\ b <> [] /\ L.hd a = L.hd b ==> 
+                      (let i = intersection l a b in
+                       i <> [] /\ L.hd i = L.hd a))) =
+  match l, a, b with
+  |[],_,_ |_,[],_ |_,_,[] -> ()
+  |x::xs,y::ys,z::zs -> if x = y || x = z then ()
+                    else (assert (x <> y /\ x <> z);
+                          if y = z then lem_inter xs a b else ())
+
+let help (p s h xs hd:concrete_st)
+  : Lemma (requires xs == L.append (L.append p h) s)
+          (ensures L.append hd xs == L.append (L.append (L.append hd p) h) s)
+         // [SMTPat (xs == L.append (L.append p h) s)]
+  = L.append_assoc hd p h;
+    L.append_assoc p h s;
+    L.append_assoc hd (L.append p h) s
+
+let rec intersectionLemma1 (l a b: concrete_st)
+  : Lemma (requires (forall e. (L.mem e a /\ L.mem e b) ==> L.mem e l) /\
+                    sorted l /\ sorted a /\ sorted b /\
+                    a <> [] /\ b <> [] /\ L.hd a = L.hd b)
+          (ensures (exists p s. l == L.append (L.append p [L.hd a]) s (*/\ 
+                    intersection l a b == intersection l (L.tl a) (L.tl b*))) = 
+ match l, a, b with
+  |[],_,_ |_,[],_ |_,_,[] -> ()
+  |x::xs,y::ys,z::zs -> if x = y || x = z then L.append_mem_forall (L.append [] [L.hd a]) xs
+                    else (assert (x <> y /\ x <> z);
+                          if y = z then 
+                             (intersectionLemma1 xs a b;
+                              L.append_mem_forall [x] xs;
+                              L.append_assoc [] [L.hd a] xs;
+                              assert (exists p s. xs == L.append (L.append p [L.hd a]) s);
+                              assume (exists p s. L.append [x] xs == L.append (L.append (L.append [x] p) [L.hd a]) s); //todo
+                              ()) else ())
 
 let lin_gt0_s1's2'_dd_eq' (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca s1 s2 /\
@@ -419,7 +557,12 @@ let lin_gt0_s1's2'_dd_eq' (lca s1 s2:st) (last1 last2:op_t)
      valid_is_unique s1; 
      valid_is_unique s2)
   else 
-    admit()
+    (admit();assert (length (ops_of s1) > length (ops_of lca));
+     assert (L.hd (v_of s1) = L.hd (v_of s2));
+     assume (sorted (v_of lca) /\ sorted (v_of s1) /\ sorted (v_of s2));
+     lem_s1s2_then_lca lca s1 s2;
+     lem_inter (v_of lca) (v_of s1) (v_of s2);
+     admit())
 
 let lin_gt0_s1's2'_trial (lca s1 s2:st)
   : Lemma (requires consistent_branches_s1s2_gt0 lca s1 s2 /\ 
