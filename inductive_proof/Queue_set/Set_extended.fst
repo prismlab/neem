@@ -60,12 +60,6 @@ let rec remove_if_mem (#a:eqtype) (s:set a) (f:a -> bool) (x:a)
   match s with
   |[] -> ()
   |x1::xs -> remove_if_mem xs f x
-  
-let rec remove_if_mem1 (#a:eqtype) (s:set a) //(f:a -> bool) 
-  : Lemma (ensures (forall s1 f. equal s s1 ==> (forall x. mem x (remove_if s f) <==> mem x (remove_if s1 f)))) =
-  match s with
-  |[] -> ()
-  |x1::xs -> remove_if_mem1 xs 
 
 let rec filter_s (#a:eqtype) (s:set a) (f:a -> bool) =
   match s with
@@ -169,12 +163,12 @@ let mem_find_min (#a:eqtype) (s:set (nat * a))
 
 let remove_min (#a:eqtype) (s:set (nat * a)) 
   : (r:set (nat * a){(s = empty ==> r = s) /\
-                   (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract_s (find_min s)))) /\
-                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s))}) =
+                   (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract_s (find_min s)))) (*/\
+                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s)*)}) =
+  always_min_exists s;
   if s = empty then s 
   else (let m = find_min s in
-        if Some? m then remove_if s (fun e -> e = extract_s (find_min s))
-        else s)
+        remove_if s (fun e -> e = extract_s (find_min s)))
 
 let mem_id_s (#a:eqtype) (id:nat) (s:set (nat * a)) 
   : (b:bool{b = true <==> (exists e. mem e s /\ fst e = id)}) =
