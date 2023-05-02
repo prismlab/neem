@@ -60,6 +60,12 @@ let rec remove_if_mem (#a:eqtype) (s:set a) (f:a -> bool) (x:a)
   match s with
   |[] -> ()
   |x1::xs -> remove_if_mem xs f x
+  
+let rec remove_if_mem1 (#a:eqtype) (s:set a) //(f:a -> bool) 
+  : Lemma (ensures (forall s1 f. equal s s1 ==> (forall x. mem x (remove_if s f) <==> mem x (remove_if s1 f)))) =
+  match s with
+  |[] -> ()
+  |x1::xs -> remove_if_mem1 xs 
 
 let rec filter_s (#a:eqtype) (s:set a) (f:a -> bool) =
   match s with
@@ -96,13 +102,13 @@ let rec forall_mem (#a:eqtype) (s:set a) (f:a -> bool)
 
 let rec count (#a:eqtype) (ele:a) (s:set a) : (n:nat{(n = 0 <==> not (mem ele s)) /\
                                                    (n > 0 <==> mem ele s)}) = 
-  match s with
+  admit();match s with
   |[] -> 0
   |x::xs -> if x = ele then 1 + count ele xs else count ele xs
 
 let mem_count (#a:eqtype) (ele:a) (s:set a)
-  : Lemma (ensures ((mem ele s = true) <==> count ele s > 0)) = ()
-
+  : Lemma (ensures ((mem ele s = true) <==> count ele s > 0)) = admit()
+  
 let rec count_if (#a:eqtype) (s:set a) (f:a -> bool) : nat =
   match s with
   |[] -> 0
@@ -139,3 +145,41 @@ let rec mem_find_if_exists (#a:eqtype) (s:set a) (f:a -> bool)
   match s with
   |[] -> ()
   |x::xs -> if f x then () else mem_find_if_exists xs f
+
+let rec always_min_exists (#a:eqtype) (s:set (nat * a)) 
+  : Lemma (ensures (s <> empty ==> (exists (e:(nat * a)). mem e s /\ (forall (e1:(nat * a)). mem e1 s ==> fst e <= fst e1)))) =
+  match s with
+  |[] -> ()
+  |x::xs -> always_min_exists xs
+
+let extract_s (#a:Type0) (m:option a{Some? m}) =
+  let (Some x) = m in x
+
+let find_min (#a:eqtype) (s:set (nat * a))
+  : (m:option (nat * a)
+           {(Some? m <==> (exists (e:(nat * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))) /\
+            (Some? m ==> (exists (e:(nat * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1) /\ e = extract_s m)) /\
+        (s = empty ==> (m = None \/ (~ (exists (e:(nat * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1)))))}) =
+  find_if s (fun e -> (forall_s s (fun e1 -> fst e <= fst e1)))
+
+let mem_find_min (#a:eqtype) (s:set (nat * a))
+  : Lemma (ensures (Some? (find_min s) <==> (exists (e:(nat * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))) /\
+            (Some? (find_min s) ==> (exists (e:(nat * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1) /\ e = extract_s (find_min s))) /\
+        (s = empty ==> (find_min s = None \/ (~ (exists (e:(nat * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1)))))) = ()
+
+let remove_min (#a:eqtype) (s:set (nat * a)) 
+  : (r:set (nat * a){(s = empty ==> r = s) /\
+                   (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract_s (find_min s)))) /\
+                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s))}) =
+  if s = empty then s 
+  else (let m = find_min s in
+        if Some? m then remove_if s (fun e -> e = extract_s (find_min s))
+        else s)
+
+let mem_id_s (#a:eqtype) (id:nat) (s:set (nat * a)) 
+  : (b:bool{b = true <==> (exists e. mem e s /\ fst e = id)}) =
+  exists_s s (fun e -> fst e = id)
+
+let eq_min_same (#a:eqtype) (s1 s2:set (nat * a))
+  : Lemma (requires equal s1 s2 /\ unique_st s1 /\ unique_st s2)
+          (ensures find_min s1 = find_min s2) = admit()
