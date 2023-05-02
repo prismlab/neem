@@ -1,19 +1,18 @@
 module App
 
 open SeqUtils
-open Set_extended
-
+module L = FStar.List.Tot
 #set-options "--query_stats"
 // the concrete state type
-// It is a set of pairs of timestamp and element.
-type concrete_st = s:set (nat & nat){s <> empty ==> (exists (e:(nat * nat)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))}
+// It is a sequence of pairs of timestamp and element.
+type concrete_st = list (nat & nat)
 
 // init state
-let init_st = empty
+let init_st = []
 
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) =
-  (forall e. mem e a <==> mem e b)
+  a == b
 
 // few properties of equivalence relation
 let symmetric (a b:concrete_st) 
@@ -40,68 +39,30 @@ let get_ele (o:op_t{Enqueue? (fst (snd o))}) : nat =
   match o with
   |(_, (Enqueue x,_)) -> x
 
-let mem_id_s (id:nat) (s:concrete_st) =
-  exists_s s (fun e -> fst e = id)
+let rec mem_id_s (id:nat) (s:concrete_st) =
+  match s with
+  |[] -> false
+  |x::xs -> fst x = id || mem_id_s id xs
 
-let unique_st (s:concrete_st) =
-  //forall_s s (fun e -> count e s > 0) &&
-  forall_s s (fun e -> not (exists_s s (fun e1 -> snd e <> snd e1 && fst e = fst e1)))
-
-val extract_s (m:option (nat * nat){Some? m}) : nat * nat
-let extract_s (Some x) = x
-
-let find_min (s:concrete_st) 
-    : (m:option (nat * nat) 
-           {(Some? m <==> (exists (e:(nat * nat)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))) /\
-            (Some? m ==> (exists (e:(nat * nat)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1) /\ e = extract_s m)) /\
-        (s = empty ==> (m = None \/ (~ (exists (e:(nat * nat)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))))) /\
-        (s <> empty ==> Some? m)}) =
-  find_if s (fun e -> (forall_s s (fun e1 -> fst e <= fst e1)))
-
-let check_find_min (s:concrete_st)
-  : Lemma (requires s = add (2,1) (singleton (3,1)))
-          (ensures find_min s = Some (2,1)) 
-  = let m = find_min s in
-    assert (mem (2,1) s /\ (forall e1. mem e1 s ==> fst (2,1) <= fst e1));
-    (*assert (Some? m);
-    assert (fst (extract_s m) = 1);
-    assert (forall e. mem e s ==> 1 <= fst e);*) ()
-
-let remove_min (s:concrete_st) 
-  : (r:concrete_st{(s = empty ==> r = s) /\
-                   (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract_s (find_min s)))) /\
-                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s))}) =
-  if s = empty then s 
-  else (let m = find_min s in
-        if Some? m then 
-          (let r = remove_if s (fun e -> e = extract_s (find_min s)) in
-           assert (forall e. mem e r <==> mem e s /\ e <> extract_s (find_min s)); admit();
-           assume (r <> empty ==> (exists (e:(nat * nat)). mem e r /\ (forall e1. mem e1 r ==> fst e <= fst e1)));
-           r)
-        else s)
-
-let find_min_equal (a b:concrete_st)
-  : Lemma (requires unique_st a /\ unique_st b /\ eq a b)
-          (ensures eq (remove_min a) (remove_min b)) = ()
+let rec unique_st (s:concrete_st) =
+  match s with
+  |[] -> true
+  |x::xs -> not (mem_id_s (fst x) xs) && unique_st xs
 
 // apply an operation to a state
 let do (s:concrete_st) (op:op_t) : concrete_st =
   match op with
-  |(id, (Enqueue x, _)) -> add (id, x) s
-  |(_, (Dequeue, _)) -> if s = empty then s else remove_min s
+  |(id, (Enqueue x, _)) -> L.append s [(id, x)]
+  |(_, (Dequeue, _)) -> if L.length s = 0 then s else L.tl s
 
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b)
-           (ensures eq (do a op) (do b op)) = 
-  assume (unique_st a /\ unique_st b); 
-  match op with
-  |(id, (Enqueue x, _)) -> ()
-  |(_, (Dequeue, _)) -> ()
-  
+           (ensures eq (do a op) (do b op)) = ()
+
 let return (s:concrete_st) (o:op_t) : ret_t =
   match o with
   |(_, (Enqueue _, _)) -> None
-  |(_, (Dequeue, r)) -> if s = empty then None else Some (extract_s (find_min s))
+  |(_, (Dequeue, r)) -> if L.length s = 0 then None else Some (L.hd s)
 
 let extract (o:op_t{Dequeue? (fst (snd o)) /\ Some? (ret_of o)}) : (nat * nat) =
   let (_, (_, Some x)) = o in x
