@@ -2,7 +2,7 @@ module SeqUtils
 
 open FStar.Seq
 
-let lt (a b:nat) : bool = a < b
+let lt (a b:pos) : bool = a < b
 
 type seq_assoc (a:eqtype) (b:Type) = seq (a & b)
 
