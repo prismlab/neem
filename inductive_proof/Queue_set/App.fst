@@ -6,7 +6,7 @@ module S = Set_extended
 #set-options "--query_stats"
 // the concrete state type
 // It is a set of pairs of timestamp and element.
-type concrete_st = S.set (pos & nat)//{s <> empty ==> (exists (e:(nat * nat)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))}
+type concrete_st = S.set (pos & nat)
 
 // init state
 let init_st = S.empty
@@ -80,7 +80,7 @@ let last_deq (s:concrete_st) (op:op_t)
                    S.mem (S.extract_s (S.find_min s)) s) =
   S.always_min_exists s
 
-let extract (o:op_t{Dequeue? (fst (snd o)) /\ Some? (ret_of o)}) : (pos * nat) =
+let ret_ele (o:op_t{Dequeue? (fst (snd o)) /\ Some? (ret_of o)}) : (pos * nat) =
   let (_, (_, Some x)) = o in x
 
 //conflict resolution
@@ -92,8 +92,8 @@ let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res =
   |(_,(Dequeue,None)), (_,(Dequeue,None)) -> Noop_both
   |(_,(Enqueue _,_)), (_,(Dequeue,Some _)) -> First_then_second
   |(_,(Dequeue,Some _)), (_,(Enqueue _,_)) -> Second_then_first 
-  |(_,(Dequeue,Some _)), (_,(Dequeue,Some _)) -> if extract x = extract y then First 
-                                                 else if fst (extract x) < fst (extract y) then First_then_second
+  |(_,(Dequeue,Some _)), (_,(Dequeue,Some _)) -> if ret_ele x = ret_ele y then First 
+                                                 else if fst (ret_ele x) > fst (ret_ele y) then First_then_second
                                                       else Second_then_first
  
 let concrete_merge (lca s1 s2:concrete_st) 
@@ -104,7 +104,15 @@ let concrete_merge (lca s1 s2:concrete_st)
   let i = S.intersect lca i' in
   let da = S.remove_if s1 (fun e -> S.mem e lca) in
   let db = S.remove_if s2 (fun e -> S.mem e lca) in
-  S.union i (S.union da db)
+  let m = S.union i (S.union da db) in
+  m
+
+let merge_min (lca s1 s2:concrete_st) (m:(pos & nat))
+  : Lemma (requires (exists l1 l2. apply_log lca l1 == s1 /\ apply_log lca l2 == s2) /\
+                    Some? (S.find_min (concrete_merge lca s1 s2)) /\
+                    m = S.extract_s (S.find_min (concrete_merge lca s1 s2)))
+          (ensures S.mem m s1 \/ S.mem m s2) = 
+  S.always_min_exists lca; S.always_min_exists s1; S.always_min_exists s2
 
 let do_is_unique (s:concrete_st) (op:op_t) 
   : Lemma (requires S.unique_st s /\ (not (S.mem_id_s (fst op) s)))
@@ -121,7 +129,9 @@ let append_id (l:concrete_st) (ele:(pos * nat))
 
 let rec lem_foldl (s:concrete_st) (l:log)
   : Lemma (requires true)
-          (ensures (forall id. S.mem_id_s id (apply_log s l) ==> S.mem_id_s id s \/ mem_id id l))
+          (ensures (forall id. S.mem_id_s id (apply_log s l) ==> S.mem_id_s id s \/ mem_id id l) /\
+                   (forall e. S.mem e (apply_log s l) ==> S.mem e s \/ 
+                         (exists op. mem op l /\ (*Enqueue? (fst (snd op)) /\*) e == (fst op, get_ele op))))
           (decreases length l) =
   match length l with
   |0 -> ()
@@ -233,7 +243,7 @@ let ind_fts_pre (lca s1 s2:st) (last1 last2:op_t) =
   eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1)
      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2)))
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 200"
 let linearizable_gt0_ind_ee_de_fts (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ind_fts_pre lca s1 s2 last1 last2 /\
                     ((Enqueue? (fst (snd last1)) /\ Enqueue? (fst (snd last2)) /\ fst last1 > fst last2) \/
@@ -250,7 +260,7 @@ let linearizable_gt0_ind_dd_fts (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ind_fts_pre lca s1 s2 last1 last2 /\
                     Dequeue? (fst (snd last1)) /\ Some? (ret_of last1) /\ 
                     Dequeue? (fst (snd last2)) /\ Some? (ret_of last2) /\
-                    fst (extract last1) < fst (extract last2))
+                    fst (ret_ele last1) > fst (ret_ele last2))
        
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = 
@@ -298,7 +308,7 @@ let linearizable_gt0_ind_dd_stf (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ind_stf_pre lca s1 s2 last1 last2 /\
                     Dequeue? (fst (snd last1)) /\ Some? (ret_of last1) /\ 
                     Dequeue? (fst (snd last2)) /\ Some? (ret_of last2) /\
-                    fst (extract last1) >= fst (extract last2))
+                    fst (ret_ele last1) <= fst (ret_ele last2))
           (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = 
    valid_is_unique lca; valid_is_unique s1; valid_is_unique s2;
@@ -379,7 +389,7 @@ let linearizable_gt0_ind1_dd_fts (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ind1_fts_pre lca s1 s2 last1 last2 /\
                     Dequeue? (fst (snd last1)) /\ Some? (ret_of last1) /\ 
                     Dequeue? (fst (snd last2)) /\ Some? (ret_of last2) /\
-                    fst (extract last1) < fst (extract last2))
+                    fst (ret_ele last1) > fst (ret_ele last2))
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = 
    valid_is_unique lca; valid_is_unique s1; valid_is_unique s2;
@@ -428,10 +438,10 @@ let linearizable_gt0_ind1_dd_stf (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ind1_stf_pre lca s1 s2 last1 last2 /\
                     Dequeue? (fst (snd last1)) /\ Some? (ret_of last1) /\ 
                     Dequeue? (fst (snd last2)) /\ Some? (ret_of last2) /\
-                    fst (extract last1) >= fst (extract last2))
+                    fst (ret_ele last1) <= fst (ret_ele last2))
           (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = 
-  admit()
+   admit()
 
 let linearizable_gt0_ind1_stf (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ind1_stf_pre lca s1 s2 last1 last2)
@@ -474,34 +484,6 @@ let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
 
 ////////////////////////////////////////////////////////////////
 
-let rec lem_s1s2_then_lca (lca s1 s2:st)
-  : Lemma (requires consistent_branches lca s1 s2)
-          (ensures (forall e. S.mem e (v_of s1) /\ S.mem e (v_of s2) ==> S.mem e (v_of lca)))
-          (decreases %[(length (ops_of s1))]) =
-  if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then ()
-  else if ops_of s1 = ops_of lca then ()
-  else (let s1' = inverse_st s1 in
-        let pre1, last1 = un_snoc (ops_of s1) in
-        lemma_mem_snoc pre1 last1;
-        distinct_invert_append pre1 (create 1 last1);
-        lem_inverse (ops_of lca) (ops_of s1); 
-        lastop_diff (ops_of lca) (ops_of s1);
-        inverse_diff_id_s1' (ops_of lca) (ops_of s1) (ops_of s2);
-        distinct_invert_append pre1 (create 1 last1);
-        split_prefix init_st (ops_of lca) (ops_of s1');
-        if Dequeue? (fst (snd last1)) then
-          (lem_s1s2_then_lca lca s1' s2;
-           valid_is_unique lca; valid_is_unique s1; valid_is_unique s2; valid_is_unique s1')
-        else (lem_s1s2_then_lca lca s1' s2;
-              valid_is_unique lca; valid_is_unique s1; valid_is_unique s2; valid_is_unique s1';
-              lem_foldl init_st (ops_of lca); lem_foldl init_st (ops_of s1); lem_foldl init_st (ops_of s2); 
-              split_prefix init_st (ops_of lca) (ops_of s1); 
-              lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
-              split_prefix init_st (ops_of lca) (ops_of s2);
-              lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
-              lem_diff (ops_of s1) (ops_of lca); 
-              lastop_diff (ops_of lca) (ops_of s1)))
-
 let linearizable_gt0_s1's2' (lca s1 s2:st)
   : Lemma (requires consistent_branches_s1s2_gt0 lca s1 s2 /\ 
                     consistent_branches lca (inverse_st s1) (inverse_st s2) /\
@@ -519,21 +501,9 @@ let linearizable_gt0_s1's2' (lca s1 s2:st)
    lem_apply_log init_st (ops_of s1);
    lem_apply_log init_st (ops_of s2);
    last_deq (v_of (inverse_st s1)) last1;
-   last_deq (v_of (inverse_st s2)) last2;
-   lem_inverse (ops_of lca) (ops_of s1); lem_inverse (ops_of lca) (ops_of s2);
-   lastop_diff (ops_of lca) (ops_of s1); lastop_diff (ops_of lca) (ops_of s2);
-   inverse_diff_id_s1'_s2' (ops_of lca) (ops_of s1) (ops_of s2);
-   lem_s1s2_then_lca lca (inverse_st s1) (inverse_st s2);
-   assert (forall e. S.mem e (v_of (inverse_st s1)) /\ S.mem e (v_of (inverse_st s2)) ==> S.mem e (v_of lca));
-   let i' = S.intersect (v_of lca) (S.intersect (v_of (inverse_st s1)) (v_of (inverse_st s2))) in
-   let i = S.intersect (v_of lca)  (S.intersect (v_of s1) (v_of s2)) in
-   assert (forall e. S.mem e i <==> S.mem e i' /\ e <> S.extract_s (S.find_min (v_of (inverse_st s1)))); 
-   let da' = S.remove_if (v_of (inverse_st s1)) (fun e -> S.mem e (v_of lca)) in
-   let db' = S.remove_if (v_of (inverse_st s2)) (fun e -> S.mem e (v_of lca)) in
-   let da = S.remove_if (v_of s1) (fun e -> S.mem e (v_of lca)) in
-   let db = S.remove_if (v_of s2) (fun e -> S.mem e (v_of lca)) in
-   assert (eq da' da);
-   assert (eq db' db); 
+   last_deq (v_of (inverse_st s2)) last2; 
+   assert (ret_of last1 == S.find_min (v_of (inverse_st s1))); 
+   assert (ret_of last1 == S.find_min (v_of (inverse_st s2)));();
    ()
 #pop-options
 
@@ -689,3 +659,53 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   if Enqueue? (fst (snd op)) then () else ()
   
 ////////////////////////////////////////////////////////////////
+
+
+(*
+let linearizable_gt0_ind_dd_fts (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires ind_fts_pre lca s1 s2 last1 last2 /\
+                    Dequeue? (fst (snd last1)) /\ Some? (ret_of last1) /\ 
+                    Dequeue? (fst (snd last2)) /\ Some? (ret_of last2) /\
+                    fst (extract last1) < fst (extract last2))
+       
+          (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = 
+   S.always_min_exists (v_of lca); S.always_min_exists (v_of s1); S.always_min_exists (v_of s2);
+   S.always_min_exists (do (v_of s1) last1); S.always_min_exists (do (v_of s2) last2);
+   valid_is_unique lca; valid_is_unique s1; valid_is_unique s2;
+   valid_is_unique (do (v_of s1) last1, hide (snoc (ops_of s1) last1));
+   valid_is_unique (do (v_of s2) last2, hide (snoc (ops_of s2) last2)); 
+   last_deq (v_of s1) last1;
+   last_deq (v_of s2) last2;
+   let min1 = S.find_min (v_of s1) in
+   let min2 = S.find_min (v_of s2) in
+   assert (ret_of last1 = min1);
+   assert (ret_of last2 = min2);
+   assert (fst (S.extract_s min1) < fst (S.extract_s min2)); 
+   lem_diff (snoc (ops_of s1) last1) (ops_of lca); 
+   lem_diff (snoc (ops_of s2) last2) (ops_of lca); 
+   lem_diff (ops_of s1) (ops_of lca); 
+   lem_diff (ops_of s2) (ops_of lca); 
+   lem_foldl init_st (ops_of lca);
+   lem_foldl init_st (ops_of s1);
+   lem_foldl init_st (ops_of s2);
+   lem_foldl init_st (snoc (ops_of s1) last1);
+   lem_foldl init_st (snoc (ops_of s2) last2);
+   split_prefix init_st (ops_of lca) (ops_of s1);
+   split_prefix init_st (ops_of lca) (ops_of s2);
+   split_prefix init_st (ops_of lca) (snoc (ops_of s1) last1);
+   split_prefix init_st (ops_of lca) (snoc (ops_of s2) last2);
+   lem_foldl (v_of lca) (diff (ops_of s1) (ops_of lca));
+   lem_foldl (v_of lca) (diff (ops_of s2) (ops_of lca));
+   lem_foldl (v_of lca) (diff (snoc (ops_of s1) last1) (ops_of lca));
+   lem_foldl (v_of lca) (diff (snoc (ops_of s2) last2) (ops_of lca));
+   //assume (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2) <> S.empty);
+   S.always_min_exists (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2));
+   //let min_m = S.extract_s (S.find_min (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2))) in
+   //merge_min (v_of lca) (v_of s1) (do (v_of s2) last2) min_m;
+   //assume (S.find_min (v_of s1) = min1);
+   //assume (forall id. S.mem_id_s id (do (v_of s2) last2) ==> lt (fst (S.extract_s min1)) id); 
+   S.mem_remove_min (v_of s1); S.mem_remove_min (v_of s2);
+   //assume (min_m = S.extract_s min1); 
+   ()
+   *)
