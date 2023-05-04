@@ -48,3 +48,60 @@ val exists_s (#a:eqtype) (s:set a) (f:a -> bool) : bool
 val exists_mem (#a:eqtype) (s:set a) (f:a -> bool)
   : Lemma (ensures ((exists_s s f = true) <==> (exists x. mem x s /\ f x)))
     [SMTPat (exists_s s f)]
+
+val forall_s (#a:eqtype) (s:set a) (f:a -> bool) : bool
+val forall_mem (#a:eqtype) (s:set a) (f:a -> bool)
+  : Lemma (ensures ((forall_s s f = true) <==> (forall x. mem x s ==> f x)))
+    [SMTPat (forall_s s f)]
+
+val extr (#a:eqtype) (x:option a{Some? x}) : (r:a{x = Some r})
+
+val find_if (#a:eqtype) (s:set a) (f:a -> bool) : option a
+val mem_find_if (#a:eqtype) (s:set a) (f:a -> bool)
+  : Lemma (ensures (None? (find_if s f) <==> ((forall e. mem e s ==> ~ (f e)) \/ s = empty)) /\
+                   (Some? (find_if s f) <==> (exists e. mem e s /\ f e)) /\
+                   (Some? (find_if s f) ==> (exists e. mem e s /\ f e /\ e = extr (find_if s f)) /\ (f (extr (find_if s f)))))
+    [SMTPat (find_if s f)]
+
+val mem_find_if_exists (#a:eqtype) (s:set a) (f:a -> bool)
+  : Lemma (requires (exists e. mem e s /\ f e))
+          (ensures (None? (find_if s f) <==> ((forall e. mem e s ==> ~ (f e)) \/ s = empty)) /\
+                   (Some? (find_if s f) <==> (exists e. mem e s /\ f e)) /\
+                   (Some? (find_if s f) ==> (exists e. mem e s /\ f e /\ e = extr (find_if s f)) /\ (f (extr (find_if s f)))) /\
+                   (s <> empty ==> Some? (find_if s f)))
+          [SMTPat (find_if s f)]
+
+val always_min_exists (#a:eqtype) (s:set (pos * a)) 
+  : Lemma (ensures (s <> empty ==> (exists (e:(pos * a)). mem e s /\ (forall (e1:(pos * a)). mem e1 s ==> fst e <= fst e1))))
+
+val extract_s (#a:Type0) (m:option a{Some? m}) : (e:a{m == Some e})
+
+val find_min (#a:eqtype) (s:set (pos * a)) 
+  : (m:option (pos * a)
+     {(Some? m <==> (exists (e:(pos * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))) /\
+            (Some? m ==> (exists (e:(pos * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1) /\ e = extract_s m)) /\
+        (s = empty ==> (m = None \/ (~ (exists (e:(pos * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))))) })
+
+val mem_find_min (#a:eqtype) (s:set (pos * a))
+  : Lemma (ensures (Some? (find_min s) <==> (exists (e:(pos * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1))) /\
+            (Some? (find_min s) ==> (exists (e:(pos * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1) /\ e = extract_s (find_min s))) /\
+        (s = empty ==> (find_min s = None \/ (~ (exists (e:(pos * a)). mem e s /\ (forall e1. mem e1 s ==> fst e <= fst e1)))))) 
+        [SMTPat (find_min s)]
+
+let unique_st (#a:eqtype) (s:set (pos * a)) =
+  forall_s s (fun e -> not (exists_s s (fun e1 -> snd e <> snd e1 && fst e = fst e1)))
+
+val remove_min (#a:eqtype) (s:set (pos * a)) 
+  : (r:set (pos * a){(s = empty ==> r = s) /\
+                   (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract_s (find_min s)))) /\
+                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s))})
+
+val mem_remove_min (#a:eqtype) (s:set (pos * a)) 
+  : Lemma (ensures (let r = remove_min s in
+                   (s = empty ==> r = s) /\
+                   (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract_s (find_min s)))) /\
+                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s))))
+    [SMTPat (remove_min s)]
+
+val mem_id_s (#a:eqtype) (id:pos) (s:set (pos * a)) 
+  : (b:bool{b = true <==> (exists e. mem e s /\ fst e = id)})
