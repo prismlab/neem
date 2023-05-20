@@ -2,8 +2,6 @@ module SeqUtils
 
 open FStar.Seq
 
-let lt (a b:nat) : bool = a < b
-
 type seq_assoc (a:eqtype) (b:Type) = seq (a & b)
 
 let rec count_assoc_fst (#a:eqtype) (#b:Type) (id:a) (l:seq_assoc a b)
@@ -179,9 +177,9 @@ let un_snoc_prop (#t1 #t2:eqtype) (a:seq_assoc t1 t2)
   
 let lem_lt_lastop_id_lca (#t:eqtype) (lca s1:seq_assoc pos t)
   : Lemma (requires is_prefix lca s1 /\ length (diff s1 lca) > 0 /\ distinct_assoc_fst s1 /\
-                    (forall id id1. mem_assoc_fst id lca /\ mem_assoc_fst id1 (diff s1 lca) ==> lt id id1))
+                    (forall id id1. mem_assoc_fst id lca /\ mem_assoc_fst id1 (diff s1 lca) ==> id < id1))
           (ensures (let _, lastop = un_snoc s1 in
-                    (forall id. mem_assoc_fst id lca ==> lt id (fst lastop)))) =
+                    (forall id. mem_assoc_fst id lca ==> id < (fst lastop)))) =
     distinct_invert_append lca (diff s1 lca); 
     let pre, lst = un_snoc s1 in
     lem_diff s1 lca;
@@ -189,12 +187,12 @@ let lem_lt_lastop_id_lca (#t:eqtype) (lca s1:seq_assoc pos t)
 
 let lastop_diff (#t:eqtype) (l a:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ is_prefix l a /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
                     length a > length l)
           (ensures (length (diff a l) > 0) /\
                    (let p, last = un_snoc a in
                    mem_assoc_fst (fst last) a /\ mem_assoc_fst (fst last) (diff a l) /\
-                   (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff p l) ==> lt id id1)))
+                   (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff p l) ==> id < id1)))
   = un_snoc_prop a;
     lem_diff a l;
     un_snoc_prop (diff a l);
@@ -204,8 +202,8 @@ let inverse_diff_id_s1' (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ 
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (forall id. mem_assoc_fst id (diff (fst (un_snoc a)) l) ==> not (mem_assoc_fst id (diff b l))))
   = un_snoc_prop a;
@@ -217,8 +215,8 @@ let inverse_diff_id_s2' (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length b > length l /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff (fst (un_snoc b)) l))))
   = un_snoc_prop b;
@@ -230,8 +228,8 @@ let inverse_diff_id_s1'_s2' (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ length b > length l /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (forall id. mem_assoc_fst id (diff (fst (un_snoc a)) l) ==> not (mem_assoc_fst id (diff (fst (un_snoc b)) l))))
   = un_snoc_prop a;
@@ -247,8 +245,8 @@ let lastop_neq (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ length b > length l /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (let p, la = un_snoc a in
                     let _, lb = un_snoc b in
@@ -345,7 +343,7 @@ let pre_suf_prop (#t1 #t2:eqtype) (l:seq_assoc t1 t2) (x:(t1 & t2))
 
 let lt_is_neq (#t:eqtype) (lca s1:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst s1 /\ is_prefix lca s1 /\ 
-                    (forall id id1. mem_assoc_fst id lca /\ mem_assoc_fst id1 (diff s1 lca) ==> lt id id1))
+                    (forall id id1. mem_assoc_fst id lca /\ mem_assoc_fst id1 (diff s1 lca) ==> id < id1))
           (ensures (forall id. mem_assoc_fst id lca ==> not (mem_assoc_fst id (diff s1 lca)))) (decreases length lca) =
   let s = snd (split s1 (length lca)) in
   lemma_split s1 (length lca);
@@ -539,8 +537,8 @@ let lem_id_s2' (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length b > length l /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (let b',lastop = un_snoc b in
                     not (mem_assoc_fst (fst lastop) l) /\
@@ -549,20 +547,20 @@ let lem_id_s2' (#t:eqtype) (l a b:seq_assoc pos t)
   let b', lastop = un_snoc b in
   lemma_append_count_assoc_fst b' (create 1 lastop);
   distinct_invert_append b' (create 1 lastop);
-  //assert (not (mem_id (fst lastop) b'));
+  assert (not (mem_assoc_fst (fst lastop) b'));
   lem_suf_equal2_last l b;
-  //assert (not (mem_id (fst lastop) l) );
+  assert (not (mem_assoc_fst (fst lastop) l) );
   lem_diff a l;
   lastop_diff l b;
-  //assert (not (mem_id (fst lastop) a));
+  assert (not (mem_assoc_fst (fst lastop) a));
   ()
 
 let lem_id_s1' (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (let a',lastop = un_snoc a in
                     not (mem_assoc_fst (fst lastop) l) /\
@@ -571,20 +569,20 @@ let lem_id_s1' (#t:eqtype) (l a b:seq_assoc pos t)
   let a', lastop = un_snoc a in
   lemma_append_count_assoc_fst a' (create 1 lastop);
   distinct_invert_append a' (create 1 lastop);
-  //assert (not (mem_id (fst lastop) a')); 
+  assert (not (mem_assoc_fst (fst lastop) a')); 
   lem_suf_equal2_last l a;
-  //assert (not (mem_id (fst lastop) l) );
+  assert (not (mem_assoc_fst (fst lastop) l) );
   lem_diff b l;
   lastop_diff l a;
-  //assert (not (mem_id (fst lastop) b));
+  assert (not (mem_assoc_fst (fst lastop) b));
   () 
 
 let inverse_diff_id_last2 (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ length b > length l /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (let pre2, last2 = un_snoc b in
                     let pre1, last1 = un_snoc a in
@@ -614,8 +612,8 @@ let inverse_diff_id_last1 (#t:eqtype) (l a b:seq_assoc pos t)
   : Lemma (requires distinct_assoc_fst l /\ distinct_assoc_fst a /\ distinct_assoc_fst b /\
                     is_prefix l a /\ is_prefix l b /\
                     length a > length l /\ length b > length l /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> lt id id1) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> lt id id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff a l) ==> id < id1) /\
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff b l) ==> id < id1) /\
                     (forall id. mem_assoc_fst id (diff a l) ==> not (mem_assoc_fst id (diff b l))))
           (ensures (let pre2, last2 = un_snoc b in
                     let pre1, last1 = un_snoc a in
@@ -780,13 +778,13 @@ let lt_snoc (#t:eqtype) (l a:seq_assoc pos t) (op:(pos & t))
                     is_prefix l a /\
                     is_prefix l (snoc a op) /\
                     is_prefix l (snoc (fst (un_snoc a)) op) /\
-                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff (snoc a op) l) ==> lt id id1))
+                    (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff (snoc a op) l) ==> id < id1))
           (ensures (let a',_ = un_snoc a in
-                   (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff (snoc a' op) l) ==> lt id id1))) = 
+                   (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (diff (snoc a' op) l) ==> id < id1))) = 
   let a',lastop = un_snoc a in
   lemma_append_count_assoc_fst a' (create 1 lastop);
   lastop_diff l (snoc a op);
-  assert (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (fst (un_snoc (diff (snoc a op) l))) ==> lt id id1);
+  assert (forall id id1. mem_assoc_fst id l /\ mem_assoc_fst id1 (fst (un_snoc (diff (snoc a op) l))) ==> id < id1);
   assume (fst (un_snoc (diff (snoc a op) l)) == (diff (snoc a' op) l) ); //todo
   ()
 
