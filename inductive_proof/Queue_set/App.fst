@@ -506,15 +506,7 @@ let rec linearizable_gt0_ind1_dd_stf (lca s1' s2':st) (last1 last2:op_t)
          (assume (consistent_branches lca s1' (do_st s2' last2) /\ //todo
                   consistent_branches lca s1'' s2' /\    //todo
                   consistent_branches lca s1' s2'); //todo
-         lem_apply_log init_st (ops_of s1'); last_deq (v_of s1'') last1'; valid_is_unique s1''; 
-         linearizable_gt0_ind1_dd_stf lca s1'' s2' last1' last2;
-         last_deq (concrete_merge (v_of lca) (v_of s1') (v_of s2')) last2;
-         merge_prop (v_of lca) (v_of s1') (do (v_of s2') last2);
-         merge_prop (v_of lca) (v_of s1') (v_of s2');
-         merge_prop1 (v_of lca) (v_of s1') (v_of s2') min2;        
-         min_in_inter (v_of lca) (v_of s1') (v_of s2') min2;
-         min_in_inter (v_of lca) (do (v_of s1') last1) (v_of s2') min2;
-         last_deq (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2')) last2)
+         linearizable_gt0_ind1_dd_stf lca s1'' s2' last1' last2)
       else 
         (assert (Enqueue? (fst (snd last1'))); 
          let last1_new = (fst last1, (fst (snd last1), return (v_of s1'') last1)) in
