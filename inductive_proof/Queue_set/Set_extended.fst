@@ -21,8 +21,9 @@ let add (#a:eqtype) (ele:a) (s:set a) =
   if mem ele s then s else ele::s
 
 let add_mem (#a:eqtype) (ele:a) (s:set a) (x:a)
-  : Lemma (ensures (mem ele s ==> (add ele s == s)) /\
-                   (not (mem ele s) ==> (mem x (add ele s) <==> (mem x s \/ x == ele)))) = ()
+  : Lemma (ensures (mem ele s ==> (add ele s = s)) /\
+                   (not (mem ele s) ==> (mem x (add ele s) <==> (mem x s \/ x == ele))) /\
+                   (s = empty ==> (mem x (add ele s) <==> x = ele))) = ()
 
 let union (#a:eqtype) (s1:set a) (s2:set a) =
   List.Tot.Base.append s1 s2
@@ -117,7 +118,7 @@ let rec mem_find_if_exists (#a:eqtype) (s:set a) (f:a -> bool)
   match s with
   |[] -> ()
   |x::xs -> if f x then () else mem_find_if_exists xs f
-
+ 
 let rec always_min_exists (#a:eqtype) (s:set (pos * a)) 
   : Lemma (ensures (s <> empty ==> (exists (e:(pos * a)). mem e s /\ (forall (e1:(pos * a)). mem e1 s ==> fst e <= fst e1)))) =
   match s with
@@ -153,11 +154,13 @@ let mem_remove_min (#a:eqtype) (s:set (pos * a))
   : Lemma (ensures (let r = remove_min s in
                    (s = empty <==> r = s) /\
                    (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract (find_min s)))) /\
-                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s)))) = 
+                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s)) /\
+                   ((exists ele. (forall e. mem e s <==> e = ele)) ==> r = empty))) = 
   always_min_exists s
 
 let mem_id_s (#a:eqtype) (id:pos) (s:set (pos * a)) 
-  : (b:bool{b = true <==> (exists e. mem e s /\ fst e = id)}) =
+  : (b:bool{(b = true <==> (exists e. mem e s /\ fst e = id)) /\
+            ((forall ele. mem (id, ele) s ==> b = true))}) =
   exists_s s (fun e -> fst e = id)
 
 let same_uni (#a:eqtype) (s1 s2:set (pos & a)) (min1:(pos & a))

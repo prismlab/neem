@@ -88,7 +88,8 @@ let rec lem_apply_log (x:concrete_st) (l:log)
                                     (apply_log x l == do (apply_log x (fst (un_snoc l))) (last l))) /\
                    ((length l > 0 /\ apply_log_ret x l) ==> apply_log_ret x (fst (un_snoc l)) /\
                            (let pre, lastop = un_snoc l in
-                            return (apply_log x pre) lastop == ret_of lastop)))
+                            return (apply_log x pre) lastop == ret_of lastop)) /\
+                   (forall x1. x == x1 ==> apply_log_ret x l == apply_log_ret x1 l))
           (decreases length l) =
   match length l with
   |0 -> ()

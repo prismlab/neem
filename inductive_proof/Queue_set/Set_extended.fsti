@@ -16,8 +16,9 @@ val equal_mem (#a:eqtype) (s1:set a) (s2:set a)
 
 val add (#a:eqtype) (ele:a) (s:set a) : set a
 val add_mem (#a:eqtype) (ele:a) (s:set a) (x:a)
-  : Lemma (ensures (mem ele s ==> (add ele s == s)) /\
-                   (not (mem ele s) ==> (mem x (add ele s) <==> (mem x s \/ x == ele))))
+  : Lemma (ensures (mem ele s ==> (add ele s = s)) /\
+                   (not (mem ele s) ==> (mem x (add ele s) <==> (mem x s \/ x == ele))) /\
+                   (s = empty ==> (mem x (add ele s) <==> x = ele)))
     [SMTPat (mem x (add ele s))]
     
 val union (#a:eqtype) (s1:set a) (s2:set a) : set a
@@ -110,11 +111,13 @@ val mem_remove_min (#a:eqtype) (s:set (pos * a))
   : Lemma (ensures (let r = remove_min s in
                    (s = empty <==> r = s) /\
                    (s <> empty /\ Some? (find_min s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract (find_min s)))) /\
-                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s))))
+                   (s <> empty /\ None? (find_min s) ==> (forall e. mem e r <==> mem e s)) /\
+                   ((exists ele. (forall e. mem e s <==> e = ele)) ==> r = empty)))
     [SMTPat (remove_min s)]
 
 val mem_id_s (#a:eqtype) (id:pos) (s:set (pos * a)) 
-  : (b:bool{b = true <==> (exists e. mem e s /\ fst e = id)})
+  : (b:bool{(b = true <==> (exists e. mem e s /\ fst e = id)) /\
+            ((forall ele. mem (id, ele) s ==> b = true))})
 
 val same_uni (#a:eqtype) (s1 s2:set (pos & a)) (min1:(pos & a))
   : Lemma (requires unique_st s1 /\ (forall e. mem e s2 <==> mem e s1 /\ e <> min1))

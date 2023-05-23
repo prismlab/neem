@@ -120,6 +120,29 @@ let rec lem_un_snoc_id (#t1 #t2:eqtype) (a b:seq_assoc t1 t2)
 let one_is_unique (#t1 #t2:eqtype) (s:(t1 & t2))
   : Lemma (ensures distinct_assoc_fst (create 1 s)) = ()
 
+let rec id_count_1 (#t:eqtype) (ele:(pos & t)) (l:seq_assoc pos t)
+  : Lemma (requires mem ele l)
+          (ensures count_assoc_fst (fst ele) l > 0) 
+          (decreases length l) =
+  match length l with
+  |0 -> ()
+  |_ -> if head l = ele then () else id_count_1 ele (tail l)
+
+let rec id_count_2 (#t:eqtype) (ele ele1:(pos & t)) (l:seq_assoc pos t)
+  : Lemma (requires mem ele l /\ mem ele1 l /\ fst ele = fst ele1 /\ snd ele <> snd ele1)
+          (ensures count_assoc_fst (fst ele) l > 1 /\ ~ (distinct_assoc_fst l)) 
+          (decreases length l) =
+  match length l with
+  |0 -> ()
+  |1 -> ()
+  |_ -> if head l = ele then
+          (id_count_1 ele1 (tail l);
+           id_count_1 ele (create 1 (head l)))
+       else if head l = ele1 then
+          (id_count_1 ele (tail l);
+           id_count_1 ele1 (create 1 (head l)))
+       else id_count_2 ele ele1 (tail l)
+
 let lem_diff (#t1 #t2:eqtype) (s1 l:seq_assoc t1 t2)
   : Lemma (requires distinct_assoc_fst s1 /\ is_prefix l s1)
           (ensures distinct_assoc_fst (diff s1 l) /\ 
@@ -129,7 +152,7 @@ let lem_diff (#t1 #t2:eqtype) (s1 l:seq_assoc t1 t2)
                     mem_assoc_fst (fst (last s1)) (diff s1 l) /\
                      (let _, l1 = un_snoc s1 in
                       let _, ld = un_snoc (diff s1 l) in
-                      l1 = ld) /\
+                      l1 = ld /\ mem_assoc_fst (fst l1) (diff s1 l)) /\
                      (let s1',lastop = un_snoc s1 in 
                        diff s1' l == fst (un_snoc (diff s1 l)))))
   = lemma_append_count_assoc_fst l (diff s1 l);
