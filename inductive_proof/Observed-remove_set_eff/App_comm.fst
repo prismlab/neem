@@ -4,7 +4,7 @@ module S = Set_extended
 
 #set-options "--query_stats"
 // the concrete state type
-type concrete_st = S.set (nat * nat)
+type concrete_st = S.set (pos * nat)
 
 let init_st = S.empty
 
@@ -34,17 +34,17 @@ let get_ele (o:op_t) : nat =
   |Add e -> e
   |Rem e -> e
 
-let mem_ele (ele:nat) (s:S.set (nat * nat))
+let mem_ele (ele:nat) (s:S.set (pos * nat))
   = S.exists_s s (fun e -> snd e = ele)
 
-let mem_id_s (id:nat) (s:S.set (nat * nat))
+let mem_id_s (id:nat) (s:S.set (pos * nat))
   = S.exists_s s (fun e -> fst e = id)
 
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
   |(id, Add e) -> let r = S.remove_if s (fun ele -> snd ele = e) in
-                 S.union (S.singleton (id, e)) r
+                 S.add (id, e) r
   |(_, Rem e) -> S.remove_if s (fun ele -> snd ele = e)
 
 let lem_do (a b:concrete_st) (op:op_t)
@@ -268,7 +268,7 @@ let rec lem_l1a_base (lca s1 s2:st) (last1 last2:op_t)
      lem_l1a_base  l' l' l' last1 last2;
      mem_ele_id (last (ops_of lca)) (ops_of lca))
 
-let rec lem_l1a_s20 (lca s1 s2:st) (last1 last2:op_t) //check
+let rec lem_l1a_s20 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ops_of s2 = ops_of lca /\
                     is_prefix (ops_of lca) (ops_of s1) /\
                     Add? (snd last1) /\ 
@@ -279,7 +279,8 @@ let rec lem_l1a_s20 (lca s1 s2:st) (last1 last2:op_t) //check
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
           (decreases %[length (ops_of s1)]) =
-  if ops_of s1 = ops_of lca then ()
+  if ops_of s1 = ops_of lca then 
+    lem_l1a_base lca s1 s2 last1 last2
   else 
     lem_l1a_s20 lca (inverse_st s1) s2 last1 last2
      
@@ -525,7 +526,7 @@ let rec lem_foldl (s:concrete_st) (l:log)
   match length l with
   |0 -> ()
   |_ -> lem_foldl (do s (head l)) (tail l)
-  
+
 let lem_l2a'_s20_s1_gt0_c1 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ops_of s2 = ops_of lca /\
                     is_prefix (ops_of lca) (ops_of s1) /\
@@ -720,6 +721,24 @@ let lem_l2r_s10p (lca s1 s2:st)
   inverse_diff_id_s2' (ops_of lca) (ops_of s1) (ops_of s2);
   lem_id_s2' (ops_of lca) (ops_of s1) (ops_of s2)
 
+let rec lem_l2r_base (lca s1 s2:st) (last2:op_t)
+ : Lemma (requires consistent_branches lca s1 s2 /\ 
+                   ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
+                   Rem? (snd last2) /\
+                   not (mem_id (fst last2) (ops_of lca)) /\
+                   not (mem_id (fst last2) (ops_of s1)) /\
+                   not (mem_id (fst last2) (ops_of s2)) /\
+                   not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                   is_prefix (ops_of lca) (ops_of s2))
+          (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)))
+          (decreases length (ops_of lca)) = 
+  if length (ops_of lca) = 0 then ()
+  else 
+    (let l' = inverse_st lca in
+     lem_l2r_base  l' l' l' last2;
+     mem_ele_id (last (ops_of lca)) (ops_of lca))
+                     
 let rec lem_l2r_s10 (lca s1 s2:st) (last2:op_t)
  : Lemma (requires consistent_branches lca s1 s2 /\ 
                    ops_of s1 = ops_of lca /\
@@ -732,7 +751,8 @@ let rec lem_l2r_s10 (lca s1 s2:st) (last2:op_t)
           (ensures eq (do (concrete_merge (v_of lca) (v_of s1) (v_of s2)) last2)
                       (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)))
          (decreases %[length (ops_of s2)]) =
-   if ops_of s2 = ops_of lca then ()
+   if ops_of s2 = ops_of lca then 
+     lem_l2r_base lca s1 s2 last2
    else 
      (lem_l2r_s10p lca s1 s2;
       lem_l2r_s10 lca s1 (inverse_st s2) last2)
@@ -907,7 +927,7 @@ let lem_l2r_neq_p2 (lca s1 s2:st)
  lem_l2r_neq_p2' (diff (ops_of s1) (ops_of lca)) last2
 
 #push-options "--z3rlimit 100"
-let lem_l2r_ind (lca s1 s2:st)        ///!!CHECK
+let lem_l2r_ind (lca s1 s2:st)  
   : Lemma (requires (Seq.length (ops_of s1) > Seq.length (ops_of lca) /\
                     (let s1' = inverse_st s1 in
                     consistent_branches_s2_gt0 lca s1 s2 /\
@@ -991,7 +1011,7 @@ let init_st_s = S.empty
 // apply an operation to a state 
 let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s =
   match snd o with
-  |(Add e) -> S.union (S.singleton e) st_s
+  |(Add e) -> S.add e st_s
   |(Rem e) -> S.remove_if st_s (fun ele -> ele = e) 
 
 //equivalence relation between the concrete states of sequential type and MRDT
@@ -1005,6 +1025,9 @@ let initial_eq (_:unit)
 //equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
-          (ensures eq_sm (do_s st_s op) (do st op)) = ()
+          (ensures eq_sm (do_s st_s op) (do st op)) = 
+  if Add? (snd op) then 
+    (if S.mem (get_ele op) st_s then () else ()) 
+  else ()
 
 ////////////////////////////////////////////////////////////////
