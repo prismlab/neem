@@ -492,10 +492,12 @@ let rec lem_l2a'_base (lca s1 s2:st) (last1 last2:op_t)
      lem_l2a'_base  l' l' l' last1 last2;
      mem_ele_id (last (ops_of lca)) (ops_of lca))
 
-let lem_l2a'_s20_s1_gt0_l1_neq_help (lca s1 s2:st) (last2:op_t)
+let lem_l2a'_s20_s1_gt0_l1_neq_help (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ops_of s2 = ops_of lca /\
                     is_prefix (ops_of lca) (ops_of s1) /\
                     length (ops_of s1) > length (ops_of lca) /\
+                    not (mem_id (fst last1) (ops_of lca)) /\
+                    not (mem_id (fst last2) (ops_of lca)) /\
                     Add? (snd last2) /\ 
                     not (exists_triple last2 (diff (ops_of s1) (ops_of lca))))
           (ensures (let _, last1' = un_snoc (ops_of s1) in
@@ -638,7 +640,7 @@ let rec lem_l2a'_s20 (lca s1 s2:st) (last1 last2:op_t)
     (let s1' = inverse_st s1 in
      let pre1, lastop = un_snoc (ops_of s1) in
      lem_inverse (ops_of lca) (ops_of s1);
-     lem_l2a'_s20_s1_gt0_l1_neq_help lca s1 s2 last2;
+     lem_l2a'_s20_s1_gt0_l1_neq_help lca s1 s2 last1 last2;
      let _, last1' = un_snoc (ops_of s1) in
      assert (~ (Add? (snd last1') /\ get_ele last1' = get_ele last2 /\ fst last1' > fst last2));
      if Rem? (snd last1') && get_ele last1' = get_ele last2 then
