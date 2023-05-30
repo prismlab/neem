@@ -37,8 +37,13 @@ let get_ele (o:op_t) : nat =
 let mem_ele (ele:nat) (s:concrete_st) : bool =
   S.exists_s s (fun e -> snd e = ele)
 
+let mem_id_s (id:nat) (s:concrete_st) : bool =
+  S.exists_s s (fun e -> fst e = id)
+  
 // apply an operation to a state
-let do (s:concrete_st) (o:op_t) : concrete_st =
+let do (s:concrete_st) (o:op_t)
+  : (r:concrete_st{(Rem? (snd o) ==> (forall e. S.mem e s /\ snd e <> get_ele o <==> S.mem e r)) /\
+                   (Add? (snd o) ==> (forall e. S.mem e s \/ e = (fst o, get_ele o) <==> S.mem e r))}) =
   match o with
   |(id, Add e) -> S.add (id, e) s
   |(id, Rem e) -> S.remove_if s (fun ele -> snd ele = e)
@@ -63,7 +68,11 @@ let resolve_conflict_prop (x y:op_t)
   = ()
 
 (*merge l a b == (intersect l a b) U (a - l) U (b - l)*)
-let concrete_merge (lca s1 s2:concrete_st) : Tot concrete_st =
+let concrete_merge (lca s1 s2:concrete_st) 
+  : Tot (m:concrete_st{forall e. S.mem e m <==>
+                            ((S.mem e lca /\ S.mem e s1 /\ S.mem e s2) \/
+                            (S.mem e s1 /\ not (S.mem e lca)) \/
+                            (S.mem e s2 /\ not (S.mem e lca)))}) =
   let da = S.remove_if s1 (fun e -> S.mem e lca) in    //a - l
   let db = S.remove_if s2 (fun e -> S.mem e lca) in    //b - l
   let i_la = S.intersect lca s1 in
@@ -739,55 +748,46 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
 
 ////////////////////////////////////////////////////////////////
 
-let merge_pre (lca s1 s2:concrete_st) = 
-  let da = S.remove_if s1 (fun e -> S.mem e lca) in
-  let db = S.remove_if s2 (fun e -> S.mem e lca) in
-  (forall id id1. S.mem_id_s id lca /\ S.mem_id_s id1 da ==> id < id1) /\
-  (forall id id1. S.mem_id_s id lca /\ S.mem_id_s id1 db ==> id < id1) /\
-  (forall id. S.mem_id_s id da ==> not (S.mem_id_s id db))
+let merge_pre (lca s1 s2:concrete_st) =
+  (forall e. (S.mem e s1 /\ S.mem e s2) ==> S.mem e lca)
 
-#push-options "--z3rlimit 200"
-let rec convergence1 (lca s1 s2 s1':st) (o:op_t)
+#push-options "--z3rlimit 100"
+let convergence1 (lca s1 s2 s1':st) (o:op_t)
   : Lemma (requires s1 == do_st s1' o /\
-                    merge_pre (v_of lca) (v_of s1) (v_of s2) /\
-                    merge_pre (v_of lca) (v_of s1') (v_of s2) /\
-                    merge_pre (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (v_of s1) /\
-                    //Rem? (snd o) /\
-                    //v_of s1 = do (v_of s1') o /\
                     consistent_branches lca s1 s2 /\
-                    consistent_branches lca s1' s2 /\
-                    //(exists l1 l2. apply_log (v_of lca) l1 == v_of s1 /\ apply_log (v_of lca) l2 == v_of s2) /\
-                    //(exists l1 l2. apply_log (v_of lca) l1 == v_of s1') /\
-                    (exists (l1 l2:log). apply_log (v_of s1') l1 == (concrete_merge (v_of lca) (v_of s1') (v_of s2))) (*/\
-                    (exists l2. apply_log (v_of s1') l2 == v_of s1*))
+                    consistent_branches lca s1' s2)
           (ensures eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
-                      (concrete_merge (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (v_of s1))) 
-          (decreases %[length (ops_of s2)]) =
-  (*if ops_of lca = ops_of s2 then
-    ()
+                      (concrete_merge (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (v_of s1))) =
+  let ele = get_ele o in
+  if Add? (snd o) then
+    (assume (not (S.mem_id_s (fst o) (v_of lca))); ())
   else 
-    (let s2' = inverse_st s2 in
-     assume (consistent_branches lca s1 s2' /\
-             consistent_branches lca s1' s2' /\
-             (exists (l1 l2:log). apply_log (v_of s1') l1 == (concrete_merge (v_of lca) (v_of s1') (v_of s2'))));
-     convergence1 lca s1 s2' s1' o;
-     ())*) ()
-  
-  (*assume (ops_of s1 == snoc (ops_of s1') o); 
-  if ops_of lca = ops_of s1' then
-    ()
+    (match mem_ele ele (v_of lca), mem_ele ele (v_of s1'), mem_ele ele (v_of s2) with
+       |_, false, _ -> () //done
+       |_, true, false -> () //done
+       |true, true, true -> (assume (merge_pre (v_of lca) (v_of s1') (v_of s2)); ())
+       |false, true, true -> (assume (merge_pre (v_of lca) (v_of s1') (v_of s2)); ()))
+                      
+let rec convergence2 (lca s2 s3 lca' s1':st)
+  : Lemma (requires consistent_branches lca' s3 s1' /\
+                    consistent_branches lca s1' s2)
+          (ensures eq (concrete_merge (v_of lca) (concrete_merge (v_of lca') (v_of s3) (v_of s1')) (v_of s2)) 
+                      (concrete_merge (v_of s1') 
+                                      (concrete_merge (v_of lca) (v_of s1') (v_of s2)) 
+                                      (concrete_merge (v_of lca') (v_of s3) (v_of s1')))) 
+          (decreases length (ops_of s3)) =
+  if ops_of s3 = ops_of lca' then ()
   else 
-    (let s1'' = inverse_st s1' in
-     let pre, lastop = un_snoc (ops_of s1') in
-     lem_last (ops_of s1');
-     assume (s1' == do_st s1'' lastop /\
-             consistent_branches lca s1' s2 /\
-             consistent_branches lca s1'' s2 /\
-             (exists (l1 l2:log). apply_log (v_of s1'') l1 == (concrete_merge (v_of lca) (v_of s1'') (v_of s2))));
-     //assume (eq (concrete_merge (v_of lca) (v_of s1') (v_of s2)) 
-               // (concrete_merge (v_of s1'') (concrete_merge (v_of lca) (v_of s1'') (v_of s2)) (v_of s1')));
-     convergence1 lca s1' s2 s1'' lastop;
-     ())*)
-
-
-#pop-options
+    (let s3' = inverse_st s3 in
+     let pre, lastop = un_snoc (ops_of s3) in
+     lem_last (ops_of s3);
+     lemma_mem_snoc pre lastop; 
+     lem_inverse (ops_of lca') (ops_of s3);
+     inverse_diff_id_s1' (ops_of lca') (ops_of s3) (ops_of s1');
+     lastop_diff (ops_of lca') (ops_of s3);
+     if Add? (snd lastop) then
+       (assume (not (S.mem_id_s (fst lastop) (v_of lca)));
+        convergence2 lca s2 s3' lca' s1')
+     else
+       (assume (merge_pre (v_of lca) (v_of s1') (v_of s2));
+        convergence2 lca s2 s3' lca' s1')) 

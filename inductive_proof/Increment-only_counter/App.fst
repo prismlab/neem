@@ -157,3 +157,25 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
           (ensures eq_sm (do_s st_s op) (do st op)) = ()
 
 ////////////////////////////////////////////////////////////////
+
+#push-options "--z3rlimit 50"
+let convergence1 (lca s1 s2 s1':st) (o:op_t)
+  : Lemma (requires s1 == do_st s1' o /\
+                    consistent_branches lca s1 s2 /\
+                    consistent_branches lca s1' s2 /\
+                    (exists l1 l2. apply_log (v_of s1') l1 == (concrete_merge (v_of lca) (v_of s1') (v_of s2)) /\ 
+                              apply_log (v_of s1') l2 == v_of s1))
+          (ensures eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
+                      (concrete_merge (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (v_of s1))) = ()
+
+let convergence2 (lca s2 s3 lca' s1':st)
+  : Lemma (requires consistent_branches lca' s3 s1' /\
+                    consistent_branches lca s1' s2 /\
+                    (exists l1. apply_log (v_of lca) l1 == (concrete_merge (v_of lca') (v_of s3) (v_of s1'))) /\
+                    (exists l1 l2. apply_log (v_of s1') l1 == (concrete_merge (v_of lca) (v_of s1') (v_of s2)) /\ 
+                              apply_log (v_of s1') l2 == (concrete_merge (v_of lca') (v_of s3) (v_of s1'))))
+          (ensures eq (concrete_merge (v_of lca) (concrete_merge (v_of lca') (v_of s3) (v_of s1')) (v_of s2)) 
+                      (concrete_merge (v_of s1') 
+                                      (concrete_merge (v_of lca) (v_of s1') (v_of s2)) 
+                                      (concrete_merge (v_of lca') (v_of s3) (v_of s1')))) = ()
+#pop-options
