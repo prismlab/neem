@@ -751,23 +751,48 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
 let merge_pre (lca s1 s2:concrete_st) =
   (forall e. (S.mem e s1 /\ S.mem e s2) ==> S.mem e lca)
 
-#push-options "--z3rlimit 100"
-let convergence1 (lca s1 s2 s1':st) (o:op_t)
-  : Lemma (requires s1 == do_st s1' o /\
-                    consistent_branches lca s1 s2 /\
-                    consistent_branches lca s1' s2)
-          (ensures eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
-                      (concrete_merge (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (v_of s1))) =
-  let ele = get_ele o in
+
+#push-options "--z3rlimit 50"
+let rec convergence1 (lca s1' s2:st) (o:op_t)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1'))
+          (ensures eq (concrete_merge (v_of lca) (do (v_of s1') o) (v_of s2)) 
+                      (concrete_merge (v_of s1') (do (v_of s1') o) (concrete_merge (v_of lca) (v_of s1') (v_of s2))))
+          (decreases %[length (ops_of s1')]) = 
+  let ele = (fst o, get_ele o) in
+  if ops_of s1' = ops_of lca then () //done
+  else 
+    (let s1'' = inverse_st s1' in
+     let pre, lastop = un_snoc (ops_of s1') in
+     //lemma_mem_snoc pre lastop;
+     //lem_last (ops_of s1');
+     lem_inverse (ops_of lca) (ops_of s1');
+     if Add? (snd o) then
+       (if S.mem ele (v_of lca) && not (S.mem ele (v_of s1')) && not (S.mem ele (v_of s2)) then 
+         (if Add? (snd lastop) then 
+            convergence1 lca s1'' s2 o //done
+          else 
+            (if get_ele o = get_ele lastop then 
+              (assert (mem_ele (get_ele o) (v_of lca) && not (mem_ele (get_ele o) (v_of s1')));            
+               if S.mem ele (v_of s1'') then admit() //spurious case          
+               else convergence1 lca s1'' s2 o) //done
+             else convergence1 lca s1'' s2 o)) //done
+        else ()) //done
+     
+     else 
+       (if S.exists_s (v_of s1') (fun e -> snd e = get_ele o && S.mem e (v_of s2) && not (S.mem e (v_of lca))) then 
+           admit() //spurious case
+        else ()))
+
+  (*let ele = get_ele o in
   if Add? (snd o) then
     (assume (not (S.mem_id_s (fst o) (v_of lca))); ())
   else 
     (match mem_ele ele (v_of lca), mem_ele ele (v_of s1'), mem_ele ele (v_of s2) with
-       |_, false, _ -> () //done
-       |_, true, false -> () //done
        |true, true, true -> (assume (merge_pre (v_of lca) (v_of s1') (v_of s2)); ())
-       |false, true, true -> (assume (merge_pre (v_of lca) (v_of s1') (v_of s2)); ()))
-                      
+       |false, true, true -> (assume (merge_pre (v_of lca) (v_of s1') (v_of s2)); ())
+       |_ -> ())*)
+
+#push-options "--z3rlimit 200"
 let rec convergence2 (lca s2 s3 lca' s1':st)
   : Lemma (requires consistent_branches lca' s3 s1' /\
                     consistent_branches lca s1' s2)
