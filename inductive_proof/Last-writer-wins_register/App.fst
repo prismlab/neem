@@ -44,7 +44,7 @@ let concrete_merge (lca s1 s2:concrete_st)
   : Pure concrete_st
          (requires (exists l1 l2. apply_log lca l1 == s1 /\ apply_log lca l2 == s2))
          (ensures (fun _ -> True)) =
-  if fst s1 = fst s2 then lca else if fst s1 < fst s2 then s2 else s1
+  if fst s1 < fst s2 then s2 else s1
 
 let rec lem_foldl (s:concrete_st) (l:log)
   : Lemma (requires true)
@@ -220,7 +220,7 @@ let do_prop (s:concrete_st) (o:op_t)
 
 let concrete_merge1 (lca s1 s2:concrete_st) : Tot concrete_st =
   if fst s1 < fst s2 then s2 else s1
-
+        
 #push-options "--z3rlimit 300"
 let convergence1 (lca s1' s2:st) (o:op_t)
   : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
@@ -255,19 +255,10 @@ let convergence1 (lca s1' s2:st) (o:op_t)
         ()) //done
      else ()) //done
 
-let convergence2 (lca s2 s3 lca' s1':st)
-  : Lemma (requires consistent_branches lca' s3 s1' /\
-                    consistent_branches lca s1' s2 /\
-                    (exists l1. apply_log (v_of lca) l1 == (concrete_merge (v_of lca') (v_of s3) (v_of s1'))) /\
-                    (exists l1 l2. apply_log (v_of s1') l1 == (concrete_merge (v_of lca) (v_of s1') (v_of s2)) /\ 
-                              apply_log (v_of s1') l2 == (concrete_merge (v_of lca') (v_of s3) (v_of s1'))))
-          (ensures eq (concrete_merge (v_of lca) (concrete_merge (v_of lca') (v_of s3) (v_of s1')) (v_of s2)) 
-                      (concrete_merge (v_of s1') 
-                                      (concrete_merge (v_of lca) (v_of s1') (v_of s2)) 
-                                      (concrete_merge (v_of lca') (v_of s3) (v_of s1')))) = 
-  assume (merge_pre (v_of lca) (concrete_merge (v_of lca') (v_of s3) (v_of s1')) (v_of s2) /\
-          merge_pre (v_of lca) (v_of s1') (v_of s2) /\
-          merge_pre (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) 
-                               (concrete_merge (v_of lca') (v_of s3) (v_of s1'))); //assumption
-  ()
+let convergence2 (lca' lca s3 s1' s2:st)
+  : Lemma (requires true)
+          (ensures eq (concrete_merge1 (v_of lca') (concrete_merge1 (v_of lca) (v_of s3) (v_of s1')) (v_of s2)) 
+                      (concrete_merge1 (v_of s1') 
+                                       (concrete_merge1 (v_of lca) (v_of s3) (v_of s1'))
+                                       (concrete_merge1 (v_of lca') (v_of s1') (v_of s2)))) = () //done
 #pop-options
