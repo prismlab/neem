@@ -23,7 +23,8 @@ val add_mem (#a:eqtype) (ele:a) (s:set a) (x:a)
     
 val union (#a:eqtype) (s1:set a) (s2:set a) : set a
 val union_mem (#a:eqtype) (s1:set a) (s2:set a) (x:a)
-  : Lemma (ensures mem x (union s1 s2) <==> (mem x s1 \/ mem x s2))
+  : Lemma (ensures (mem x (union s1 s2) <==> (mem x s1 \/ mem x s2)) /\
+                   (not (mem x (union s1 s2)) <==> (not (mem x s1) /\ not (mem x s2))))
     [SMTPat (mem x (union s1 s2))]
 
 val intersect (#a:eqtype) (s1:set a) (s2:set a) : set a
@@ -36,6 +37,11 @@ val remove_if_mem (#a:eqtype) (s:set a) (f:a -> bool) (x:a)
   : Lemma (ensures mem x (remove_if s f) <==> (mem x s /\ ~ (f x))) 
     [SMTPat (mem x (remove_if s f))]
 
+val diff (#a:eqtype) (s1 s2:set a) : set a
+val diff_mem (#a:eqtype) (s1 s2:set a) (x:a)
+  : Lemma (ensures mem x (diff s1 s2) <==> (mem x s1 /\ ~ (mem x s2))) 
+    [SMTPat (mem x (diff s1 s2))]
+    
 val filter_s (#a:eqtype) (s:set a) (f:a -> bool) : set a
 val filter_mem (#a:eqtype) (s:set a) (f:a -> bool) (x:a)
   : Lemma (ensures (mem x (filter_s s f) <==> (mem x s /\ f x)))

@@ -29,7 +29,8 @@ let union (#a:eqtype) (s1:set a) (s2:set a) =
   List.Tot.Base.append s1 s2
 
 let union_mem (#a:eqtype) (s1:set a) (s2:set a) (x:a)
-  : Lemma (ensures mem x (union s1 s2) <==> (mem x s1 \/ mem x s2)) =
+  : Lemma (ensures (mem x (union s1 s2) <==> (mem x s1 \/ mem x s2)) /\
+                   (not (mem x (union s1 s2)) <==> (not (mem x s1) /\ not (mem x s2)))) =
   append_mem_forall s1 s2
 
 let rec remove (#a:eqtype) (ele:a) (s1:set a) : (r:set a{forall e. mem e r <==> mem e s1 /\ e <> ele}) =
@@ -60,6 +61,15 @@ let rec remove_if_mem (#a:eqtype) (s:set a) (f:a -> bool) (x:a)
   |[] -> ()
   |x1::xs -> remove_if_mem xs f x
 
+let diff (#a:eqtype) (s1 s2:set a) : set a =
+  remove_if s1 (fun e -> mem e s2)
+
+let rec diff_mem (#a:eqtype) (s1 s2:set a) (x:a)
+  : Lemma (ensures mem x (diff s1 s2) <==> (mem x s1 /\ ~ (mem x s2)))  =
+  match s1 with
+  |[] -> ()
+  |x1::xs -> diff_mem xs s2 x
+  
 let rec filter_s (#a:eqtype) (s:set a) (f:a -> bool) =
   match s with
   |[] -> []
