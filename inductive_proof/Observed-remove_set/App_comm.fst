@@ -1,10 +1,11 @@
 module App_comm
 
-module S = Set_extended
+open SeqUtils
+module S = Set_extended_new
 
 #set-options "--query_stats"
 // the concrete state type
-type concrete_st = S.set (pos * nat)
+type concrete_st = S.t (pos & nat)
 
 let init_st = S.empty
 
@@ -45,8 +46,8 @@ let do (s:concrete_st) (o:op_t)
   : (r:concrete_st{(Rem? (snd o) ==> (forall e. S.mem e s /\ snd e <> get_ele o <==> S.mem e r)) /\
                    (Add? (snd o) ==> (forall e. S.mem e s \/ e = (fst o, get_ele o) <==> S.mem e r))}) =
   match o with
-  |(id, Add e) -> S.add (id, e) s
-  |(id, Rem e) -> S.remove_if s (fun ele -> snd ele = e)
+  |(id, Add e) -> S.insert (id, e) s
+  |(id, Rem e) -> S.filter s (fun ele -> snd ele <> e)
   
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b)
@@ -73,10 +74,10 @@ let concrete_merge (lca s1 s2:concrete_st)
                             ((S.mem e lca /\ S.mem e s1 /\ S.mem e s2) \/
                             (S.mem e s1 /\ not (S.mem e lca)) \/
                             (S.mem e s2 /\ not (S.mem e lca)))}) =
-  let da = S.remove_if s1 (fun e -> S.mem e lca) in    //a - l
-  let db = S.remove_if s2 (fun e -> S.mem e lca) in    //b - l
-  let i_la = S.intersect lca s1 in
-  let i_lab = S.intersect i_la s2 in            // intersect l a b
+  let da = S.difference s1 lca in    //a - l
+  let db = S.difference s2 lca in    //b - l
+  let i_ab = S.intersection s1 s2 in
+  let i_lab = S.intersection lca i_ab in            // intersect l a b
   S.union i_lab (S.union da db)          // (intersect l a b) U (a - l) U (b - l)
 
 //operations x and y are commutative
@@ -97,7 +98,7 @@ let merge_is_comm (lca s1 s2:st)
   : Lemma (requires consistent_branches lca s1 s2)
           (ensures (eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
                        (concrete_merge (v_of lca) (v_of s2) (v_of s1)))) = ()
-                      
+                 
 let lem_trans_merge_s1' (lca s1 s2 s1':concrete_st)
   : Lemma (requires eq s1 s1' /\
                     (exists l1' l1 l2. s1' == apply_log lca l1' /\ s1 == apply_log lca l1 /\ s2 == apply_log lca l2))
@@ -168,7 +169,7 @@ let lem_exists (lastop:op_t) (l:log)
 
 let rec lem_l2a_l1r_eq''_base (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    Add? (snd last2) /\ 
+                    Add? (snd last2) /\
                     not (mem_id (fst last1) (ops_of lca)) /\
                     not (mem_id (fst last2) (ops_of lca)))
           (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
@@ -719,7 +720,7 @@ let linearizable_gt0_s2' (lca s1 s2:st)
 //// Sequential implementation //////
 
 // the concrete state 
-let concrete_st_s = S.set nat
+let concrete_st_s = S.t nat
 
 // init state 
 let init_st_s = S.empty
@@ -727,8 +728,8 @@ let init_st_s = S.empty
 // apply an operation to a state 
 let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s =
   match snd o with
-  |(Add e) -> S.add e st_s
-  |(Rem e) -> S.remove_if st_s (fun ele -> ele = e) 
+  |(Add e) -> S.insert e st_s
+  |(Rem e) -> S.filter st_s (fun ele -> ele <> e) 
 
 //equivalence relation between the concrete states of sequential type and MRDT
 let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
@@ -751,48 +752,101 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
 let merge_pre (lca s1 s2:concrete_st) =
   (forall e. (S.mem e s1 /\ S.mem e s2) ==> S.mem e lca)
 
-
-#push-options "--z3rlimit 50"
-let rec convergence1 (lca s1' s2:st) (o:op_t)
-  : Lemma (requires is_prefix (ops_of lca) (ops_of s1'))
-          (ensures eq (concrete_merge (v_of lca) (do (v_of s1') o) (v_of s2)) 
-                      (concrete_merge (v_of s1') (do (v_of s1') o) (concrete_merge (v_of lca) (v_of s1') (v_of s2))))
-          (decreases %[length (ops_of s1')]) = 
-  let ele = (fst o, get_ele o) in
-  if ops_of s1' = ops_of lca then () //done
-  else 
-    (let s1'' = inverse_st s1' in
-     let pre, lastop = un_snoc (ops_of s1') in
-     //lemma_mem_snoc pre lastop;
-     //lem_last (ops_of s1');
-     lem_inverse (ops_of lca) (ops_of s1');
-     if Add? (snd o) then
-       (if S.mem ele (v_of lca) && not (S.mem ele (v_of s1')) && not (S.mem ele (v_of s2)) then 
-         (if Add? (snd lastop) then 
-            convergence1 lca s1'' s2 o //done
-          else 
-            (if get_ele o = get_ele lastop then 
-              (assert (mem_ele (get_ele o) (v_of lca) && not (mem_ele (get_ele o) (v_of s1')));            
-               if S.mem ele (v_of s1'') then admit() //spurious case          
-               else convergence1 lca s1'' s2 o) //done
-             else convergence1 lca s1'' s2 o)) //done
-        else ()) //done
-     
-     else 
-       (if S.exists_s (v_of s1') (fun e -> snd e = get_ele o && S.mem e (v_of s2) && not (S.mem e (v_of lca))) then 
-           admit() //spurious case
-        else ()))
-
-  (*let ele = get_ele o in
-  if Add? (snd o) then
-    (assume (not (S.mem_id_s (fst o) (v_of lca))); ())
-  else 
-    (match mem_ele ele (v_of lca), mem_ele ele (v_of s1'), mem_ele ele (v_of s2) with
-       |true, true, true -> (assume (merge_pre (v_of lca) (v_of s1') (v_of s2)); ())
-       |false, true, true -> (assume (merge_pre (v_of lca) (v_of s1') (v_of s2)); ())
-       |_ -> ())*)
-
 #push-options "--z3rlimit 200"
+let rec convergence1 (lca s1' s2:st) (o:op_t)
+  : Lemma (requires is_prefix (ops_of lca) (ops_of s1') /\
+                    is_prefix (ops_of lca) (ops_of s2) /\
+                    (forall id. mem_id id (diff (ops_of s1') (ops_of lca)) ==> not (mem_id id (diff (ops_of s2) (ops_of lca)))) /\
+                    not (mem_id (fst o) (ops_of s1')))
+          (ensures eq (concrete_merge (v_of lca) (do (v_of s1') o) (v_of s2)) 
+                      (concrete_merge (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (do (v_of s1') o)))
+          (decreases %[length (ops_of s1'); length (ops_of s2)]) =
+  let ele = (fst o, get_ele o) in
+  let lhs = (concrete_merge (v_of lca) (do (v_of s1') o) (v_of s2)) in
+  let rhs = (concrete_merge (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (do (v_of s1') o)) in
+  let da = S.difference (do (v_of s1') o) (v_of lca) in
+  let da' = S.difference (v_of s1') (v_of lca) in
+  let db = S.difference (v_of s2) (v_of lca) in
+  let i_rhs = S.intersection (v_of s1') (S.intersection (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (do (v_of s1') o)) in
+  let da_rhs = S.difference (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (v_of s1') in
+  let db_rhs = S.difference (do (v_of s1') o) (v_of s1') in
+  let i' = S.intersection (v_of lca) (S.intersection (v_of s1') (v_of s2)) in
+  let da_rhs = S.difference (do (v_of s1') o) (v_of s1') in
+  if Add? (snd o) then
+    (if S.mem ele lhs then 
+      (if S.mem ele da || S.mem ele db then
+        (assert (not (S.mem ele (v_of lca)));
+        if S.mem ele (v_of s1') then 
+          ((*assert (S.mem ele da');
+           assert (S.mem ele i_rhs);*) ())
+        else ((*assert (S.mem ele rhs);*) ()))
+      else if S.mem ele i' then 
+        (if not (S.mem ele (v_of s1')) then () else ()))
+      else if S.mem ele db then ()
+    else if S.mem ele rhs then 
+      (if S.mem ele db_rhs then 
+        (let s1'' = inverse_st s1' in 
+         assert (not (S.mem ele (v_of s1'))); 
+         let pre, lastop = un_snoc (ops_of s1') in
+         let db_new = S.difference (do (v_of s1'') o) (v_of lca) in
+         lemma_mem_snoc pre lastop;
+         lem_last (ops_of s1');
+         if Add? (snd lastop) || Rem? (snd lastop) && get_ele lastop <> get_ele o then 
+           (lem_diff (ops_of s1') (ops_of lca);
+            inverse_diff_id_s1' (ops_of lca) (ops_of s1') (ops_of s2);
+            convergence1 lca s1'' s2 o)
+         else 
+           (assert (S.mem ele rhs); 
+            lem_diff (ops_of s1') (ops_of lca);
+            inverse_diff_id_s1' (ops_of lca) (ops_of s1') (ops_of s2);
+            convergence1 lca s1'' s2 o; 
+            assert (not (S.mem ele (v_of lca))); ())) //check
+       else ()) //done
+    else ()) //done
+  else 
+    (assert (Rem? (snd o));
+     (*assert (forall e. S.mem e (concrete_merge (v_of s1') (concrete_merge (v_of lca) (v_of s1') (v_of s2)) (do (v_of s1') o)) ==>
+                  S.mem e (concrete_merge (v_of lca) (do (v_of s1') o) (v_of s2)));*)
+     if S.exists_s (v_of s1') (fun e -> snd e = get_ele o && S.mem e (v_of s2) && not (S.mem e (v_of lca))) then 
+       (let s1'' = inverse_st s1' in 
+        let pre, lastop = un_snoc (ops_of s1') in
+        lem_diff (ops_of s1') (ops_of lca);
+        
+        let s2' = inverse_st s2 in        
+        let pre2, lastop2 = un_snoc (ops_of s2) in
+        lem_diff (ops_of s2) (ops_of lca);
+        lem_inverse (ops_of lca) (ops_of s2);
+        if ops_of s2' = ops_of lca then 
+           (if Add? (snd lastop2) && get_ele lastop2 = get_ele o then 
+             (inverse_diff_id_s1' (ops_of lca) (ops_of s1') (ops_of s2);
+              convergence1 lca s1'' s2 o; 
+              assert (not (S.mem (fst lastop2, get_ele lastop2) (v_of s1''))); 
+              assert ((fst lastop, get_ele lastop) <> (fst lastop2, get_ele lastop2));
+              assert (not (S.mem (fst lastop2, get_ele lastop2) (v_of s1')));
+              ()) //done
+            else convergence1 lca s1'' s2 o) //done
+        else 
+          (if Add? (snd lastop2) && get_ele lastop2 = get_ele o then 
+            (lem_diff (ops_of s2) (ops_of lca);
+             lem_diff (ops_of s1') (ops_of lca);
+             lem_inverse (ops_of lca) (ops_of s2);
+             inverse_diff_id_s1' (ops_of lca) (ops_of s1') (ops_of s2);
+             inverse_diff_id_s2' (ops_of lca) (ops_of s1') (ops_of s2);
+             convergence1 lca s1'' s2 o; 
+             convergence1 lca s1' s2' o;
+             assert (forall e. S.mem e (S.difference (v_of s2') (v_of lca)) /\ snd e = get_ele o ==> 
+                          not (S.mem e (v_of s1')) /\ S.mem e lhs);
+             convergence1 lca s1'' s2 lastop; 
+             (*assert (forall e. S.mem e (S.difference (v_of s2) (v_of lca)) /\ snd e = get_ele o ==>
+                          not (S.mem e (v_of s1'')));*)
+             assert (fst lastop <> fst lastop2);
+             //assert (not (S.mem (fst lastop2, get_ele lastop2) (v_of s1'))); 
+             ())
+           else 
+             (inverse_diff_id_s2' (ops_of lca) (ops_of s1') (ops_of s2);
+              convergence1 lca s1' s2' o)))
+     else ()) //done
+
 let rec convergence2 (lca s2 s3 lca' s1':st)
   : Lemma (requires consistent_branches lca' s3 s1' /\
                     consistent_branches lca s1' s2)
@@ -811,8 +865,9 @@ let rec convergence2 (lca s2 s3 lca' s1':st)
      inverse_diff_id_s1' (ops_of lca') (ops_of s3) (ops_of s1');
      lastop_diff (ops_of lca') (ops_of s3);
      if Add? (snd lastop) then
-       (assume (not (S.mem_id_s (fst lastop) (v_of lca)));
+       (assume (not (mem_id_s (fst lastop) (v_of lca)));
         convergence2 lca s2 s3' lca' s1')
      else
        (assume (merge_pre (v_of lca) (v_of s1') (v_of s2));
         convergence2 lca s2 s3' lca' s1')) 
+#pop-options
