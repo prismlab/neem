@@ -477,15 +477,15 @@ let lem_l3r_ind (lca s1 s2:st)
   lem_apply_log init_st (ops_of s1)
 
 let rec trial (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
+  : Lemma (requires //consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
                     consistent_branches lca s1 s2 /\
                     //length (ops_of s1) > length (ops_of lca) /\
-                    fst last1 <> fst last2 /\
+                    //fst last1 <> fst last2 /\
                     //(let s1' = inverse_st s1 in
-                    Rem? (snd last1) /\ Rem? (snd last2) /\ get_ele last1 = get_ele last2 /\ 
+                    Rem? (snd last1) /\ Rem? (snd last2) /\ get_ele last1 = get_ele last2) 
                     //consistent_branches lca (do_st s1' last1) s2 /\
                     //consistent_branches lca (do_st s1' last1) (do_st s2 last2) /\
-                    consistent_branches lca (do_st s1 last1) s2)
+                    //consistent_branches lca (do_st s1 last1) s2)
         
           (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
@@ -494,10 +494,17 @@ let rec trial (lca s1 s2:st) (last1 last2:op_t)
   else 
     (let s1' = inverse_st s1 in
      lem_apply_log init_st (ops_of s1);
-     pre1_pre2_s1 lca s1 s2;     
-     assume (consistent_branches lca (do_st s1' last1) (do_st s2 last2) /\
-             //consistent_branches lca s1' s2 /\
-             consistent_branches lca (do_st s1' last1) s2);
+     pre1_pre2_s1 lca s1 s2;   
+     (*lem_diff (ops_of s1) (ops_of lca);
+     lem_diff (ops_of s2) (ops_of lca);
+     assume (fst last1 <> fst last2); *)
+     (*distinct_snoc_inv (ops_of s1) last1;
+     split_prefix init_st (ops_of lca) (snoc (ops_of s1') last1);
+     lt_snoc (ops_of lca) (ops_of s1) last1; 
+     s1's2_snoc (ops_of lca) (ops_of s1) (snoc (ops_of s2) last2) last1; 
+     assume (consistent_branches lca (do_st s1' last1) (do_st s2 last2));*)
+     (*s1's2_snoc (ops_of lca) (ops_of s1) (ops_of s2) last1;
+     assume (consistent_branches lca (do_st s1' last1) s2); *)
      trial lca s1' s2 last1 last2; 
      lem_last (ops_of s1); ())
   
