@@ -31,6 +31,22 @@ val intersect_mem (#a:eqtype) (s1:set a) (s2:set a) (x:a)
   : Lemma (ensures mem x (intersect s1 s2) <==> (mem x s1 /\ mem x s2))
     [SMTPat (mem x (intersect s1 s2))]
 
+val difference (#a:eqtype) (s1 s2:set a) : set a
+val mem_difference (#a:eqtype) (s1 s2:set a) (x:a)
+  : Lemma (mem x (difference s1 s2) <==> (mem x s1 /\ ~ (mem x s2)))
+          [SMTPat (mem x (difference s1 s2))]
+
+let subset (#a:eqtype) (s1 s2:set a) =
+  (forall x. mem x s1 ==> mem x s2)
+val mem_subset (#a:eqtype) (s1 s2:set a)
+  : Lemma (requires (forall x. mem x s1 ==> mem x s2))
+          (ensures (subset s1 s2))
+          [SMTPat (subset s1 s2)]
+val subset_mem (#a:eqtype) (s1 s2:set a)
+  : Lemma (requires (subset s1 s2))
+          (ensures (forall x. mem x s1 ==> mem x s2))
+          [SMTPat (subset s1 s2)]
+          
 val remove_if (#a:eqtype) (s:set a) (f:a -> bool) : set a
 val remove_if_mem (#a:eqtype) (s:set a) (f:a -> bool) (x:a)
   : Lemma (ensures mem x (remove_if s f) <==> (mem x s /\ ~ (f x))) 
