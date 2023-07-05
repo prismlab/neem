@@ -644,7 +644,7 @@ val init_st_s : concrete_st_s
 val do_s (st_s:concrete_st_s) (_:op_t) : concrete_st_s
 
 // equivalence relation between the concrete states of sequential type and MRDT
-val eq_sm (st_s:concrete_st_s) (st:concrete_st) : prop
+val eq_sm (st_s:concrete_st_s) (st:concrete_st) : Type0
 
 // initial states are equivalent
 val initial_eq (_:unit)
