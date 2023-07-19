@@ -68,11 +68,14 @@ let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res = 
 // concrete merge pre-condition
 let merge_pre l a b = 
   S.subset (fst l) (fst a) /\ S.subset (fst l) (fst b) /\
-  S.subset (snd l) (snd a) /\ S.subset (snd l) (snd b) /\
+  //S.subset (snd l) (snd a) /\ S.subset (snd l) (snd b) /\
+  (forall id. mem_id_s id (fst l) ==> ~ (mem_id_s id (S.difference (fst a) (fst l)))) /\
+  (forall id. mem_id_s id (fst l) ==> ~ (mem_id_s id (S.difference (fst b) (fst l)))) /\
   (forall id. mem_id_s id (S.difference (fst a) (fst l)) ==> ~ (mem_id_s id (S.difference (fst b) (fst l))))
 
 let concrete_merge (lca s1:concrete_st) (s2:concrete_st{merge_pre lca s1 s2}) : concrete_st =
-  (S.union (S.intersect (fst s1) (fst s1))
+  (//S.union (S.intersect (fst s1) (fst s2))
+   S.union (fst lca)
            (S.union (S.difference (fst s1) (fst lca)) (S.difference (fst s2) (fst lca))),
    S.union (snd s1) (snd s2))
   //(S.union (fst s1) (fst s2), (S.union (snd s1) (snd s2)))
@@ -200,6 +203,7 @@ let linearizable_gt0_base_stf (lca s1 s2:st) (last1 last2:op_t)
                     fst last1 <> fst last2 /\
                     merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2) /\
                     Second_then_first? (resolve_conflict last1 last2))
+         
           (ensures merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2) /\
                    do_pre (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2 /\
                    eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
@@ -294,6 +298,7 @@ let linearizable_gt0_ind_fts (lca s1 s2:st) (last1 last2:op_t)
                     do_pre (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1 /\
                     eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2)))) 
+        
           (ensures merge_pre (v_of lca) (v_of s1) (do (v_of s2) last2) /\
                    do_pre (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1 /\
                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
@@ -318,6 +323,7 @@ let linearizable_gt0_ind_stf (lca s1 s2:st) (last1 last2:op_t)
                     merge_pre (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2) /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))))
+       
           (ensures merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2) /\
                    do_pre (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2 /\
                    eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
@@ -342,6 +348,7 @@ let linearizable_gt0_ind1_fts (lca s1 s2:st) (last1 last2:op_t)
                     do_pre (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1 /\
                     eq (do (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1)
                        (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)))) 
+        
           (ensures merge_pre (v_of lca) (v_of s1) (do (v_of s2) last2) /\
                    do_pre (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1 /\
                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
@@ -365,6 +372,7 @@ let linearizable_gt0_ind1_stf (lca s1 s2:st) (last1 last2:op_t)
                     do_pre (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2 /\
                     eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
                        (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))))
+        
           (ensures merge_pre (v_of lca) (do (v_of s1) last1) (v_of s2) /\
                    do_pre (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2 /\    
                    eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
