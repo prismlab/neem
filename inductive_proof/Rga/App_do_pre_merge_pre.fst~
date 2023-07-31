@@ -1,0 +1,255 @@
+module App_do_pre_merge_pre
+
+open SeqUtils
+module L = FStar.List.Tot
+module S = Set_extended
+
+type concrete_st' = 
+  |Leaf
+  |Node : (pos * nat) -> list concrete_st' -> concrete_st'
+  
+type concrete_st = concrete_st' & S.set pos
+let rec mem (value:(pos * nat)) (t:concrete_st') : Tot bool =
+  match t with
+  |Leaf -> false
+  |Node x children -> x = value || mem_child value children
+
+and mem_child (value:(pos * nat)) (children:list concrete_st') : Tot bool =
+  match children with
+  |[] -> false
+  |x::xs -> mem value x || mem_child value xs
+
+let preorder_traversal (t:concrete_st') : Tot (list (pos * nat)) =
+  let rec traverse (acc:list (pos * nat)) (lst:list concrete_st') : Tot (list (pos * nat)) (decreases lst) =
+    match lst with
+    |[] -> acc
+    |Leaf::xs -> traverse acc xs
+    |Node x children::xs ->
+      let acc' = x::acc in
+      let acc'' = traverse acc' children in
+      traverse acc'' xs in
+  traverse [] [t]
+
+let rec mem_id_s (id:pos) (t:concrete_st') : Tot bool =
+  match t with
+  |Leaf -> false
+  |Node x children -> fst x = id || mem_child_id_s id children
+
+and mem_child_id_s (id:pos) (children:list concrete_st') : Tot bool =
+  match children with
+  |[] -> false
+  |x::xs -> mem_id_s id x || mem_child_id_s id xs
+
+let rec count_id_s (id:pos) (t:concrete_st'): Tot int =
+  let rec count_id_helper (id:pos) (t: concrete_st'): Tot int =
+    match t with
+    | Leaf -> 0 
+    | Node x children ->
+      let occurrences = if fst x = id then 1 else 0 in
+      let child_occurrences = count_id_children id children in
+      occurrences + child_occurrences
+  and count_id_children (id:pos) (children: list concrete_st'): Tot int =
+    match children with
+    | [] -> 0
+    | c::cs -> count_id_helper id c + count_id_children id cs
+  in
+  count_id_helper id t
+
+let unique_st (t:concrete_st') = (forall id. count_id_s id t <= 1)
+
+// init state
+let init_st = (Leaf, S.empty)
+
+// equivalence between 2 concrete states
+let eq (a b:concrete_st) =
+  //preorder_traversal (fst a) == preorder_traversal (fst b) /\
+  fst a = fst b /\
+  S.equal (snd a) (snd b)
+
+// few properties of equivalence relation
+let symmetric (a b:concrete_st) 
+  : Lemma (requires eq a b)
+          (ensures eq b a) = ()
+
+let transitive (a b c:concrete_st)
+  : Lemma (requires eq a b /\ eq b c)
+          (ensures eq a c) = ()
+
+let eq_is_equiv (a b:concrete_st)
+  : Lemma (requires a == b)
+          (ensures eq a b) = ()
+
+
+// operation type
+type app_op_t:eqtype = 
+  | Add_at_front : ele:nat -> app_op_t //inserts ele at the beginning. Pre-cond is the tree should be empty
+  | Add_after : ele:nat -> id:pos -> app_op_t //inserts ele after id
+  | Remove : id:pos -> app_op_t //removes the ele with id as the identifier
+
+
+let do_pre (s:concrete_st) (op:op_t) : prop =
+  match op with
+  |(ts, Add_at_front _) -> ~ (mem_id_s ts (fst s))
+  |(ts, Add_after ele id) -> if mem_id_s id (fst s) && not (mem_id_s ts (fst s)) then True else False
+  |_ -> True
+
+let rec contains_child (child:(pos * nat)) (children:list concrete_st') =
+  match children with
+  |[] -> false
+  |x::xs -> match x with
+          |Leaf -> contains_child child xs
+          |Node y _ -> child = y || contains_child child xs
+
+let rec is_child (child parent:(pos * nat)) (t:concrete_st') =
+  match t with
+  |Leaf -> false
+  |Node x children -> if x = parent then contains_child child children 
+                     else is_child_helper child parent children
+
+and is_child_helper (child parent:(pos * nat)) (lst:list concrete_st') =
+  match lst with
+  |[] -> false
+  |x::xs -> is_child child parent x || is_child_helper child parent xs
+
+let add_at_front (ele:(pos * nat)) (t:concrete_st') 
+  : (r:concrete_st'{(forall e. mem e r <==> mem e t \/ e = ele)
+                    ///\ (forall c p. mem c t /\ mem p t /\ is_child c p t ==> mem c r /\ mem p r /\ is_child c p r)
+                    }) =
+  match t with
+  |Leaf ->  Node ele []
+  |Node x children -> Node ele [Node x children] 
+
+let rec add_after (id:pos) (ele:(pos * nat)) (t:concrete_st') : Tot concrete_st' =
+  match t with
+  |Leaf -> Leaf
+  |Node value children -> if fst value = id then (Node value ((Node ele [])::children))
+                         else Node value (add_after_helper id ele children)
+
+and add_after_helper (id:pos) (ele:(pos * nat)) (lst:list concrete_st') : Tot (list concrete_st') =
+  match lst with
+  |[] -> []
+  |x::xs -> let child' = add_after id ele x in
+          child'::add_after_helper id ele xs
+
+// apply an operation to a state
+let do (s:concrete_st) (op:op_t{do_pre s op}) : concrete_st =
+  match op with
+  |(ts, Add_at_front ele) -> add_at_front (ts, ele) (fst s), snd s
+  |(ts, Add_after ele after_id) -> add_after after_id (ts, ele) (fst s), snd s
+  |(_, Remove id) -> fst s, S.add id (snd s)
+
+let lem_do (a b:concrete_st) (op:op_t)
+   : Lemma (requires eq a b /\ do_pre a op)
+           (ensures eq (do a op) (do b op)) = ()
+
+//conflict resolution
+let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res =
+  match x, y with
+  |(ts1, Add_at_front _), (ts2, Add_at_front _) -> if lt ts1 ts2 then First_then_second else Second_then_first
+  |(ts1, Add_at_front _), (_, Add_after _ id2) -> First_then_second //any order is ok, but ts1 <> id2
+  |(ts1, Add_at_front _), (_, Remove id2) -> First_then_second //any order is ok, but ts1 <> id2
+  |(_, Add_after _ id1), (ts2, Add_at_front _) -> First_then_second //any order is ok, but ts2 <> id1
+  |(_, Add_after _ _), (_, Add_after _ _) -> First_then_second //any order is ok 
+  |(ts1, Add_after _ _), (_, Remove id1) -> First_then_second //any order is ok, but ts1 <> id2
+  |(_, Remove id1), (ts2, Add_at_front _) -> First_then_second //any order is ok, but ts2 <> id1
+  |(_, Remove id1), (ts2, Add_after _ _) -> First_then_second //any order is ok, but ts2 <> id1
+  |(_, Remove _), (_, Remove _) -> First_then_second //any order is ok
+
+let merge_pre (lca a b:concrete_st) = true
+
+let concrete_merge (lca a:concrete_st) (b:concrete_st{merge_pre lca a b})
+  : (r:concrete_st{(forall e. mem e (fst r) <==> mem e (fst lca) \/ mem e (fst a) \/ mem e (fst b)) /\
+                 
+                   (S.equal (snd r) (S.union (snd lca) (S.union (snd a) (snd b)))) /\
+                   
+                   (forall c p. (mem c (fst r) /\ mem p (fst r) /\ is_child c p (fst r)) <==>
+                           (mem c (fst lca) /\ mem p (fst lca) /\ is_child c p (fst lca)) \/
+                           (mem c (fst a) /\ mem p (fst a) /\ is_child c p (fst a)) \/
+                           (mem c (fst b) /\ mem p (fst b) /\ is_child c p (fst b)))
+
+                   // order of children as well.
+                   }) =
+  admit()
+
+
+
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+let rec idx (id:pos) (l:list (pos * nat) {mem_id_s id l}) : Tot nat =
+  match l with
+  |id1::xs -> if id = fst id1 then 0 else 1 + idx id xs
+
+let ord (id:pos) (id1:pos)
+        (l:list (pos * nat) {mem_id_s id l /\ mem_id_s id1 l})
+        : Tot (b:bool {b = true <==> idx id l < idx id1 l})
+    = idx id l < idx id1 l 
+
+let rec diff_s (a l:list (pos & nat))
+  : Tot (r:list (pos & nat){(forall e. L.mem e r <==> (L.mem e a /\ not (L.mem e l)))}) =
+  match a with
+  |[] -> []
+  |x::xs -> if L.mem x l then diff_s xs l else x::diff_s xs l
+  
+let merge_pre (lca a b:concrete_st) =
+  (forall e e1. (L.mem e a /\ L.mem e1 lca /\ (fst e = fst e1)) ==> (snd e = snd e1)) /\
+  (forall e e1. (L.mem e b /\ L.mem e1 lca /\ (fst e = fst e1)) ==> (snd e = snd e1)) /\
+  (forall e e1. L.mem e lca /\ L.mem e1 lca /\ L.mem e a /\ L.mem e1 a /\ ord (fst e) (fst e1) lca ==> ord (fst e) (fst e1) a) /\
+  (forall e e1. L.mem e lca /\ L.mem e1 lca /\ L.mem e b /\ L.mem e1 b /\ ord (fst e) (fst e1) lca ==> ord (fst e) (fst e1) b) 
+  (*(forall id. mem_id_s id lca ==> not (mem_id_s id (diff_s a lca)) /\ not (mem_id_s id (diff_s b lca))) /\
+  (forall id. mem_id_s id (diff_s a lca) ==> not (mem_id_s id (diff_s b lca))) ///\
+  //(forall e. (L.mem e a /\ L.mem e b) ==> L.mem e lca)*)
+
+
+let rec concrete_merge1 (lca s1:list (pos & nat)) (s2:list (pos & nat)) //{merge_pre lca s1 s2}) 
+  : Tot (r:list (pos & nat)) (decreases %[s1;s2]) =
+  match s1, s2 with
+  |[], [] -> []
+  |[], y::ys -> if L.mem y lca then concrete_merge1 lca s1 ys else y::concrete_merge1 lca s1 ys
+  |x::xs, [] -> if L.mem x lca then concrete_merge1 lca xs s2 else x::concrete_merge1 lca xs s2
+  |x::xs, y::ys -> if x = y then x::concrete_merge1 lca xs ys
+                else
+                  (if L.mem x lca && L.mem y lca then 
+                      (assume (mem_id_s (fst x) lca /\ mem_id_s (fst y) lca); //can be proved
+                       if ord (fst x) (fst y) lca then (x::(y::concrete_merge1 lca xs ys)) 
+                       else (y::(x::concrete_merge1 lca xs ys)))
+                  
+                   else if L.mem x lca && not (L.mem y lca) then y::concrete_merge1 lca s1 ys
+                  
+                   else if not (L.mem x lca) && L.mem y lca then x::concrete_merge1 lca xs s2
+                   
+                   else (if lt (fst x) (fst y) then y::concrete_merge1 lca s1 ys else x::concrete_merge1 lca xs s2))
+
+
+let concrete_merge (lca a:concrete_st) (b:concrete_st{merge_pre lca a b})
+  : (r:concrete_st{(forall e. L.mem e r <==> (L.mem e lca /\ L.mem e a /\ L.mem e b) \/ 
+                                       L.mem e (diff_s a lca) /\ L.mem e (diff_s b lca)) /\
+                   (forall e e1. L.mem e r /\ L.mem e1 r /\ ord (fst e) (fst e1) r ==>
+                            (L.mem e a /\ L.mem e1 a /\ ord (fst e) (fst e1) a) \/
+                            (L.mem e a /\ L.mem e1 b /\ ord (fst e) (fst e1) b) \/
+                            (L.mem e a /\ L.mem e1 b /\ fst e > fst e1) \/
+                            (L.mem e b /\ L.mem e1 a /\ fst e > fst e1))}) =
+  admit()//concrete_merge1 lca a b
+
+let merge_is_comm (lca s1 s2:st)
+  : Lemma (requires consistent_branches lca s1 s2 /\
+                    merge_pre (v_of lca) (v_of s1) (v_of s2))
+          (ensures merge_pre (v_of lca) (v_of s2) (v_of s1) /\
+                   (eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
+                       (concrete_merge (v_of lca) (v_of s2) (v_of s1)))) = admit() 
+
+let linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
+  : Lemma (requires do_pre (v_of s2') last2 /\
+                    consistent_branches lca s1 (do_st s2' last2) /\
+                    ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
+                    length (ops_of lca) = 0 /\
+                    merge_pre (v_of lca) (v_of s1) (do (v_of s2') last2))
+        
+          (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
