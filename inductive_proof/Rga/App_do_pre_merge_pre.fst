@@ -61,9 +61,38 @@ let _ = assert (count 1 [(Node (2,1)
                          (Node (1,1) []); 
                          (Node (1,1) [])] = 3)
 
+let rec sorted_lst (l:list (pos * nat)) =
+  match l with
+  |[] -> true
+  |[x] -> true
+  |x::y::xs -> fst x > fst y && sorted_lst (y::xs)
+
+let rec get_children (id:pos) (l:list node{mem_id_s' id l /\ unique_st' l}) = 
+  match l with
+  |x::xs -> match x with
+          |Node value children -> if fst value = id then children 
+                                 else if mem_id_s' id children then get_children id children
+                                 else get_children id xs
+
+let rec get_chldn_lst (l:list node) =
+  match l with
+  |[] -> []
+  |(Node v _)::xs -> v::get_chldn_lst xs
+
+let rec get_children_lst (id:pos) (l:list node{mem_id_s' id l}) =
+  match l with
+  |Node value chldn::xs -> if fst value = id then get_chldn_lst chldn 
+                         else if mem_id_s' id chldn then get_children_lst id chldn
+                         else get_children_lst id xs
+                         
 let unique_st (s:concrete_st') = unique_st' (get_lst s)
 
-type concrete_st = s:concrete_st'{unique_st s}
+let sorted' (l:list node) = sorted_lst (get_chldn_lst l) /\
+                            (forall id. mem_id_s' id l ==> sorted_lst (get_children_lst id l))
+
+let sorted (s:concrete_st') = sorted' (get_lst s)
+
+type concrete_st = s:concrete_st'{unique_st s /\ sorted s}
 
 let _ = assert (mem (4,1) (Root [(Node (4,1) [(Node (2,1) [])]); (Node (3,1) [])]))
 
@@ -100,7 +129,8 @@ let get_ele (o:op_t) : nat =
 let do_pre (s:concrete_st) (o:op_t) =
   let (ts, Add_after after_id _) = o in
   ~ (mem_id_s ts s) /\
-  (~ (after_id = 0) ==> mem_id_s after_id s)
+  (~ (after_id = 0) ==> mem_id_s after_id s) /\
+  (forall id. mem_id_s id s ==> fst o > id)
 
 let rec contains_child (child:(pos & nat)) (children:list node) =
   match children with
@@ -118,23 +148,6 @@ let rec is_child (child:(pos & nat)) (parent:pos) (l:list node) =
           |Node x children -> if fst x = parent then contains_child child children 
                              else (is_child child parent children || is_child child parent xs)
 
-let rec get_children (id:pos) (l:list node{mem_id_s' id l /\ unique_st' l}) = 
-  match l with
-  |x::xs -> match x with
-          |Node value children -> if fst value = id then children 
-                                 else if mem_id_s' id children then get_children id children
-                                 else get_children id xs
-
-let rec get_chldn_lst (l:list node) =
-  match l with
-  |[] -> []
-  |(Node v _)::xs -> v::get_chldn_lst xs
-
-let rec get_children_lst (id:pos) (l:list node{mem_id_s' id l /\ unique_st' l}) =
-  match l with
-  |Node value chldn::xs -> if fst value = id then get_chldn_lst chldn 
-                         else if mem_id_s' id chldn then get_children_lst id chldn
-                         else get_children_lst id xs
 
 let rec lem_same (l l1:list node) 
   : Lemma (requires unique_st' l /\ unique_st' l1 /\
@@ -194,11 +207,11 @@ let check1 (l:list node)
           (ensures is_sibling (4,1) (10,1) l) = ()
           
 #push-options "--z3rlimit 50 --ifuel 1"
-let rec add_after_id (l:list node{unique_st' l}) 
-                     (ts:pos{not (mem_id_s' ts l)}) 
+let rec add_after_id (l:list node{unique_st' l /\ sorted' l}) 
+                     (ts:pos{not (mem_id_s' ts l) /\ (forall id. mem_id_s' id l ==> ts > id)}) 
                      (after_id:pos{mem_id_s' after_id l}) 
                      (ele:nat) 
-   : Tot (r:list node{unique_st' r /\ mem_id_s' ts r /\
+   : Tot (r:list node{unique_st' r /\ mem_id_s' ts r /\ sorted' r /\
                       (forall id. mem_id_s' id r <==> mem_id_s' id l \/ id = ts) /\
                       is_child (ts, ele) after_id r /\
                       get_children_lst after_id r = (ts, ele)::get_children_lst after_id l /\
@@ -210,37 +223,37 @@ let rec add_after_id (l:list node{unique_st' l})
   |x::xs -> if mem_id_s' after_id [x] then 
     (let child' = (match x with
                   |Node value children -> if fst value = after_id 
-                                        then (assert (forall id. mem_id_s' id children ==>
-                                                            get_children_lst id l = get_children_lst id children);
+                                        then (//assert (forall id. mem_id_s' id children ==>
+                                                //            get_children_lst id l = get_children_lst id children);
                                               Node value (Node (ts,ele) []::children))
-                                        else (assert (mem_id_s' after_id children); 
+                                        else (//assert (mem_id_s' after_id children); 
                                               Node value (add_after_id children ts after_id ele))) in
                                         
       (assert (not (mem_id_s' after_id xs)); 
        assert (forall id. mem_id_s' id xs ==> get_children_lst id xs = get_children_lst id l);
        let r = child'::xs in
-       assert (is_child (ts,ele) after_id r);
+       (*assert (is_child (ts,ele) after_id r);
        assert (mem_id_s' ts r); 
        assert (unique_st' r);
        assert (forall id. mem_id_s' id l /\ id <> after_id ==>
-                         (get_children_lst id l = get_children_lst id r)); 
+                         (get_children_lst id l = get_children_lst id r)); *)
        r))
     else
     (let r = x::(add_after_id xs ts after_id ele) in 
-     assert (is_child (ts,ele) after_id r);
+     (*assert (is_child (ts,ele) after_id r);
      assert (mem_id_s' ts r); 
-     assert (unique_st' r);
+     assert (unique_st' r);*)
      r)
 
 let do (s:concrete_st) (op:op_t{do_pre s op}) 
   : (r:concrete_st{(get_after_id op = 0 ==> 
-         get_chldn_lst (get_lst r) = (fst op, get_ele op)::get_chldn_lst (get_lst s) /\
-         (forall id. mem_id_s' id (get_lst s) /\ mem_id_s' id (get_lst r) ==>
-                get_children_lst id (get_lst s) = get_children_lst id (get_lst r)))}) =
+         (get_chldn_lst (get_lst r) = (fst op, get_ele op)::get_chldn_lst (get_lst s) /\
+         (forall id. mem_id_s id s /\ mem_id_s id r ==>
+                get_children_lst id (get_lst s) = get_children_lst id (get_lst r))))}) =
   
-  let (ts, Add_after after_id ele) = op in
-  if after_id = 0 then (Root ((Node (ts, ele) [])::(get_lst s)))
-  else (Root (add_after_id (get_lst s) ts after_id ele))
+  if get_after_id op = 0 then (Root ((Node (fst op, get_ele op) [])::(get_lst s)))
+  else (assert (get_after_id op > 0);
+        Root (add_after_id (get_lst s) (fst op) (get_after_id op) (get_ele op)))
 
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b /\ do_pre a op)
