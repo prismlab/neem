@@ -542,6 +542,31 @@ let do_st (s:st1) (o:op_t) : st1 =
   split_prefix init_st (ops_of s) (snoc (ops_of s) o); 
   (do (v_of s) o, hide (snoc (ops_of s) o))
 
+let ls1s2_to_ls1's2' (lca s1 s2:st)
+  : Lemma (requires consistent_branches_s1s2_gt0 lca s1 s2)
+          (ensures consistent_branches lca (inverse_st s1) (inverse_st s2)) =
+  lem_inverse (ops_of lca) (ops_of s1);
+  lem_inverse (ops_of lca) (ops_of s2);
+  lastop_diff (ops_of lca) (ops_of s1);
+  lastop_diff (ops_of lca) (ops_of s2);
+  inverse_diff_id_s1'_s2' (ops_of lca) (ops_of s1) (ops_of s2)
+
+let ls1s2_to_ls1s2' (lca s1 s2:st)
+  : Lemma (requires consistent_branches_s2_gt0 lca s1 s2)
+          (ensures consistent_branches lca s1 (inverse_st s2)) =
+  lem_inverse (ops_of lca) (ops_of s2);
+  lastop_diff (ops_of lca) (ops_of s2);
+  split_prefix init_st (ops_of lca) (ops_of (inverse_st s2));
+  inverse_diff_id_s2' (ops_of lca) (ops_of s1) (ops_of s2)
+
+let ls1s2_to_ls1's2 (lca s1 s2:st)
+  : Lemma (requires consistent_branches_s1_gt0 lca s1 s2)
+          (ensures consistent_branches lca (inverse_st s1) s2) =
+  lem_inverse (ops_of lca) (ops_of s1);
+  lastop_diff (ops_of lca) (ops_of s1);
+  split_prefix init_st (ops_of lca) (ops_of (inverse_st s1));
+  inverse_diff_id_s1' (ops_of lca) (ops_of s1) (ops_of s2)
+  
 // Prove that merge is commutative
 val merge_is_comm (lca s1 s2:st)
   : Lemma (requires consistent_branches lca s1 s2)
