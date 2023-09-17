@@ -1,6 +1,6 @@
 module Ewflag_rid_map
 
-module M = Map
+module M = Map_extended
 module S = FStar.Set
 
 #set-options "--query_stats"
@@ -79,12 +79,9 @@ let merge_cf (lca s1 s2:cf) : cf =
 let concrete_merge (lca s1 s2:concrete_st) 
   : Tot (r:concrete_st{(forall id. M.contains r id <==> M.contains lca id \/ M.contains s1 id \/ M.contains s2 id) /\
                        (forall id. M.contains r id ==> sel r id = merge_cf (sel lca id) (sel s1 id) (sel s2 id))}) =
-  let lca_k = M.domain lca in
-  let s1_k = M.domain s1 in
-  let s2_k = M.domain s2 in
-  let keys = Set.union lca_k (Set.union s1_k s2_k) in
+  let keys = Set.union (M.domain lca) (Set.union (M.domain s1) (M.domain s2)) in
   let u = M.const_on keys (0, false) in
-  M.iter_upd (fun k v -> merge_cf (sel lca k) (sel s1 k) (sel s2 k)) u 
+  M.iter_upd (fun k v -> merge_cf (sel lca k) (sel s1 k) (sel s2 k)) u
 
 let prop1 (l:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires fst o1 <> fst o3 /\ 

@@ -1,4 +1,4 @@
-module Map
+module Map_extended
 
 module S = FStar.Set
 
@@ -35,6 +35,10 @@ val concat: #key:eqtype -> #value:Type -> t key value -> t key value -> Tot (t k
 *)
 val map_val: #val1:Type -> #val2:Type -> f:(val1 -> val2) -> #key:eqtype -> t key val1 -> Tot (t key val2)
 
+(* iter_upd f m:
+      A map whose domain is the same as `m` but all values have
+      `f` applied to them. f takes as parameter both key and value.
+*)
 val iter_upd: #key:eqtype -> #val1:Type -> #val2:Type -> f:(key -> val1 -> val2) -> t key val1 -> Tot (t key val2)
 
 (* restrict s m:
