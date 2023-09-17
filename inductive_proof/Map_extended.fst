@@ -58,11 +58,6 @@ let restrict #key #value s m = {
   domain =   intersect s m.domain
 }
 
-let map_literal #k #v f = {
-  mappings = F.on k f;
-  domain = complement empty;
-}
-
 let lemma_SelUpd1 #key #value m k v        = ()
 let lemma_SelUpd2 #key #value m k1 k2 v    = ()
 let lemma_SelConst #key #value v k         = ()
@@ -80,12 +75,3 @@ let lemma_InIterUpd #key #val1 #val2 f m k = ()
 let lemma_InDomRestrict #key #value m ks k = ()
 let lemma_ContainsDom #key #value m k      = ()
 let lemma_UpdDomain #key #value m k v      = ()
-let lemma_map_literal #key #value f        = ()
-
-let equal (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) : Type0 =
-    F.feq m1.mappings m2.mappings /\
-    S.equal m1.domain m2.domain
-
-let lemma_equal_intro #key #value m1 m2 = ()
-let lemma_equal_elim #key #value m1 m2  = ()
-let lemma_equal_refl #key #value m1 m2  = ()

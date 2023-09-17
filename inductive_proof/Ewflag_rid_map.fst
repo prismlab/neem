@@ -14,8 +14,8 @@ let init_st : concrete_st = M.const (0, false)
 let sel (s:concrete_st) k = if M.contains s k then M.sel s k else (0, false)
 
 let eq (a b:concrete_st) =
-  (forall id. M.contains a id <==> M.contains b id) /\
-  (forall id. sel a id = sel b id)
+  (forall id. M.contains a id = M.contains b id /\
+         sel a id == sel b id)
 
 // few properties of equivalence relation
 let symmetric (a b:concrete_st) 
