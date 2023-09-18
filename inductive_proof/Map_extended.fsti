@@ -1,3 +1,34 @@
+(*
+   Copyright 2008-2018 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(**
+
+ @summary FStar.Map provides a polymorphic, partial map from keys to
+   values, where keys support decidable equality.
+
+ `m:Map.t key value` is a partial map from `key` to `value`
+
+  A distinctive feature of the library is in its model of partiality.
+
+  A map can be seen as a pair of:
+    1. a total map `key -> Tot value`
+    2. a set of keys that record the domain of the map
+
+*)
+
 module Map_extended
 
 module S = FStar.Set

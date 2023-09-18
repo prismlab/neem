@@ -51,7 +51,7 @@ let do (s:concrete_st) (o:op_t) : concrete_st =
   |(_, (rid, Disable)) -> M.map_val (fun (c,f) -> (c, false)) s 
 
 let lem_do (s:concrete_st) (o:op_t)
-  : Lemma (requires true) (ensures (let rid = get_rid o in let r:concrete_st = do s o in
+  : Lemma (ensures (let rid = get_rid o in let r:concrete_st = do s o in
                     (Enable? (snd (snd o)) ==> (forall id. M.contains r id <==> M.contains s id \/ id = rid) /\
                       (not (M.contains s rid) ==> sel r rid = (1, true) /\
                         (forall id cf. (sel r id = sel s id) \/ (sel r id = (1, true)))) /\
@@ -76,12 +76,16 @@ let merge_flag (l a b:cf) : bool =
 let merge_cf (lca s1 s2:cf) : cf =
   (fst s1 + fst s2 - fst lca, merge_flag lca s1 s2)
 
-let concrete_merge (lca s1 s2:concrete_st) 
-  : Tot (r:concrete_st{(forall id. M.contains r id <==> M.contains lca id \/ M.contains s1 id \/ M.contains s2 id) /\
-                       (forall id. M.contains r id ==> sel r id = merge_cf (sel lca id) (sel s1 id) (sel s2 id))}) =
+let concrete_merge (lca s1 s2:concrete_st) : concrete_st =  
   let keys = Set.union (M.domain lca) (Set.union (M.domain s1) (M.domain s2)) in
   let u = M.const_on keys (0, false) in
   M.iter_upd (fun k v -> merge_cf (sel lca k) (sel s1 k) (sel s2 k)) u
+
+let lem_merge (lca s1 s2:concrete_st) 
+  : Lemma (ensures (let r = concrete_merge lca s1 s2 in
+                            (forall id. M.contains r id <==> M.contains lca id \/ M.contains s1 id \/ M.contains s2 id) /\
+                            (forall id. M.contains r id ==> sel r id = merge_cf (sel lca id) (sel s1 id) (sel s2 id))))
+                   [SMTPat (concrete_merge lca s1 s2)] = ()
 
 let prop1 (l:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires fst o1 <> fst o3 /\ 
