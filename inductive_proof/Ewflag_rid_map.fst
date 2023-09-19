@@ -46,12 +46,7 @@ let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
   |(_, (rid, Enable)) -> M.upd s rid (fst (sel s rid) + 1, true) 
   |(_, (rid, Disable)) -> M.map_val (fun (c,f) -> (c, false)) s 
-
-let lem_do (s:concrete_st) (o:op_t)
-  : Lemma (requires Enable? (snd (snd o)))
-          (ensures (sel (do s o) (get_rid o) = (fst (sel s (get_rid o)) + 1, true)))
-          [SMTPat (do s o)] = ()
-          
+       
 let merge_flag (l a b:cf) : bool =
   let lc = fst l in
   let ac = fst a in
@@ -75,9 +70,11 @@ let concrete_merge (lca s1 s2:concrete_st) : concrete_st =
 #push-options "--z3rlimit 100"
 let prop1 (l:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires fst o1 <> fst o3 /\ 
-                    ((Enable? (snd (snd o1)) /\ Enable? (snd (snd o3)) /\ Enable? (snd (snd o2))) \/
-                     (Enable? (snd (snd o1)) /\ Disable? (snd (snd o3))) \/
-                     (Disable? (snd (snd o3)))) /\
+                    ((Enable? (snd (snd o1)) /\ Enable? (snd (snd o2)) /\ Enable? (snd (snd o3))) \/
+                     (Enable? (snd (snd o1)) /\ Enable? (snd (snd o2)) /\ Disable? (snd (snd o3))) \/
+                     (Enable? (snd (snd o1)) /\ Disable? (snd (snd o2)) /\ Disable? (snd (snd o3))) \/
+                     (Disable? (snd (snd o1)) /\ Enable? (snd (snd o2)) /\ Disable? (snd (snd o3))) \/
+                     (Disable? (snd (snd o1)) /\ Disable? (snd (snd o2)) /\ Disable? (snd (snd o3)))) /\
                     get_rid o1 = get_rid o2 (*/\ get_rid o3 <> get_rid o1*))
                     //resolve_conflict o1 o3 = First_then_second) //o3.o1
                     //not (resolve_conflict o2 o3 = Second_then_first) //not(o2.o3)
@@ -85,19 +82,35 @@ let prop1 (l:concrete_st) (o1 o2 o3:op_t)
 
 let prop2 (l s s':concrete_st) (o1 o2 o3:op_t) 
   : Lemma (requires eq (concrete_merge s (do s o2) s') (do s' o2) /\
+                    ((Enable? (snd (snd o1)) /\ Enable? (snd (snd o2)) /\ Enable? (snd (snd o3))) \/
+                     (Enable? (snd (snd o1)) /\ Enable? (snd (snd o2)) /\ Disable? (snd (snd o3))) \/
+                     (Enable? (snd (snd o1)) /\ Disable? (snd (snd o2)) /\ Enable? (snd (snd o3))) \/
+                     (Enable? (snd (snd o1)) /\ Disable? (snd (snd o2)) /\ Disable? (snd (snd o3))) \/
+                     (Disable? (snd (snd o1)) /\ Enable? (snd (snd o2)) /\ Enable? (snd (snd o3))) \/
+                     (Disable? (snd (snd o1)) /\ Enable? (snd (snd o2)) /\ Disable? (snd (snd o3))) \/
+                     (Disable? (snd (snd o1)) /\ Disable? (snd (snd o2)) /\ Enable? (snd (snd o3))) \/
+                     (Disable? (snd (snd o1)) /\ Disable? (snd (snd o2)) /\ Disable? (snd (snd o3)))) /\
                     eq (concrete_merge l s (do l o3)) s' (*/\
                     get_rid o1 = get_rid o2 /\ get_rid o1 <> get_rid o3*))
           (ensures eq (concrete_merge (do s o1) (do (do s o1) o2) (do s' o1)) (do (do s' o1) o2)) = ()
 
 let prop3 (s s':concrete_st) (o2 o2':op_t)
   : Lemma (requires eq (concrete_merge s s s') s' /\
-                    (forall o. eq (concrete_merge s (do s o) s') (do s' o)) (*/\
-                    fst o2 <> fst o2' /\ get_rid o2 = get_rid o2'*))
+                    ((Enable? (snd (snd o2)) /\ Enable? (snd (snd o2'))) \/
+                     (Enable? (snd (snd o2)) /\ Disable? (snd (snd o2'))) \/
+                     (Disable? (snd (snd o2)) /\ Enable? (snd (snd o2'))) \/
+                     (Disable? (snd (snd o2)) /\ Disable? (snd (snd o2')))) /\
+                    (forall o. eq (concrete_merge s (do s o) s') (do s' o)) /\
+                    fst o2 <> fst o2' /\ get_rid o2 = get_rid o2')
           (ensures eq (concrete_merge s (do (do s o2') o2) s') (do (do s' o2') o2)) = ()
 
 let lem_merge3 (l a b c:concrete_st) (op op':op_t) 
   : Lemma 
     (requires eq (concrete_merge l a b) c /\ 
+              ((Enable? (snd (snd op)) /\ Enable? (snd (snd op'))) \/
+               (Enable? (snd (snd op)) /\ Disable? (snd (snd op'))) \/
+               (Disable? (snd (snd op)) /\ Enable? (snd (snd op'))) \/
+               (Disable? (snd (snd op)) /\ Disable? (snd (snd op')))) /\
               //fst op <> fst op' /\ get_rid op = get_rid op' /\
               (forall (o:op_t). eq (concrete_merge l a (do b o)) (do c o)))
     (ensures eq (concrete_merge l a (do (do b op) op')) (do (do c op) op')) = ()
@@ -120,6 +133,10 @@ let prop4 (l s:concrete_st) (o1 o2 o3 o3':op_t) //automatic
 
 let lem_merge4 (s s':concrete_st) (op op':op_t)
   : Lemma (requires get_rid op = get_rid op' /\
+                    ((Enable? (snd (snd op)) /\ Enable? (snd (snd op'))) \/
+                    (Enable? (snd (snd op)) /\ Disable? (snd (snd op'))) \/
+                    (Disable? (snd (snd op)) /\ Enable? (snd (snd op'))) \/
+                    (Disable? (snd (snd op)) /\ Disable? (snd (snd op')))) /\
                     eq (concrete_merge (do s op) (do s' op) (do s op)) (do s' op))
           (ensures eq (concrete_merge (do s op) (do (do s' op') op) (do s op)) (do (do s' op') op)) = ()
 
@@ -129,6 +146,10 @@ let idempotence (s:concrete_st) //automatic
 let prop5' (l s s':concrete_st) (o o3:op_t)
   : Lemma (requires eq (concrete_merge s s s') s' /\
                     eq (concrete_merge l s (do l o3)) s' /\
+                    ((Enable? (snd (snd o)) /\ Enable? (snd (snd o3))) \/
+                    (Enable? (snd (snd o)) /\ Disable? (snd (snd o3))) \/
+                    (Disable? (snd (snd o)) /\ Enable? (snd (snd o3))) \/
+                    (Disable? (snd (snd o)) /\ Disable? (snd (snd o3)))) /\
                     get_rid o <> get_rid o3)
           (ensures eq (concrete_merge s s (do s' o)) (do s' o)) = ()
 
