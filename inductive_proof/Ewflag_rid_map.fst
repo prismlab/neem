@@ -41,20 +41,17 @@ type op_t = timestamp_t & (nat (*replica_id*) & app_op_t)
 
 let get_rid (_,(rid,_)) = rid
 
-let one_ele (k:nat) v : concrete_st = M.const_on (Set.singleton k) v
-
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
-  |(_, (rid, Enable)) -> if M.contains s rid then M.upd s rid (fst (sel s rid) + 1, true) 
-                        else M.concat (one_ele rid (1, true)) s
+  |(_, (rid, Enable)) -> M.upd s rid (fst (sel s rid) + 1, true) 
   |(_, (rid, Disable)) -> M.map_val (fun (c,f) -> (c, false)) s 
 
 let lem_do (s:concrete_st) (o:op_t)
   : Lemma (requires Enable? (snd (snd o)))
           (ensures (sel (do s o) (get_rid o) = (fst (sel s (get_rid o)) + 1, true)))
           [SMTPat (do s o)] = ()
-
+          
 let merge_flag (l a b:cf) : bool =
   let lc = fst l in
   let ac = fst a in
