@@ -59,114 +59,188 @@ let upd_cf (e:E.concrete_st) (rid:nat{M.contains e rid}) (v:E.cf) : E.concrete_s
 let upd_cf_all (e:E.concrete_st) (v:E.cf) : E.concrete_st =
   M.map_val (fun _ -> v) e
 
+//let lem_concat k v es
+ // : Lemma (ensures (forall id. M.contains (M.concat (E.one_ele k v) es) id <==> M.contains es id \/ id = k)) 
+   //       [SMTPat (M.concat (E.one_ele k v) es)] = ()
+
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
-  |(_, (rid, Add e)) -> if M.contains s e && M.contains (sel s e) rid then 
-                          M.upd s e (M.upd (sel s e) rid (fst (E.sel (sel s e) rid) + 1, true))
-                       else if not (M.contains (sel s e) rid) then
-                          M.upd s e (M.concat (E.one_ele rid (1, true)) (sel s e))
-                       else M.concat (one_ele e (E.one_ele rid (1, true))) s
+  |(_, (rid, Add e)) -> M.upd s e (M.upd (sel s e) rid (fst (E.sel (sel s e) rid) + 1, true))
   |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = get_ele o then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
-                       //M.upd s e (M.map_val (fun (c,f) -> (c, false)) (sel s e))
 
-let lem_do_add (s:concrete_st) (o:op_t)
-  : Lemma (requires Add? (snd (snd o)))
-          (ensures (E.sel (sel (do s o) (get_ele o)) (get_rid o) = (fst (E.sel (sel s (get_ele o)) (get_rid o)) + 1, true)) /\
-                   (forall e id. ele_id (do s o) e id <==> ele_id s e id \/ (e = get_ele o /\ id = get_rid o)) /\
-                   (forall e. M.contains (do s o) e <==> M.contains s e \/ e = get_ele o) (*/\
-    (forall e. M.contains s e ==> (forall id. M.contains (sel (do s o) e) id <==> M.contains (sel s e) id \/ id = get_rid o)*))
-          [SMTPat (do s o)] = ()
+type resolve_conflict_res =
+  | First_then_second // op2.op1 
+  | Second_then_first // op1.op2
 
-let lem_do_rem (s:concrete_st) (o:op_t)
-  : Lemma (requires Rem? (snd (snd o)))
-          (ensures (forall e id. ele_id s e id <==> ele_id (do s o) e id) /\
-                   (forall e. M.contains s e ==> (forall id. M.contains (sel (do s o) e) id <==> M.contains (sel s e) id)))
-          [SMTPat (do s o)] = ()
+let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res =
+  if get_ele x = get_ele y && Add? (snd (snd x)) && Rem? (snd (snd y)) then First_then_second 
+  else Second_then_first
 
 let concrete_merge (lca s1 s2:concrete_st) : concrete_st =  
   let eles = S.union (M.domain lca) (S.union (M.domain s1) (M.domain s2)) in
   let u = M.const_on eles init_st in
   M.iter_upd (fun k v -> E.concrete_merge (sel lca k) (sel s1 k) (sel s2 k)) u
 
-let lem_merge (lca s1 s2:concrete_st)
-  : Lemma (ensures (forall e. M.contains (concrete_merge lca s1 s2) e <==> 
-                         M.contains lca e \/ M.contains s1 e \/ M.contains s2 e) /\
-                   (forall e id. M.contains (concrete_merge lca s1 s2) e ==>
-                         (M.contains (sel (concrete_merge lca s1 s2) e) id <==>
-                          M.contains (sel lca e) id \/ M.contains (sel s1 e) id \/ M.contains (sel s2 e) id)))
-                   [SMTPat (concrete_merge lca s1 s2)] = ()
+#push-options "--z3rlimit 100"
+let prop1 (l:concrete_st) (o1 o2 o3:op_t) // cond1
+  : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\ 
+                    resolve_conflict o1 o3 = First_then_second /\
+                    resolve_conflict o2 o3 = First_then_second (*/\
+                    get_rid o1 = get_rid o2 /\ get_rid o3 <> get_rid o1*))
+          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) (do (do (do l o3) o1) o2)) = ()
 
+let prop2 (s s':concrete_st) (o1 o2 o3:op_t) //cond2
+  : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\
+                    resolve_conflict o1 o3 = First_then_second /\
+                    resolve_conflict o2 o3 = First_then_second /\
+                    eq (concrete_merge s (do s o2) s') (do s' o2)
+                    (*get_rid o1 = get_rid o2 /\ get_rid o1 <> get_rid o3*))
+          (ensures eq (concrete_merge (do s o1) (do (do s o1) o2) (do s' o1)) (do (do s' o1) o2)) = ()
 
-#push-options "--z3rlimit 200"
-let prop1 (l:concrete_st) (o1 o2 o3:op_t)
-  : Lemma (requires fst o1 <> fst o3 /\ fst o1 <> fst o2 /\ fst o2 <> fst o3 /\
-                    ((Add? (snd (snd o1)) /\ Add? (snd (snd o3)) /\ Add? (snd (snd o2)))) /\ // \/
-                     //(Add? (snd (snd o1)) /\ Rem? (snd (snd o3))) /\
-                     //(Rem? (snd (snd o3)))) /\
-                    get_rid o1 = get_rid o2 /\ get_rid o3 <> get_rid o1)
-                    //resolve_conflict o1 o3 = First_then_second) //o3.o1
-                    //not (resolve_conflict o2 o3 = Second_then_first) //not(o2.o3)
-          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) (do (do (do l o3) o1) o2)) = 
-  let lhs = (concrete_merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) in
-  let rhs = (do (do (do l o3) o1) o2) in
-  let e1 = get_ele o1 in let e2 = get_ele o2 in let e3 = get_ele o3 in
-  let r2 = get_rid o2 in let r1 = get_rid o1 in let r3 = get_rid o3 in
-  assert (forall e. M.contains lhs e <==> M.contains rhs e);
-  assert (forall e id. ele_id (do l o1) e id <==> ele_id l e id \/ (e = e1 /\ id = r1));
-  assert (forall e id. ele_id (do l o3) e id <==> ele_id l e id \/ (e = e3 /\ id = r3));
-  assert (forall e id. ele_id (do (do l o1) o2) e id <==> ele_id (do l o1) e id \/ (e = e2 /\ id = r2));
-  assert (forall e id. ele_id (do (do l o3) o1) e id <==> ele_id (do l o3) e id \/ (e = e1 /\ id = r1));
-  assert (forall e id. ele_id (do (do (do l o3) o1) o2) e id <==> ele_id (do (do l o3) o1) e id \/ (e = e2 /\ id = r2));
-  assert (forall e id. ele_id (do (do (do l o3) o1) o2) e id <==> 
-                  ele_id l e id \/ (e = e1 /\ id = r1) \/ (e = e2 /\ id = r2) \/ (e = e3 /\ id = r3));
-  //assert (forall e id. ele_id (concrete_merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) e id <==> 
-    //              ele_id l e id \/ (e = e1 /\ id = r1) \/ (e = e2 /\ id = r2) \/ (e = e3 /\ id = r3));
-  //assert (forall e id. ele_id lhs e id <==> ele_id rhs e id);
-  assert (forall e. M.contains lhs e ==> (forall id. M.contains (sel lhs e) id <==> M.contains (sel rhs e) id));
-  admit()
-  
+let prop3 (s s':concrete_st) (o2 o2':op_t)
+  : Lemma (requires eq (concrete_merge s s s') s' /\
+                    ((Add? (snd (snd o2)) /\ Add? (snd (snd o2'))) \/
+                     (Add? (snd (snd o2)) /\ Rem? (snd (snd o2'))) \/
+                     (Rem? (snd (snd o2)) /\ Add? (snd (snd o2'))) \/
+                     (Rem? (snd (snd o2)) /\ Rem? (snd (snd o2')))) /\
+                    (forall o. eq (concrete_merge s (do s o) s') (do s' o)))
+                    //fst o2 <> fst o2' /\ get_rid o2 = get_rid o2')
+          (ensures eq (concrete_merge s (do (do s o2') o2) s') (do (do s' o2') o2)) = ()
 
+let lem_merge3 (l a b c:concrete_st) (op op':op_t) //cond3
+  : Lemma 
+    (requires eq (concrete_merge l a b) c /\ 
+              ((Add? (snd (snd op)) /\ Add? (snd (snd op'))) \/
+               (Add? (snd (snd op)) /\ Rem? (snd (snd op'))) \/
+               (Rem? (snd (snd op)) /\ Add? (snd (snd op'))) \/
+               (Rem? (snd (snd op)) /\ Rem? (snd (snd op')))) /\
+              (forall (o:op_t). eq (concrete_merge l a (do b o)) (do c o)))
+              //fst op <> fst op' /\ get_rid op = get_rid op' /\
+    (ensures eq (concrete_merge l a (do (do b op) op')) (do (do c op) op')) = ()
+
+let prop4 (l s:concrete_st) (o1 o2 o3 o3':op_t) //automatic //cond5
+  : Lemma (requires fst o1 <> fst o3 /\ fst o1 <> fst o3' /\ fst o2 <> fst o3 /\ fst o2 <> fst o3' /\
+                    resolve_conflict o1 o3 = First_then_second /\
+                    resolve_conflict o1 o3' = First_then_second /\
+                    resolve_conflict o2 o3 = First_then_second /\
+                    resolve_conflict o2 o3' = First_then_second /\
+                    //get_rid o1 = get_rid o2 /\ get_rid o3 = get_rid o3' /\
+                    //o3.o1, o3'.o1, o3.o2, o3'.o2
+                    eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do s o3) o1)) (do (do (do s o3) o1) o2))
+          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do (do s o3') o3) o1)) 
+                      (do (do (do (do s o3') o3) o1) o2)) = ()
+
+let merge_pre l a b =
+  (forall e. M.contains (concrete_merge l a b) e ==>
+        (forall id. M.contains (sel (concrete_merge l a b) e) id ==>
+               fst (E.sel (sel a e) id) >= fst (E.sel (sel l e) id) /\
+               fst (E.sel (sel b e) id) >= fst (E.sel (sel l e) id)))
+               
+let lem_merge4 (s s':concrete_st) (op op':op_t) //cond4
+  : Lemma (requires get_rid op = get_rid op' /\
+                    merge_pre (do s op) (do s' op) (do s op) /\
+                    ((Add? (snd (snd op)) /\ Add? (snd (snd op'))) \/
+                    (Add? (snd (snd op)) /\ Rem? (snd (snd op'))) \/
+                    (Rem? (snd (snd op)) /\ Add? (snd (snd op'))) \/
+                    (Rem? (snd (snd op)) /\ Rem? (snd (snd op')))) /\
+                    eq (concrete_merge (do s op) (do s' op) (do s op)) (do s' op))
+          (ensures eq (concrete_merge (do s op) (do (do s' op') op) (do s op)) (do (do s' op') op)) = ()
 
 let idempotence (s:concrete_st) //automatic
   : Lemma (eq (concrete_merge s s s) s) = ()
 
-let prop4 (l s:concrete_st) (o1 o2 o3 o3':op_t) //automatic
-  : Lemma (requires //fst o2 <> fst o3 /\ 
-                    ((Add? (snd (snd o1)) /\ Add? (snd (snd o3))) \/
-                     (Rem? (snd (snd o3)))) /\
-                    ((Add? (snd (snd o2)) /\ Add? (snd (snd o3))) \/
-                     (Rem? (snd (snd o3)))) /\
-                    ((Add? (snd (snd o1)) /\ Add? (snd (snd o3'))) \/
-                     (Rem? (snd (snd o3')))) /\
-                    ((Add? (snd (snd o2)) /\ Add? (snd (snd o3'))) \/
-                     (Rem? (snd (snd o3')))) /\
-                    get_rid o1 = get_rid o2 /\ get_rid o3 = get_rid o3' /\
-                    //o3.o1, o3'.o1, o3.o2, o3'.o2
-                    eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do s o3) o1)) (do (do (do s o3) o1) o2))
-          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do (do s o3') o3) o1)) 
-                      (do (do (do (do s o3') o3) o1) o2)) = admit()
-                      
-let lem_merge4 (s s':concrete_st) (op op':op_t)
-  : Lemma (requires get_rid op = get_rid op' /\ 
-                    eq (concrete_merge (do s op) (do s' op) (do s op)) (do s' op))
-          (ensures eq (concrete_merge (do s op) (do (do s' op') op) (do s op)) (do (do s' op') op)) = admit()
+let prop5' (s:concrete_st) (o:op_t)
+  : Lemma (requires Add? (snd (snd o)) \/ Rem? (snd (snd o)))
+          (ensures eq (concrete_merge s s (do s o)) (do s o)) = ()
 
-let prop5' (l s s':concrete_st) (o o3:op_t)
+let prop5 (s s':concrete_st) (o:op_t)
   : Lemma (requires eq (concrete_merge s s s') s' /\
-                    eq (concrete_merge l s (do l o3)) s' /\
-                    get_rid o <> get_rid o3)
-          (ensures eq (concrete_merge s s (do s' o)) (do s' o)) = admit() 
+                    merge_pre s s s' /\
+                    (Add? (snd (snd o)) \/ Rem? (snd (snd o))))
+          (ensures eq (concrete_merge s s (do s' o)) (do s' o)) = ()
+#pop-options
 
-let prop3 (s s':concrete_st) (o2 o2':op_t) //done
+(*#push-options "--z3rlimit 100"
+let prop1 (l:concrete_st) (o1 o2 o3:op_t) // cond1
+  : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\ 
+                    not (resolve_conflict o3 o1 = First_then_second) /\
+                    not (resolve_conflict o3 o2 = First_then_second) /\
+                    get_rid o1 = get_rid o2 (*/\ get_rid o3 <> get_rid o1*))
+                    //resolve_conflict o1 o3 = First_then_second) //o3.o1
+                    //not (resolve_conflict o2 o3 = Second_then_first) //not(o2.o3)
+          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) (do (do (do l o3) o1) o2)) = ()
+
+let prop2 (l s s':concrete_st) (o1 o2 o3:op_t) //cond2
+  : Lemma (requires eq (concrete_merge s (do s o2) s') (do s' o2) /\
+                    fst o1 <> fst o3 /\ fst o2 <> fst o3 /\
+                    not (resolve_conflict o3 o1 = First_then_second) /\
+                    not (resolve_conflict o3 o2 = First_then_second) /\
+                    eq (concrete_merge l s (do l o3)) s'
+                    (*get_rid o1 = get_rid o2 /\ get_rid o1 <> get_rid o3*))
+          (ensures eq (concrete_merge (do s o1) (do (do s o1) o2) (do s' o1)) (do (do s' o1) o2)) = ()
+          
+let prop3 (s s':concrete_st) (o2 o2':op_t) 
   : Lemma (requires eq (concrete_merge s s s') s' /\
+                    ((Add? (snd (snd o2)) /\ Add? (snd (snd o2'))) \/
+                     (Add? (snd (snd o2)) /\ Rem? (snd (snd o2'))) \/
+                     (Rem? (snd (snd o2)) /\ Add? (snd (snd o2'))) \/
+                     (Rem? (snd (snd o2)) /\ Rem? (snd (snd o2')))) /\
                     (forall o. eq (concrete_merge s (do s o) s') (do s' o)) /\
                     fst o2 <> fst o2' /\ get_rid o2 = get_rid o2')
           (ensures eq (concrete_merge s (do (do s o2') o2) s') (do (do s' o2') o2)) = ()
 
-let lem_merge3 (l a b c:concrete_st) (op op':op_t) //done
+let lem_merge3 (l a b c:concrete_st) (op op':op_t) //cond3
   : Lemma 
     (requires eq (concrete_merge l a b) c /\ 
+              ((Add? (snd (snd op)) /\ Add? (snd (snd op'))) \/
+               (Add? (snd (snd op)) /\ Rem? (snd (snd op'))) \/
+               (Rem? (snd (snd op)) /\ Add? (snd (snd op'))) \/
+               (Rem? (snd (snd op)) /\ Rem? (snd (snd op')))) /\
               //fst op <> fst op' /\ get_rid op = get_rid op' /\
               (forall (o:op_t). eq (concrete_merge l a (do b o)) (do c o)))
     (ensures eq (concrete_merge l a (do (do b op) op')) (do (do c op) op')) = ()
+
+let merge_pre l a b =
+  (forall e. M.contains (concrete_merge l a b) e ==>
+        (forall id. M.contains (sel (concrete_merge l a b) e) id ==>
+               fst (E.sel (sel a e) id) >= fst (E.sel (sel l e) id) /\
+               fst (E.sel (sel b e) id) >= fst (E.sel (sel l e) id)))
+
+let prop4 (l s:concrete_st) (o1 o2 o3 o3':op_t)  //cond5
+  : Lemma (requires fst o1 <> fst o3 /\ fst o1 <> fst o3' /\ fst o2 <> fst o3 /\ fst o2 <> fst o3' /\
+                    //merge_pre (do l o1) (do (do l o1) o2) (do (do s o3) o1) /\
+                    //merge_pre (do l o1) (do (do l o1) o2) (do (do (do s o3') o3) o1) /\
+                    //not (resolve_conflict o3 o1 = First_then_second) /\
+                     (resolve_conflict o2 o3 = First_then_second) /\
+                     //not (resolve_conflict o3' o1 = First_then_second) /\
+                    resolve_conflict o3' o2 = First_then_second /\
+                    get_rid o1 = get_rid o2 /\ get_rid o3 = get_rid o3' /\
+                    //o3.o1, o3'.o1, o3.o2, o3'.o2
+                    eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do s o3) o1)) (do (do (do s o3) o1) o2))
+          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do (do s o3') o3) o1)) 
+                      (do (do (do (do s o3') o3) o1) o2)) = ()
+
+let lem_merge4 (s s':concrete_st) (op op':op_t) //cond4
+  : Lemma (requires get_rid op = get_rid op' /\
+                    merge_pre (do s op) (do s' op) (do s op) /\ //extra pre-cond
+                    ((Add? (snd (snd op)) /\ Add? (snd (snd op'))) \/ 
+                    (Add? (snd (snd op)) /\ Rem? (snd (snd op'))) \/ 
+                    (Rem? (snd (snd op)) /\ Add? (snd (snd op'))) \/ 
+                    (Rem? (snd (snd op)) /\ Rem? (snd (snd op')))) /\ 
+                    eq (concrete_merge (do s op) (do s' op) (do s op)) (do s' op))
+          (ensures eq (concrete_merge (do s op) (do (do s' op') op) (do s op)) (do (do s' op') op)) = ()
+
+let idempotence (s:concrete_st) 
+  : Lemma (eq (concrete_merge s s s) s) = ()
+
+let prop5' (l s s':concrete_st) (o o3:op_t)
+  : Lemma (requires eq (concrete_merge s s s') s' /\
+                    merge_pre s s s' /\
+                    //eq (concrete_merge l s (do l o3)) s' /\
+                    ((Add? (snd (snd o)) /\ Add? (snd (snd o3))) \/
+                    (Add? (snd (snd o)) /\ Rem? (snd (snd o3))) \/
+                    (Rem? (snd (snd o)) /\ Add? (snd (snd o3))) \/
+                    (Rem? (snd (snd o)) /\ Rem? (snd (snd o3)))) /\
+                    get_rid o <> get_rid o3)
+          (ensures eq (concrete_merge s s (do s' o)) (do s' o)) = ()*)
