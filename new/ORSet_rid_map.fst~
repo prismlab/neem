@@ -1,0 +1,56 @@
+module Orset_rid_map
+
+module M = Map_extended
+module S = FStar.Set
+module E = Ewflag_rid_map
+
+#set-options "--query_stats"
+// the concrete state type
+type concrete_st = M.t nat E.concrete_st // (element, replica_id, ctr, flag) //replica ids are unique
+
+let init_st : concrete_st = M.const E.init_st
+
+let sel (s:concrete_st) k = if M.contains s k then M.sel s k else E.init_st
+
+let eq (a b:concrete_st) =
+  (forall e. M.contains a e = M.contains b e /\
+        E.eq (sel a e) (sel b e))
+
+// few properties of equivalence relation
+let symmetric (a b:concrete_st) 
+  : Lemma (requires eq a b)
+          (ensures eq b a) = ()
+
+let transitive (a b c:concrete_st)
+  : Lemma (requires eq a b /\ eq b c)
+          (ensures eq a c) = ()
+
+let eq_is_equiv (a b:concrete_st)
+  : Lemma (requires a == b)
+          (ensures eq a b) = ()
+
+// operation type
+type app_op_t:eqtype =
+  |Add : nat -> app_op_t 
+  |Rem : nat -> app_op_t
+
+type timestamp_t = pos 
+
+type op_t = timestamp_t & (nat (*replica_id*) & app_op_t)
+
+let get_rid (_,(rid,_)) = rid
+
+let one_ele (k:nat) v : concrete_st = M.const_on (Set.singleton k) v
+
+let upd_cf (e:E.concrete_st) (rid:nat{M.contains e rid}) (v:E.cf) : E.concrete_st =
+  M.upd e rid v
+
+// apply an operation to a state
+let do (s:concrete_st) (o:op_t) : concrete_st =
+  match o with
+  |(_, (rid, Add e)) -> if M.contains s e && M.contains (sel s e) rid then 
+                          M.upd s e (upd_cf (sel s e) rid (E.sel (sel s e) rid))
+                       else if not (M.contains (sel s e) rid) then
+                          M.upd s e (M.concat (E.one_ele rid (1, true)) (sel s e))
+                       else M.concat (E.one_ele e (E.one_ele rid (1, true))) s
+  |(_, (rid, Rem e)) -> admit()
