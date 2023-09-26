@@ -1,4 +1,4 @@
-module App
+module App_comm_mrdts
 
 #set-options "--query_stats"
 // the concrete state type
@@ -24,10 +24,15 @@ let eq_is_equiv (a b:concrete_st)
           (ensures eq a b) = ()
 
 // operation type
-type app_op_t = unit
+type app_op_t:eqtype = 
+  |Inc 
+  |Dec 
 
 // apply an operation to a state
-let do (s:concrete_st) (op:op_t) : concrete_st = s + 1
+let do (s:concrete_st) (op:op_t) : concrete_st =
+  match snd op with
+  |Inc -> s + 1
+  |Dec -> s - 1
 
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b)
@@ -85,15 +90,14 @@ let linearizable_s1_0_s2_0_base (lca s1 s2:st)
 
 let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
-                    ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
                     consistent_branches lca s1 s2 /\
+                    ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
                     fst last1 <> fst last2)
          
           (ensures (First_then_second? (resolve_conflict last1 last2) ==>
                       (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                           (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))  = ()              
 
-#push-options "--z3rlimit 20"
 let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
                     consistent_branches lca s1 s2 /\
@@ -110,8 +114,7 @@ let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
                    
                     (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))) = ()
-#pop-options
-
+                       
 let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
                     consistent_branches lca s1 s2 /\
@@ -133,13 +136,16 @@ let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
 //// Sequential implementation //////
 
 // the concrete state 
-type concrete_st_s = nat
+type concrete_st_s = int
 
 // init state 
 let init_st_s = 0
 
 // apply an operation to a state 
-let do_s (s:concrete_st_s) (op:op_t) : concrete_st_s = s + 1
+let do_s (s:concrete_st_s) (op:op_t) : concrete_st_s =
+  match snd op with
+  |Inc -> s + 1
+  |Dec -> s - 1
 
 //equivalence relation between the concrete states of sequential type and MRDT
 let eq_sm (st_s:concrete_st_s) (st:concrete_st) = st_s == st
