@@ -76,11 +76,11 @@ let get_ele (o:op_t) =
 
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) 
-  : (r:concrete_st(*{(forall rid e. e <> get_ele o ==> E.sel (sel r e) rid = E.sel (sel s e) rid) /\
+  : (r:concrete_st{(forall rid e. e <> get_ele o ==> E.sel (sel r e) rid = E.sel (sel s e) rid) /\
                    (Add? (snd (snd o)) ==> (forall e. M.contains r e <==> M.contains s e \/ e = get_ele o) /\
                                    (forall e. e = get_ele o ==> E.sel (sel r e) (get_rid o) = (fst (E.sel (sel s e) (get_rid o)) + 1, true))) /\
                    (Rem? (snd (snd o)) ==> (forall e. M.contains r e <==> M.contains s e) /\
-                                   (forall e rid. e = get_ele o ==> E.sel (sel r e) rid = (fst (E.sel (sel s e) rid), false)))}*)) =
+                                   (forall e rid. e = get_ele o ==> E.sel (sel r e) rid = (fst (E.sel (sel s e) rid), false)))}) =
   match o with
   |(_, (rid, Add e)) -> M.upd s e (M.upd (sel s e) rid (fst (E.sel (sel s e) rid) + 1, true))
   |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = get_ele o then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
@@ -137,8 +137,8 @@ let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res =
   else Second_then_first
 
 let concrete_merge (lca s1 s2:concrete_st) 
-  : (r:concrete_st(*{(forall e. M.contains r e <==> M.contains lca e \/ M.contains s1 e \/ M.contains s2 e) /\
-                   (forall e rid. E.sel (sel r e) rid = E.sel (E.concrete_merge (sel lca e) (sel s1 e) (sel s2 e)) rid)}*)) =  
+  : (r:concrete_st{(forall e. M.contains r e <==> M.contains lca e \/ M.contains s1 e \/ M.contains s2 e) /\
+                   (forall e rid. E.sel (sel r e) rid = E.sel (E.concrete_merge (sel lca e) (sel s1 e) (sel s2 e)) rid)}) =  
   let eles = S.union (M.domain lca) (S.union (M.domain s1) (M.domain s2)) in
   let u = M.const_on eles init_st in
   M.iter_upd (fun k v -> E.concrete_merge (sel lca k) (sel s1 k) (sel s2 k)) u
@@ -528,6 +528,14 @@ let lin_comm_ind_a3_req (lca s1 s2:st) (last1 last2:op_t)
                       E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
                            (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
 
+let merge_pre_ext l a b =
+  (forall e. M.contains l e ==> M.contains a e /\ M.contains b e) /\
+  (forall e id. M.contains l e /\ M.contains (sel l e) id ==> M.contains (sel a e) id /\ M.contains (sel b e) id) /\
+  (forall e. M.contains (concrete_merge l a b) e ==>
+        (forall id. M.contains (sel (concrete_merge l a b) e) id ==>
+               fst (E.sel (sel a e) id) >= fst (E.sel (sel l e) id) /\
+               fst (E.sel (sel b e) id) >= fst (E.sel (sel l e) id)))
+               
 let lin_comm_ind_a3_aeq (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires get_rid last1 <> get_rid last2 /\
                     ops_of s1 = ops_of lca /\ 
@@ -541,7 +549,17 @@ let lin_comm_ind_a3_aeq (lca s1 s2:st) (last1 last2:op_t)
                         (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))))
           (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
                       E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
-                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = admit()
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = 
+  assert (forall e rid. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e /\ 
+              rid <> get_rid last2 ==> E.sel (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) rid =
+                                      E.sel (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e) rid);
+  assert (forall e rid. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e /\ 
+              rid = get_rid last2 ==> fst (E.sel (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) rid) =
+                                      fst (E.sel (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e) rid));
+  assert (forall e rid. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e /\ 
+              rid = get_rid last2 ==> snd (E.sel (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) rid) =
+                                      snd (E.sel (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e) rid));
+  ()
 
 let lin_comm_ind_a3 (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires get_rid last1 <> get_rid last2 /\
