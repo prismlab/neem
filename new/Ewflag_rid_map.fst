@@ -65,7 +65,10 @@ let v_of (s:st0) : concrete_st = fst s
 let ops_of (s:st0) : GTot log = snd s
 
 // apply an operation to a state
-let do (s:concrete_st) (o:op_t) : concrete_st =
+let do (s:concrete_st) (o:op_t) 
+  : (r:concrete_st{(Enable? (snd (snd o)) ==> sel r (get_rid o) = (fst (sel s (get_rid o)) + 1, true) /\
+                                              (forall rid. rid <> get_rid o ==> sel r rid = sel s rid)) /\
+                   (Disable? (snd (snd o)) ==> (forall rid. sel r rid = (fst (sel s rid), false)))}) =
   match o with
   |(_, (rid, Enable)) -> M.upd s rid (fst (sel s rid) + 1, true) 
   |(_, (rid, Disable)) -> M.map_val (fun (c,f) -> (c, false)) s 
@@ -131,7 +134,9 @@ let merge_flag (l a b:cf) : bool =
 let merge_cf (lca s1 s2:cf) : cf =
   (fst s1 + fst s2 - fst lca, merge_flag lca s1 s2)
 
-let concrete_merge (lca s1 s2:concrete_st) : concrete_st =  
+let concrete_merge (lca s1 s2:concrete_st) 
+  : (r:concrete_st{(forall rid. M.contains r rid <==> M.contains lca rid \/ M.contains s1 rid \/ M.contains s2 rid) /\
+                   (forall rid. sel r rid = merge_cf (sel lca rid) (sel s1 rid) (sel s2 rid))}) =  
   let keys = S.union (M.domain lca) (S.union (M.domain s1) (M.domain s2)) in
   let u = M.const_on keys (0, false) in
   M.iter_upd (fun k v -> merge_cf (sel lca k) (sel s1 k) (sel s2 k)) u
@@ -199,11 +204,52 @@ let do_st (s:st1) (o:op_t) : st1 =
   split_prefix init_st (ops_of s) (snoc (ops_of s) o); 
   (do (v_of s) o, hide (snoc (ops_of s) o))
 
+#push-options "--z3rlimit 50 --ifuel 3"
 let merge_is_comm (lca s1 s2:st)
   : Lemma (requires true) //consistent_branches lca s1 s2)
           (ensures (eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
                        (concrete_merge (v_of lca) (v_of s2) (v_of s1)))) = ()
 
+let lin_rc_ind_s1' (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires length (ops_of s1) > length (ops_of lca) /\
+                    Disable? (snd (snd last1)) /\ Enable? (snd (snd last2)) /\
+                    (let s1' = inverse_st s1 in
+                    eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
+                       (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))))
+                           
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = ()
+                      
+let lin_rc_ind_s2' (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires length (ops_of s2) > length (ops_of lca) /\
+                    Disable? (snd (snd last1)) /\ Enable? (snd (snd last2)) /\
+                    (let s2' = inverse_st s2 in
+                    eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))))
+                           
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = ()
+                      
+let rec lin_rc (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires consistent_branches lca s1 s2 /\ 
+                    //fst last1 <> fst last2 /\
+                    get_rid last1 <> get_rid last2 /\
+                    Disable? (snd (snd last1)) /\ Enable? (snd (snd last2)))       
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
+          (decreases %[length (ops_of s1); length (ops_of s2)]) =
+  if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then () //done
+  else if ops_of s1 = ops_of lca then 
+    (let s2' = inverse_st s2 in
+     assume (consistent_branches lca s1 s2'); //can be done
+     lin_rc lca s1 s2' last1 last2;
+     lin_rc_ind_s2' lca s1 s2 last1 last2) //done
+  else 
+    (let s1' = inverse_st s1 in
+     assume (consistent_branches lca s1' s2); //can be done
+     lin_rc lca s1' s2 last1 last2;
+     lin_rc_ind_s1' lca s1 s2 last1 last2) //done
+                       
 #push-options "--z3rlimit 50 --ifuel 3"
 let linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
   : Lemma (requires //consistent_branches lca s1 (do_st s2' last2) /\
@@ -379,7 +425,7 @@ let linearizable_gt0_ind1_stf_ee_help (lca s1 s2:st) (last1 last2:op_t)
   split_prefix init_st (ops_of lca) (ops_of (do_st s1 last1));
   lem_apply (v_of lca) (diff (snoc (ops_of s1) last1) (ops_of lca))
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 200"
 let linearizable_gt0_ind1_stf_ee (lca s1 s2:st) (last1 last2:op_t)
   : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
                     consistent_branches lca s1 s2 /\

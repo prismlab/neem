@@ -76,11 +76,11 @@ let get_ele (o:op_t) =
 
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) 
-  : (r:concrete_st{(forall rid e. e <> get_ele o ==> E.sel (sel r e) rid = E.sel (sel s e) rid) /\
+  : (r:concrete_st(*{(forall rid e. e <> get_ele o ==> E.sel (sel r e) rid = E.sel (sel s e) rid) /\
                    (Add? (snd (snd o)) ==> (forall e. M.contains r e <==> M.contains s e \/ e = get_ele o) /\
                                    (forall e. e = get_ele o ==> E.sel (sel r e) (get_rid o) = (fst (E.sel (sel s e) (get_rid o)) + 1, true))) /\
                    (Rem? (snd (snd o)) ==> (forall e. M.contains r e <==> M.contains s e) /\
-                                   (forall e rid. e = get_ele o ==> E.sel (sel r e) rid = (fst (E.sel (sel s e) rid), false)))}) =
+                                   (forall e rid. e = get_ele o ==> E.sel (sel r e) rid = (fst (E.sel (sel s e) rid), false)))}*)) =
   match o with
   |(_, (rid, Add e)) -> M.upd s e (M.upd (sel s e) rid (fst (E.sel (sel s e) rid) + 1, true))
   |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = get_ele o then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
@@ -137,8 +137,8 @@ let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res =
   else Second_then_first
 
 let concrete_merge (lca s1 s2:concrete_st) 
-  : (r:concrete_st{(forall e. M.contains r e <==> M.contains lca e \/ M.contains s1 e \/ M.contains s2 e) /\
-                   (forall e rid. E.sel (sel r e) rid = E.sel (E.concrete_merge (sel lca e) (sel s1 e) (sel s2 e)) rid)}) =  
+  : (r:concrete_st(*{(forall e. M.contains r e <==> M.contains lca e \/ M.contains s1 e \/ M.contains s2 e) /\
+                   (forall e rid. E.sel (sel r e) rid = E.sel (E.concrete_merge (sel lca e) (sel s1 e) (sel s2 e)) rid)}*)) =  
   let eles = S.union (M.domain lca) (S.union (M.domain s1) (M.domain s2)) in
   let u = M.const_on eles init_st in
   M.iter_upd (fun k v -> E.concrete_merge (sel lca k) (sel s1 k) (sel s2 k)) u
@@ -227,11 +227,12 @@ let do_st (s:st1) (o:op_t) : st1 =
   split_prefix init_st (ops_of s) (snoc (ops_of s) o); 
   (do (v_of s) o, hide (snoc (ops_of s) o))
 
+#push-options "--z3rlimit 50 --ifuel 3"
 let merge_is_comm (lca s1 s2:st)
   : Lemma (requires true) //consistent_branches lca s1 s2)
           (ensures (eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
                        (concrete_merge (v_of lca) (v_of s2) (v_of s1)))) = ()
-
+                       
 let lem_trans_merge_s1' (lca s1 s2 s1':concrete_st)
   : Lemma (requires eq s1 s1')
           (ensures eq (concrete_merge lca s1 s2)
@@ -241,7 +242,154 @@ let lem_trans_merge_s2' (lca s1 s2 s2':concrete_st)
   : Lemma (requires eq s2 s2')
           (ensures eq (concrete_merge lca s1 s2)
                       (concrete_merge lca s1 s2')) = ()
+
+#push-options "--z3rlimit 100 --ifuel 5 --split_queries always"
+let lin_rc_ind_s1'_pre (lca s1 s2:st) (last1 last2:op_t) =
+  length (ops_of s1) > length (ops_of lca) /\ //get_rid last1 <> get_rid last2 /\
+  Rem? (snd (snd last1)) /\ Add? (snd (snd last2)) /\ get_ele last1 = get_ele last2 /\
+  (let s1' = inverse_st s1 in
+  eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
+     (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2)))
+                       
+let lin_rc_ind_s1'_req (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s1'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last1' = un_snoc (ops_of s1) in
+                     Rem? (snd (snd last1')) /\ get_ele last1' = get_ele last1))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+
+let lin_rc_ind_s1'_rneq (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s1'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last1' = un_snoc (ops_of s1) in
+                     Rem? (snd (snd last1')) /\ get_ele last1' <> get_ele last1))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+
+let lin_rc_ind_s1'_aeq (lca s1 s2:st) (last1 last2:op_t) //takes time
+  : Lemma (requires lin_rc_ind_s1'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last1' = un_snoc (ops_of s1) in
+                     Add? (snd (snd last1')) /\ get_ele last1' = get_ele last1))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+
+let lin_rc_ind_s1'_aneq (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s1'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last1' = un_snoc (ops_of s1) in
+                     Add? (snd (snd last1')) /\ get_ele last1' <> get_ele last1))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+                           
+let lin_rc_ind_s1' (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s1'_pre lca s1 s2 last1 last2)                        
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = 
+  let _, last1' = un_snoc (ops_of s1) in
+  if Rem? (snd (snd last1')) && get_ele last1' = get_ele last1 then lin_rc_ind_s1'_req lca s1 s2 last1 last2
+  else if Rem? (snd (snd last1')) && get_ele last1' <> get_ele last1 then lin_rc_ind_s1'_rneq lca s1 s2 last1 last2
+  else if Add? (snd (snd last1')) && get_ele last1' = get_ele last1 then lin_rc_ind_s1'_aeq lca s1 s2 last1 last2
+  else lin_rc_ind_s1'_aneq lca s1 s2 last1 last2
+
+let lin_rc_ind_s2'_pre (lca s1 s2:st) (last1 last2:op_t) =
+  length (ops_of s2) > length (ops_of lca) /\ //get_rid last1 <> get_rid last2 /\
+  Rem? (snd (snd last1)) /\ Add? (snd (snd last2)) /\ get_ele last1 = get_ele last2 /\
+  (let s2' = inverse_st s2 in
+  eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
+     (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2)))
+
+let lin_rc_ind_s2'_req (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s2'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last2' = un_snoc (ops_of s2) in
+                     Rem? (snd (snd last2')) /\ get_ele last2' = get_ele last2))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+
+let lin_rc_ind_s2'_rneq (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s2'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last2' = un_snoc (ops_of s2) in
+                     Rem? (snd (snd last2')) /\ get_ele last2' <> get_ele last2))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+
+let lin_rc_ind_s2'_aeq (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s2'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last2' = un_snoc (ops_of s2) in
+                     Add? (snd (snd last2')) /\ get_ele last2' = get_ele last2))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+
+let lin_rc_ind_s2'_aneq (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s2'_pre lca s1 s2 last1 last2 /\ 
+                    (let _, last2' = un_snoc (ops_of s2) in
+                     Add? (snd (snd last2')) /\ get_ele last2' <> get_ele last2))                         
+          (ensures (forall e. e = get_ele last2 /\ M.contains (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e ==> 
+                      E.eq (sel (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2) e) 
+                           (sel (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)) e))) = ()
+                           
+let lin_rc_ind_s2' (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires lin_rc_ind_s2'_pre lca s1 s2 last1 last2)                           
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = 
+  let _, last2' = un_snoc (ops_of s2) in
+  if Rem? (snd (snd last2')) && get_ele last2' = get_ele last2 then lin_rc_ind_s2'_req lca s1 s2 last1 last2
+  else if Rem? (snd (snd last2')) && get_ele last2' <> get_ele last2 then lin_rc_ind_s2'_rneq lca s1 s2 last1 last2
+  else if Add? (snd (snd last2')) && get_ele last2' = get_ele last2 then lin_rc_ind_s2'_aeq lca s1 s2 last1 last2
+  else lin_rc_ind_s2'_aneq lca s1 s2 last1 last2
                       
+let rec lin_rc (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires consistent_branches lca s1 s2 /\ 
+                    //fst last1 <> fst last2 /\
+                    //get_rid last1 <> get_rid last2 /\
+                    Rem? (snd (snd last1)) /\ Add? (snd (snd last2)) /\ get_ele last1 = get_ele last2) //rc last1 last2 
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
+          (decreases %[length (ops_of s1); length (ops_of s2)]) =
+  if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then () //done
+  else if ops_of s1 = ops_of lca then 
+    (let s2' = inverse_st s2 in
+     assume (consistent_branches lca s1 s2'); //can be done
+     lin_rc lca s1 s2' last1 last2;
+     lin_rc_ind_s2' lca s1 s2 last1 last2) //done
+  else 
+    (let s1' = inverse_st s1 in
+     assume (consistent_branches lca s1' s2); //can be done
+     lin_rc lca s1' s2 last1 last2;
+     lin_rc_ind_s1' lca s1 s2 last1 last2) //done
+
+let rec lin_comm (lca s1 s2:st) (last1 last2:op_t)
+    : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
+                      get_rid last1 <> get_rid last2 /\
+                      Rem? (snd (snd last2)) /\
+                      not (exists_triple last2 (diff (snoc (ops_of s1) last1) (ops_of lca))))
+            (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = admit()
+
+
+#push-options "--z3rlimit 100 --split_queries always"
+let linearizable_gt0_s2' (lca s1 s2:st)
+  : Lemma (requires //consistent_branches_s1s2_gt0 lca s1 s2 /\ 
+                    (length (ops_of s1) > length (ops_of lca) /\
+                     length (ops_of s2) > length (ops_of lca) /\
+                     (let _, last1 = un_snoc (ops_of s1) in
+                     let _, last2 = un_snoc (ops_of s2) in
+                     fst last1 <> fst last2 /\
+                     get_rid last1 <> get_rid last2 /\
+                     Rem? (snd (snd last1)) /\ Add? (snd (snd last2)) /\ get_ele last1 = get_ele last2)))
+                     //not (exists_triple last1 (diff (ops_of s2) (ops_of lca))) /\
+                     //not (exists_triple last2 (diff (ops_of s1) (ops_of lca))) /\
+                     //Second_then_first? (resolve_conflict last1 last2) /\
+                     //consistent_branches lca s1 (inverse_st s2)))
+        
+          (ensures (let _, last2 = un_snoc (ops_of s2) in
+                    eq (do (concrete_merge (v_of lca) (v_of s1) (v_of (inverse_st s2))) last2)
+                       (concrete_merge (v_of lca) (v_of s1) (v_of s2)))) = ()
+                       
 let linearizable_s1_0 (lca s1 s2:st)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 == ops_of lca)

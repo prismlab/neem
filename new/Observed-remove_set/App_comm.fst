@@ -43,8 +43,8 @@ let mem_id_s (id:nat) (s:concrete_st) : bool =
   
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t)
-  : (r:concrete_st{(Rem? (snd o) ==> (forall e. S.mem e s /\ snd e <> get_ele o <==> S.mem e r)) /\
-                   (Add? (snd o) ==> (forall e. S.mem e s \/ e = (fst o, get_ele o) <==> S.mem e r))}) =
+  : (r:concrete_st(*{(Rem? (snd o) ==> (forall e. S.mem e s /\ snd e <> get_ele o <==> S.mem e r)) /\
+                   (Add? (snd o) ==> (forall e. S.mem e s \/ e = (fst o, get_ele o) <==> S.mem e r))}*)) =
   match o with
   |(id, Add e) -> S.insert (id, e) s
   |(id, Rem e) -> S.filter s (fun ele -> snd ele <> e)
@@ -70,10 +70,10 @@ let resolve_conflict_prop (x y:op_t)
 
 (*merge l a b == (intersect l a b) U (a - l) U (b - l)*)
 let concrete_merge (lca s1 s2:concrete_st) 
-  : Tot (m:concrete_st{forall e. S.mem e m <==>
+  : Tot (m:concrete_st(*{forall e. S.mem e m <==>
                             ((S.mem e lca /\ S.mem e s1 /\ S.mem e s2) \/
                             (S.mem e s1 /\ not (S.mem e lca)) \/
-                            (S.mem e s2 /\ not (S.mem e lca)))}) =
+                            (S.mem e s2 /\ not (S.mem e lca)))}*)) =
   let da = S.difference s1 lca in    //a - l
   let db = S.difference s2 lca in    //b - l
   let i_ab = S.intersection s1 s2 in
@@ -115,7 +115,55 @@ let linearizable_s1_0 (lca s1 s2:st)
   : Lemma (requires consistent_branches lca s1 s2 /\
                     ops_of s1 == ops_of lca)
           (ensures eq (v_of s2) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
-          
+
+let lin_rc_ind_s1' (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires length (ops_of s1) > length (ops_of lca) /\
+                    Rem? (snd last1) /\ Add? (snd last2) /\ get_ele last1 = get_ele last2 /\
+                    (let s1' = inverse_st s1 in
+                    eq (do (concrete_merge (v_of lca) (do (v_of s1') last1) (v_of s2)) last2)
+                       (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))))
+                           
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = ()
+                      
+let lin_rc_ind_s2' (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires length (ops_of s2) > length (ops_of lca) /\
+                    Rem? (snd last1) /\ Add? (snd last2) /\ get_ele last1 = get_ele last2 /\
+                    (let s2' = inverse_st s2 in
+                    eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2')) last2)
+                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))))
+                           
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))) = ()
+
+#push-options "--z3rlimit 100 --ifuel 3"
+let rec lin_rc (lca s1 s2:st) (last1 last2:op_t)
+  : Lemma (requires consistent_branches lca s1 s2 /\ 
+                    fst last1 <> fst last2 /\
+                    //get_rid last1 <> get_rid last2 /\
+                    Rem? (snd last1) /\ Add? (snd last2) /\ get_ele last1 = get_ele last2) //rc last1 last2 
+          (ensures eq (do (concrete_merge (v_of lca) (do (v_of s1) last1) (v_of s2)) last2)
+                      (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))
+          (decreases %[length (ops_of lca); length (ops_of s1); length (ops_of s2)]) =
+  if ops_of s1 = ops_of lca && ops_of s2 = ops_of lca then //done 
+    (if length (ops_of lca) = 0 then ()
+     else 
+       (let l' = inverse_st lca in 
+        let _, lastl' = un_snoc (ops_of lca) in
+        assume (fst lastl' <> fst last2); //can be done
+        lin_rc l' l' l' last1 last2))
+  else if ops_of s1 = ops_of lca then 
+    (let s2' = inverse_st s2 in
+     assume (consistent_branches lca s1 s2'); //can be done
+     lin_rc lca s1 s2' last1 last2;
+     lin_rc_ind_s2' lca s1 s2 last1 last2) //done
+  else 
+    (let s1' = inverse_st s1 in
+     assume (consistent_branches lca s1' s2); //can be done
+     lin_rc lca s1' s2 last1 last2;
+     lin_rc_ind_s1' lca s1 s2 last1 last2) //done
+
+     
 ///////////////////////////////////////////
 
 (*let ls1s2_to_ls1's2' (lca s1 s2:st)
