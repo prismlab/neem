@@ -38,7 +38,14 @@ type app_op_t:eqtype =
   |Disable
 
 // apply an operation to a state
-let do (s:concrete_st) (o:op_t) : concrete_st =
+(*let do (s:concrete_st) (o:op_t) : concrete_st =
+  match o with
+  |(_, (rid, Enable)) -> M.upd s rid (fst (sel s rid) + 1, true) 
+  |(_, (rid, Disable)) -> M.map_val (fun (c,f) -> (c, false)) s *)
+let do (s:concrete_st) (o:op_t) 
+  : (r:concrete_st{(Enable? (snd (snd o)) ==> sel r (get_rid o) = (fst (sel s (get_rid o)) + 1, true) /\
+                                              (forall rid. rid <> get_rid o ==> sel r rid = sel s rid)) /\
+                   (Disable? (snd (snd o)) ==> (forall rid. sel r rid = (fst (sel s rid), false)))}) =
   match o with
   |(_, (rid, Enable)) -> M.upd s rid (fst (sel s rid) + 1, true) 
   |(_, (rid, Disable)) -> M.map_val (fun (c,f) -> (c, false)) s 
@@ -80,10 +87,17 @@ let merge_cf (l a b:cf) : cf =
   (fst a + fst b - fst l, merge_flag l a b)
   
 // concrete merge operation
-let merge (l a b:concrete_st) : concrete_st =
+(*let merge (l a b:concrete_st) : concrete_st =
   let keys = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
   let u = M.const_on keys (0, false) in
-  M.iter_upd (fun k v -> merge_cf (sel l k) (sel a k) (sel b k)) u
+  M.iter_upd (fun k v -> merge_cf (sel l k) (sel a k) (sel b k)) u*)
+let merge (lca s1 s2:concrete_st) 
+  : (r:concrete_st{(forall rid. M.contains r rid <==> M.contains lca rid \/ M.contains s1 rid \/ M.contains s2 rid) /\
+                   (forall rid. sel r rid = merge_cf (sel lca rid) (sel s1 rid) (sel s2 rid))}) =  
+  let keys = S.union (M.domain lca) (S.union (M.domain s1) (M.domain s2)) in
+  let u = M.const_on keys (0, false) in
+  M.iter_upd (fun k v -> merge_cf (sel lca k) (sel s1 k) (sel s2 k)) u
+
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -173,6 +187,19 @@ let rec lem_apply (x:concrete_st) (l:log)
   |0 -> ()
   |_ -> lem_apply (do x (head l)) (tail l)
 
+let lin_comm_ind_a'_ee_help (l a b:st) (last1 last2:op_t)
+  : Lemma (requires cons_reps l a b)                           
+          (ensures (forall id. M.contains (v_of l) id ==> M.contains (do (v_of a) last1) id /\  M.contains (v_of b) id) /\
+                   (forall id. M.contains (merge (v_of l) (do (v_of a) last1) (v_of b)) id ==>
+                          fst (sel (do (v_of a) last1) id) >= fst (sel (v_of l) id) /\
+                          fst (sel (v_of b) id) >= fst (sel (v_of l) id))) = 
+  lem_apply init_st (ops_of l);  
+  split_prefix init_st (ops_of l) (ops_of b);
+  lem_apply (v_of l) (diff (ops_of b) (ops_of l));
+  split_prefix init_st (ops_of l) (ops_of (do_st a last1));
+  lem_apply (v_of l) (diff (snoc (ops_of a) last1) (ops_of l))
+
+#push-options "--z3rlimit 200 --split_queries always"
 let lin_comm_ind_a'_ee (l a b:st) (last1 last2:op_t)
   : Lemma (requires cons_reps l a b /\
                     length (ops_of a) > length (ops_of l) /\
@@ -183,18 +210,10 @@ let lin_comm_ind_a'_ee (l a b:st) (last1 last2:op_t)
                            
           (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
                       (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2))) = 
-  lem_apply init_st (ops_of l);  
-  split_prefix init_st (ops_of l) (ops_of b);
-  lem_apply (v_of l) (diff (ops_of b) (ops_of l));
-  split_prefix init_st (ops_of l) (ops_of (do_st a last1));
-  lem_apply (v_of l) (diff (snoc (ops_of a) last1) (ops_of l)); 
-  assert ((forall id. M.contains (v_of l) id ==> M.contains (do (v_of a) last1) id /\  M.contains (v_of b) id) /\
-          (forall id. M.contains (merge (v_of l) (do (v_of a) last1) (v_of b)) id ==>
-                 fst (sel (do (v_of a) last1) id) >= fst (sel (v_of l) id) /\
-                 fst (sel (v_of b) id) >= fst (sel (v_of l) id))); ()
+  lin_comm_ind_a'_ee_help l a b last1 last2
 
 let lin_comm_ind_a' (l a b:st) (last1 last2:op_t)
-  : Lemma (requires length (ops_of a) > length (ops_of l) /\
+  : Lemma (requires cons_reps l a b /\ length (ops_of a) > length (ops_of l) /\
                     comm_ops last1 last2 /\
                     (let a' = inverse_st a in
                     eq (do (merge (v_of l) (do (v_of a') last1) (v_of b)) last2)
