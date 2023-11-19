@@ -164,6 +164,15 @@ let lin_comm_ind_a'_dd (l a b:st) (last1 last2:op_t)
           (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
                       (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2))) = ()
 
+let rec lem_apply (x:concrete_st) (l:log)
+  : Lemma (ensures (let r = apply_log x l in
+                        (forall rid. M.contains x rid ==> M.contains r rid) /\
+                        (forall rid. fst (sel r rid) >= fst (sel x rid))))
+          (decreases length l) =
+  match length l with
+  |0 -> ()
+  |_ -> lem_apply (do x (head l)) (tail l)
+
 let lin_comm_ind_a'_ee (l a b:st) (last1 last2:op_t)
   : Lemma (requires cons_reps l a b /\
                     length (ops_of a) > length (ops_of l) /\
@@ -174,11 +183,15 @@ let lin_comm_ind_a'_ee (l a b:st) (last1 last2:op_t)
                            
           (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
                       (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2))) = 
-  lem_apply_log init_st (ops_of l);  
+  lem_apply init_st (ops_of l);  
   split_prefix init_st (ops_of l) (ops_of b);
-  lem_apply_log (v_of l) (diff (ops_of b) (ops_of l));
+  lem_apply (v_of l) (diff (ops_of b) (ops_of l));
   split_prefix init_st (ops_of l) (ops_of (do_st a last1));
-  lem_apply_log (v_of l) (diff (snoc (ops_of a) last1) (ops_of l))
+  lem_apply (v_of l) (diff (snoc (ops_of a) last1) (ops_of l)); 
+  assert ((forall id. M.contains (v_of l) id ==> M.contains (do (v_of a) last1) id /\  M.contains (v_of b) id) /\
+          (forall id. M.contains (merge (v_of l) (do (v_of a) last1) (v_of b)) id ==>
+                 fst (sel (do (v_of a) last1) id) >= fst (sel (v_of l) id) /\
+                 fst (sel (v_of b) id) >= fst (sel (v_of l) id))); ()
 
 let lin_comm_ind_a' (l a b:st) (last1 last2:op_t)
   : Lemma (requires length (ops_of a) > length (ops_of l) /\
