@@ -698,7 +698,7 @@ let rec lin_comm_a (lca s1 s2:st) (last1 last2:op_t)
        lin_comm_a lca s1' s2 last1' last2;
        lin_comm_ind_a lca s1 s2 last1 last2)
 
-#push-options "--z3rlimit 100 --split_queries always"
+(*#push-options "--z3rlimit 100 --split_queries always"
 let linearizable_gt0_s2' (lca s1 s2:st)
   : Lemma (requires //consistent_branches_s1s2_gt0 lca s1 s2 /\ 
                     (length (ops_of s1) > length (ops_of lca) /\
