@@ -111,9 +111,6 @@ val rc (x:op_t) (y:op_t{fst x <> fst y /\ ~ (comm_ops x y)}) : rc_res
 // concrete merge operation
 val merge (l a b:concrete_st) : concrete_st
 
-(*let comm_empty_log (x:op_t) (l:log)
-  : Lemma (ensures length l = 0 ==> commutative_seq x l) = ()*)
-
 // returns true if there exists an operation op in log l such that
 // 1. last_op and op are non-commutative
 // 2. op is commutative with all the operations in the suffix of l
@@ -144,13 +141,7 @@ let rec split_prefix (s:concrete_st) (l:log) (a:log)
 // returns the inverse state by undoing the last operation
 #push-options "--z3rlimit 50"
 let inverse_st (s:st{Seq.length (ops_of s) > 0}) 
-  : GTot (i:st{//(v_of s == do (v_of i) (last (ops_of s))) /\
-               //(ops_of i == fst (un_snoc (ops_of s))) /\
-               //(ops_of s == snoc (ops_of i) (last (ops_of s))) /\
-               //length (ops_of i) = length (ops_of s) - 1 /\
-               //is_prefix (ops_of i) (ops_of s) /\
-               (let _, last2 = un_snoc (ops_of s) in
-               //(lem_last (ops_of s);
+  : GTot (i:st{(let _, last2 = un_snoc (ops_of s) in
                s == (do (v_of i) last2, hide (snoc (ops_of i) last2))) /\
                (forall id. mem_id id (ops_of i) <==> mem_id id (ops_of s) /\ id <> fst (last (ops_of s)))}) = 
   lem_apply_log init_st (ops_of s);
@@ -160,16 +151,6 @@ let inverse_st (s:st{Seq.length (ops_of s) > 0})
   lemma_append_count_assoc_fst p (snd (split (ops_of s) (length (ops_of s) - 1))); 
   distinct_invert_append p (snd (split (ops_of s) (length (ops_of s) - 1))); 
   (r, hide p)
-
-(*let rec inverse_helper (s:concrete_st) (l':log) (op:op_t)
-  : Lemma 
-    (ensures (let l = Seq.snoc l' op in 
-              (apply_log s l == do (apply_log s l') op)))
-    (decreases length l')
-  = Seq.un_snoc_snoc l' op;
-    match length l' with
-    |0 -> ()
-    |_ ->  inverse_helper (do s (head l')) (tail l') op*)
 
 let cons_reps (l a b:st1) =
   distinct_ops (ops_of l) /\ distinct_ops (ops_of a) /\ distinct_ops (ops_of b) /\
@@ -234,10 +215,16 @@ val merge_comm (l a b:st)
 val merge_idem (s:st)
   : Lemma (ensures eq (merge (v_of s) (v_of s) (v_of s)) (v_of s))
 
-val fast_fwd (a b:st)
-  : Lemma (requires cons_reps a a b)
-          (ensures eq (merge (v_of a) (v_of a) (v_of b)) (v_of b))
+val fast_fwd_base (a b:st) (last2:op_t)
+  : Lemma (ensures eq (do (v_of a) last2) (merge (v_of a) (v_of a) (do (v_of a) last2)))
 
+val fast_fwd_ind (a b:st) (last2:op_t)
+  : Lemma (requires length (ops_of b) > length (ops_of a) /\
+                    (let b' = inverse_st b in
+                    cons_reps a a b' /\
+                    eq (do (v_of b') last2) (merge (v_of a) (v_of a) (do (v_of b') last2))))      
+          (ensures eq (do (v_of b) last2) (merge (v_of a) (v_of a) (do (v_of b) last2)))
+  
 val merge_eq (l a b a':concrete_st)
   : Lemma (requires eq a a')
           (ensures eq (merge l a b)
