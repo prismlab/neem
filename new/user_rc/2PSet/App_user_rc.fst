@@ -1,32 +1,20 @@
 module App_user_rc
 
-module S = FStar.Set
-module M = Map_extended
-module S' = Set_extended_new
+module S = Set_extended_new
 
 #set-options "--query_stats"
 
-let cf = (int * bool)
-
 // the concrete state type
-type concrete_st = M.t nat (M.t nat cf) // element ->
-                                       //    replica ID -> 
-                                       //       (ctr, flag) //elements & replica ids are unique
+type concrete_st = s:(S.t nat & S.t nat){S.subset (snd s) (fst s)} 
+                 //first one is add set, second one is remove set
 
 // init state
-let init_st : concrete_st = M.const (M.const (0, false))
+let init_st : concrete_st = (S.empty, S.empty)
 
-let sel_e (s:concrete_st) e = if M.contains s e then M.sel s e else (M.const (0, false))
-
-let sel_id (s:M.t nat cf) id = if M.contains s id then M.sel s id else (0, false)
-
-let ele_id (s:concrete_st) (e id:nat) =
-  M.contains s e /\ M.contains (sel_e s e) id
-  
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) =
-  (forall e. M.contains a e = M.contains b e) /\
-  (forall e. M.contains a e ==> (forall id. M.contains (sel_e a e) id = M.contains (sel_e a e) id /\ sel_id (sel_e a e) id == sel_id (sel_e a e) id))
+  S.equal (fst a) (fst b) /\
+  S.equal (snd a) (snd b)
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -53,14 +41,12 @@ let get_ele (o:op_t) : nat =
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
  match o with
-  |(_, (rid, Add e)) -> M.upd s e (M.upd (sel_e s e) rid (fst (sel_id (sel_e s e) rid) + 1, true))
-  |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = get_ele o then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
+  |(_, (rid, Add e)) -> if S.mem e (snd s) then s else (S.insert e (fst s), snd s)
+  |(_, (rid, Rem e)) -> if S.mem e (fst s) then (fst s, S.insert e (snd s)) else s
 
-#push-options "--ifuel 3"
 let lem_do (a b:concrete_st) (op:op_t)
    : Lemma (requires eq a b)
            (ensures eq (do a op) (do b op)) = ()
-#pop-options
 
 //operations x and y are commutative
 let comm_ops (x y:op_t) : bool =
@@ -80,32 +66,9 @@ let rc (x:op_t) (y:op_t{fst x <> fst y /\ ~ (comm_ops x y)}) : rc_res =
   |Add x, Rem y -> if x = y then Snd_fst else Fst_snd
   |Rem x, Add y -> Fst_snd // Rem x, Add y && x = y
 
-let merge_flag (l a b:cf) : bool =
-  let lc = fst l in
-  let ac = fst a in
-  let bc = fst b in
-  let af = snd a in
-  let bf = snd b in
-    if af && bf then true
-      else if not af && not bf then false
-        else if af then ac > lc
-          else bc > lc
-
-// concrete merge operation
-let merge_cf (l a b:cf) : cf =
-  (fst a + fst b - fst l, merge_flag l a b)
-  
-// concrete merge operation
-let merge_ew (l a b:(M.t nat cf)) : (M.t nat cf) =
-  let keys = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
-  let u = M.const_on keys (0, false) in
-  M.iter_upd (fun k v -> merge_cf (sel_id l k) (sel_id a k) (sel_id b k)) u
-  
 // concrete merge operation
 let merge (l a b:concrete_st) : concrete_st =
-  let eles = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
-  let u = M.const_on eles init_st in
-  M.iter_upd (fun k v -> merge_ew (sel_e l k) (sel_e a k) (sel_e b k)) u
+  (S.union (fst l) (S.union (fst a) (fst b)), (S.union (snd l) (S.union (snd a) (snd b))))
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -141,17 +104,11 @@ let rec lin_rc (l a b:st) (last1 last2:op_t)
           (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
                       (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
           (decreases %[length (ops_of l); length (ops_of a); length (ops_of b)]) =
-  if ops_of a = ops_of l && ops_of b = ops_of l then 
-    (if length (ops_of l) = 0 then ()
-     else 
-       (let l' = inverse_st l in
-        let _, lastl' = un_snoc (ops_of l) in
-        assume (fst lastl' <> fst last2); //can be done
-        lin_rc l' l' l' last1 last2; ()))
+  if ops_of a = ops_of l && ops_of b = ops_of l then ()
   else if ops_of a = ops_of l then 
     (let b' = inverse_st b in 
      cons_reps_s2' l a b;
-     lin_rc l a b' last1 last2) 
+     lin_rc l a b' last1 last2)
   else 
     (let a' = inverse_st a in
      cons_reps_s1' l a b;
@@ -197,45 +154,27 @@ let not_add_eq (lca s1:st) (s2:st1)
   assert (~ (Add? (snd (snd last1)) /\ get_ele last1 = get_ele last2)); ()
 
 let rec lin_comm1_r (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps l a b /\
+  : Lemma (requires cons_reps l a b /\ 
                     fst last1 <> fst last2 /\ comm_ops last1 last2 /\ Rem? (snd (snd last2)) /\
                     ~ (reorder last2 (diff (snoc (ops_of a) last1) (ops_of l))))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
+          (ensures eq (do (merge (v_of l) (v_of a) (v_of b)) last2)
+                      (merge (v_of l) (v_of a) (do (v_of b) last2)))
           (decreases %[length (ops_of b); length (ops_of a)]) = 
-  assert (Rem? (snd (snd last1)) \/ (Add? (snd (snd last1)) /\ get_ele last1 <> get_ele last2));
   if ops_of a = ops_of l && ops_of b = ops_of l then ()
-  else if ops_of a = ops_of l then ()
+  else if ops_of a = ops_of l then
+    (let b' = inverse_st b in
+     cons_reps_s2' l a b;
+     lin_comm1_r l a b' last1 last2)
   else 
     (let a' = inverse_st a in
      cons_reps_s1' l a b;
      let pre1, last1' = un_snoc (ops_of a) in
-     assume (fst last1' <> fst last2); //can be done
+     assume (fst last1' <> fst last2);
      assume (~ (reorder last2 (diff (ops_of a) (ops_of l)))); //can be done
      un_snoc_snoc (ops_of a') last1';
      un_snoc_snoc (ops_of b) last2;
      not_add_eq l (do_st a' last1') (do_st b last2);
-     lin_comm1_r l a' b last1' last2)    
-
-let rec lin_comm1_a (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps l a b /\
-                    fst last1 <> fst last2 /\ Add? (snd (snd last2)))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
-          (decreases %[length (ops_of a); length (ops_of b)]) = 
-  if ops_of a = ops_of l && ops_of b = ops_of l then ()
-  else if ops_of b = ops_of l then 
-    (let a' = inverse_st a in
-     let _, last1' = un_snoc (ops_of a) in
-     cons_reps_s1' l a b;
-     assume (fst last1' <> fst last2); //can be done
-     if Rem? (snd (snd last1)) && get_ele last1 = get_ele last2 then
-       lin_comm1_a l a' b last1 last2
-     else lin_comm1_a l a' b last1' last2)
-  else 
-    (let b' = inverse_st b in
-     cons_reps_s2' l a b;
-     lin_comm1_a l a b' last1 last2)  
+     lin_comm1_r l a' b last1' last2)       
 #pop-options
 
 let lin_comm (l a b:st) (last1 last2:op_t)
@@ -245,7 +184,7 @@ let lin_comm (l a b:st) (last1 last2:op_t)
           (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
                       (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2))) =
   if Rem? (snd (snd last2)) then lin_comm1_r l a b last1 last2
-  else lin_comm1_a l a b last1 last2
+  else ()
                       
 let inter_merge1 (l:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\ 
@@ -280,20 +219,16 @@ let inter_merge4 (l s:concrete_st) (o1 o2 o3 o4:op_t)
 //// Sequential implementation //////
 
 // the concrete state 
-let concrete_st_s = S'.t nat
+let concrete_st_s = concrete_st
 
 // init state 
-let init_st_s = S'.empty
+let init_st_s = init_st
 
 // apply an operation to a state 
-let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s =
-  match o with
-  |(ts, (rid, Add e)) -> S'.insert e st_s
-  |(_, (rid, Rem e)) -> S'.filter st_s (fun ele -> ele <> e)
+let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s = do st_s o
 
 // equivalence relation between the concrete states of sequential type and MRDT
-let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
-  (forall e. S'.mem e st_s <==> (M.contains st e /\ (exists id. snd (sel_id (sel_e st e) id) = true)))
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) = eq st_s st
 
 // initial states are equivalent
 let initial_eq (_:unit)
@@ -302,9 +237,6 @@ let initial_eq (_:unit)
 // equivalence between states of sequential type and MRDT at every operation
 let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
-          (ensures eq_sm (do_s st_s op) (do st op)) = 
-  if Add? (snd (snd op)) then 
-    (if S'.mem (get_ele op) st_s then () else ()) 
-  else ()
+          (ensures eq_sm (do_s st_s op) (do st op)) = ()
 
 ////////////////////////////////////////////////////////////////
