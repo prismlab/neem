@@ -30,107 +30,85 @@ let eq_is_equiv (a b:concrete_st)
 // (the only operation is Add, so nat is fine)
 type app_op_t = nat
 
+//pre-condition for do
+let do_pre (s:concrete_st) (o:op_t) : prop = true
+
 // apply an operation to a state
-let do (s:concrete_st) (op:op_t) : concrete_st =
-  S.add (snd op) s
+let do (s:concrete_st) (op:op_t{do_pre s op}) : concrete_st =
+  S.add (snd (snd op)) s
   
 let lem_do (a b:concrete_st) (op:op_t)
-   : Lemma (requires eq a b)
+   : Lemma (requires eq a b /\ do_pre a op)
            (ensures eq (do a op) (do b op)) = ()
            
-//conflict resolution
-let resolve_conflict (x:op_t) (y:op_t{fst x <> fst y}) : resolve_conflict_res = First_then_second
+//pre-condition for merge
+let merge_pre (l a b:concrete_st) : prop = true
 
 // concrete merge operation
-let concrete_merge (lca s1 s2:concrete_st) : Tot concrete_st =
-  S.union lca (S.union s1 s2)
+let merge (l a:concrete_st) (b:concrete_st{merge_pre l a b}) : concrete_st =
+  S.union l (S.union a b)
 
-let merge_is_comm (lca s1 s2:st)
-  : Lemma (requires consistent_branches lca s1 s2)
-          (ensures (eq (concrete_merge (v_of lca) (v_of s1) (v_of s2)) 
-                       (concrete_merge (v_of lca) (v_of s2) (v_of s1)))) = ()
+let merge_comm (l a b:st)
+  : Lemma (requires cons_reps l a b /\ merge_pre (v_of l) (v_of a) (v_of b))
+          (ensures merge_pre (v_of l) (v_of b) (v_of a) /\
+                   (eq (merge (v_of l) (v_of a) (v_of b)) 
+                       (merge (v_of l) (v_of b) (v_of a)))) = ()
 
-let linearizable_s1_0''_base_base (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires consistent_branches lca s1 (do_st s2' last2) /\
-                    ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
-                    length (ops_of lca) = 0)
-        
-          (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
+let merge_idem (s:st)
+  : Lemma (requires merge_pre (v_of s) (v_of s) (v_of s))
+          (ensures eq (merge (v_of s) (v_of s) (v_of s)) (v_of s)) = ()
 
-let linearizable_s1_0''_base_ind (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires consistent_branches lca s1 (do_st s2' last2) /\
-                    ops_of s1 = ops_of lca /\ ops_of s2' = ops_of lca /\
-                    length (ops_of lca) > 0 /\
+let rec fast_fwd (a b:st)
+  : Lemma (requires cons_reps a a b /\ merge_pre (v_of a) (v_of a) (v_of b))
+          (ensures eq (merge (v_of a) (v_of a) (v_of b)) (v_of b)) 
+          (decreases length (ops_of b)) =
+  if ops_of a = ops_of b then ()
+  else 
+    (let b' = inverse_st b in
+     cons_reps_b' a a b;
+     fast_fwd a b')
 
-                    (let l' = inverse_st lca in
-                    let s1' = inverse_st s1 in
-                    let s2'' = inverse_st s2' in
-                    consistent_branches l' s1' (do_st s2'' last2) /\
-                    ops_of s1' = ops_of l' /\ ops_of s2'' = ops_of l' /\
-                    eq (do (v_of s2'') last2) (concrete_merge (v_of l') (v_of s1') (do (v_of s2'') last2))))
+let lin_prop1 (s:concrete_st) (op1 op2:op_t)
+  : Lemma (requires do_pre s op1 /\ do_pre s op2 /\ do_pre (do s op1) op2 /\ do_pre (do s op2) op1)
+          (ensures eq (do (do s op1) op2) (do (do s op2) op1)) = ()
 
-          (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
+let lin_prop3 (l a b:concrete_st) (last2:op_t) 
+  :  Lemma (requires do_pre b last2 /\ merge_pre l a b /\ merge_pre l a (do b last2) /\
+                     do_pre (merge l a b) last2)
+           (ensures eq (do (merge l a b) last2) (merge l a (do b last2))) = ()
 
-let linearizable_s1_0''_ind (lca s1 s2':st) (last2:op_t)
-  : Lemma (requires consistent_branches lca s1 (do_st s2' last2) /\
-                    ops_of s1 = ops_of lca /\
-                    length (ops_of s2') > length (ops_of lca) /\
+let inter_merge1 (l:concrete_st) (o1 o2 o3:op_t)
+  : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\ 
+                    do_pre l o1 /\ do_pre l o3 /\ do_pre (do l o1) o2 /\ do_pre (do l o3) o1 /\ do_pre (do (do l o3) o1) o2 /\
+                    merge_pre (do l o1) (do (do l o1) o2) (do (do l o3) o1))
+          (ensures eq (merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) (do (do (do l o3) o1) o2)) = ()
 
-                    (let inv2 = inverse_st s2' in
-                    consistent_branches lca s1 (do_st inv2 last2) /\
-                    eq (do (v_of inv2) last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of inv2) last2))))
-        
-          (ensures eq (do (v_of s2') last2) (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2))) = ()
+let inter_merge2 (l s s':concrete_st) (o1 o2 o3:op_t)
+  : Lemma (requires fst o2 <> fst o3 /\ fst o1 <> fst o3 /\
+                    do_pre l o3 /\ do_pre l o2 /\ do_pre s' o2 /\ do_pre s o2 /\
+                    merge_pre l s (do l o3) /\ merge_pre s (do s o2) s' /\
+                    eq (merge l s (do l o3)) s' /\
+                    eq (merge s (do s o2) s') (do s' o2) /\
+                    do_pre s o1 /\ do_pre s' o1 /\ do_pre (do s o1) o2 /\ do_pre (do s' o1) o2 /\
+                    merge_pre (do s o1) (do (do s o1) o2) (do s' o1))
+          (ensures eq (merge (do s o1) (do (do s o1) o2) (do s' o1)) (do (do s' o1) o2)) = ()
 
-let linearizable_s1_0_s2_0_base (lca s1 s2:st)
-  : Lemma (requires consistent_branches lca s1 s2 /\
-                    ops_of s1 == ops_of lca /\ ops_of s2 == ops_of lca)
-        
-          (ensures eq (v_of lca) (concrete_merge (v_of lca) (v_of s1) (v_of s2))) = ()
+let inter_merge3 (l a b c:concrete_st) (op op':op_t) 
+  : Lemma (requires merge_pre l a b /\ eq (merge l a b) c /\
+                    (forall (o:op_t). do_pre b o /\ do_pre c o /\ merge_pre l a (do b o) ==> eq (merge l a (do b o)) (do c o)) /\
+                    do_pre b op /\ do_pre c op /\ do_pre (do b op) op' /\ do_pre (do c op) op' /\
+                    merge_pre l a (do (do b op) op'))
+          (ensures eq (merge l a (do (do b op) op')) (do (do c op) op')) = ()
 
-let linearizable_gt0_base (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
-                    consistent_branches lca s1 s2 /\
-                    ops_of s1 = ops_of lca /\ ops_of s2 = ops_of lca /\
-                    fst last1 <> fst last2)
-         
-          (ensures (First_then_second? (resolve_conflict last1 last2) ==>
-                      (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
-                          (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))  = ()              
-
-let linearizable_gt0_ind (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
-                    consistent_branches lca s1 s2 /\
-                    length (ops_of s2) > length (ops_of lca) /\
-                    fst last1 <> fst last2)
-       
-          (ensures (let s2' = inverse_st s2 in
-                   ((First_then_second? (resolve_conflict last1 last2) /\
-                    consistent_branches lca s1 (do_st s2' last2) /\
-                    consistent_branches lca (do_st s1 last1) (do_st s2' last2) /\
-                    consistent_branches lca s1 (do_st s2 last2) /\
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2') last2)) last1)
-                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2') last2))) ==>
-                   
-                    (eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
-                        (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2)))))) = ()
-                       
-let linearizable_gt0_ind1 (lca s1 s2:st) (last1 last2:op_t)
-  : Lemma (requires consistent_branches lca (do_st s1 last1) (do_st s2 last2) /\
-                    consistent_branches lca s1 s2 /\
-                    length (ops_of s1) > length (ops_of lca) /\
-                    fst last1 <> fst last2)
-                           
-          (ensures (let s1' = inverse_st s1 in
-                   ((ops_of s2 = ops_of lca /\
-                    First_then_second? (resolve_conflict last1 last2) /\
-                    consistent_branches lca s1' (do_st s2 last2) /\
-                    consistent_branches lca (do_st s1' last1) (do_st s2 last2) /\
-                    consistent_branches lca s1 (do_st s2 last2) /\
-                    eq (do (concrete_merge (v_of lca) (v_of s1') (do (v_of s2) last2)) last1)
-                       (concrete_merge (v_of lca) (do (v_of s1') last1) (do (v_of s2) last2))) ==>
-                    eq (do (concrete_merge (v_of lca) (v_of s1) (do (v_of s2) last2)) last1)
-                       (concrete_merge (v_of lca) (do (v_of s1) last1) (do (v_of s2) last2))))) = ()
+let inter_merge4 (l s:concrete_st) (o1 o2 o3 o4:op_t)
+  : Lemma (requires fst o1 <> fst o3 /\ fst o1 <> fst o4 /\ fst o2 <> fst o3 /\
+                    do_pre l o1 /\ do_pre s o3 /\ do_pre (do l o1) o2 /\ do_pre (do s o3) o1 /\ do_pre (do (do s o3) o1) o2 /\
+                    merge_pre (do l o1) (do (do l o1) o2) (do (do s o3) o1) /\
+                    eq (merge (do l o1) (do (do l o1) o2) (do (do s o3) o1)) (do (do (do s o3) o1) o2) /\
+                    do_pre s o4 /\ do_pre (do s o4) o3 /\ do_pre (do (do s o4) o3) o1 /\ do_pre (do (do (do s o4) o3) o1) o2 /\
+                    merge_pre (do l o1) (do (do l o1) o2) (do (do (do s o4) o3) o1))
+          (ensures eq (merge (do l o1) (do (do l o1) o2) (do (do (do s o4) o3) o1)) 
+                      (do (do (do (do s o4) o3) o1) o2)) = ()
 
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
@@ -143,7 +121,7 @@ let init_st_s = S.empty
 
 // apply an operation to a state 
 let do_s (s:concrete_st_s) (op:op_t) : concrete_st_s =
-  S.add (snd op) s
+  S.add (snd (snd op)) s
 
 //equivalence relation between the concrete states of sequential type and MRDT
 let eq_sm (st_s:concrete_st_s) (st:concrete_st) = st_s == st
@@ -157,60 +135,4 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
           (ensures eq_sm (do_s st_s op) (do st op)) = ()
 
-////////////////////////////////////////////////////////////////
-//// Linearization properties //////
-
-let conv_prop1 (s:concrete_st) (op1 op2:op_t)
-  : Lemma (eq (do (do s op1) op2) (do (do s op2) op1)) = ()
-
-let conv_prop2 (lca s1 s2:concrete_st) (op:op_t) 
-  : Lemma (eq (do (concrete_merge lca s1 s2) op) (concrete_merge lca (do s1 op) s2)) = ()
-
-let conv_prop3 (lca s1 s2:concrete_st) (op:op_t) 
-  :  Lemma (eq (do (concrete_merge lca s1 s2) op) (concrete_merge lca s1 (do s2 op))) = 
-  conv_prop2 lca s2 s1 op
-
-let conv_prop4 (s:concrete_st)
-  : Lemma (eq (concrete_merge s s s) s) = ()
-
-let conv_prop5 (lca s1 s2:concrete_st) (op:op_t)
-  : Lemma (eq (concrete_merge lca (do s1 op) (do s2 op)) (do (do (concrete_merge lca s1 s2) op) op)) = ()
-
-////////////////////////////////////////////////////////////////
-//// Linearization properties - intermediate merge //////
-
-let inter_prop1 (l:concrete_st) (o1 o2 o3:op_t)
-  : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\ 
-                    resolve_conflict o1 o3 = First_then_second /\
-                    resolve_conflict o2 o3 = First_then_second)
-          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) (do (do (do l o3) o1) o2)) = ()
-
-let inter_prop2 (s s':concrete_st) (o1 o2:op_t) 
-  : Lemma (requires eq (concrete_merge s (do s o2) s') (do s' o2))
-          (ensures eq (concrete_merge (do s o1) (do (do s o1) o2) (do s' o1)) (do (do s' o1) o2)) = ()
-
-let inter_prop3 (l a b c:concrete_st) (op op':op_t)
-  : Lemma (requires eq (concrete_merge l a b) c /\ 
-                    (forall (o:op_t). eq (concrete_merge l a (do b o)) (do c o)))
-          (ensures eq (concrete_merge l a (do (do b op) op')) (do (do c op) op')) = ()
-
-let inter_prop4 (l s:concrete_st) (o1 o2 o3 o3':op_t)
-  : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\
-                    resolve_conflict o1 o3 = First_then_second /\
-                    resolve_conflict o2 o3 = First_then_second /\
-                    eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do s o3) o1)) (do (do (do s o3) o1) o2))
-          (ensures eq (concrete_merge (do l o1) (do (do l o1) o2) (do (do (do s o3') o3) o1)) 
-                      (do (do (do (do s o3') o3) o1) o2)) = ()
-
-////////////////////////////////////////////////////////////////
-//// Recursive merge condition //////
-
-let rec_merge (s si si' sn sn':concrete_st)
-  : Lemma (requires eq (concrete_merge s sn sn') (concrete_merge si sn (concrete_merge s si sn')) /\
-                    eq (concrete_merge s sn sn') (concrete_merge si' sn' (concrete_merge s sn si')) /\
-                    eq (concrete_merge s sn si') (concrete_merge si sn (concrete_merge s si si')) /\
-                    eq (concrete_merge s si sn') (concrete_merge si' sn' (concrete_merge s si' si)))         
-          (ensures (eq (concrete_merge s sn sn')
-                       (concrete_merge (concrete_merge s si si') (concrete_merge s si sn') (concrete_merge s si' sn)))) = ()
-          
 ////////////////////////////////////////////////////////////////
