@@ -50,7 +50,10 @@ let get_after_id (op:op_t{Add_after? (snd (snd op))}) : nat =
 
 let get_rem_id (op:op_t{Remove? (snd (snd op))}) : pos =
   let (_, (_, Remove id)) = op in id
-  
+
+let id_ele (s:concrete_st) (id ele:nat) =
+  exists e. S.mem e (fst s) /\ fst e = id /\ snd (snd e) = ele /\ not (S.mem id (snd s))
+
 //pre-condition for do
 let do_pre (s:concrete_st) (o:op_t) : prop = 
   match o with
@@ -147,25 +150,57 @@ let inter_merge4 (l s:concrete_st) (o1 o2 o3 o4:op_t)
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
 
+module L = FStar.List.Tot
+
+let rec mem_id_s_s (id:nat) (l:list (nat * nat)) =
+  match l with
+  |[] -> false
+  |x::xs -> fst x = id || mem_id_s_s id xs
+
+let rec unique_lst (l:list (nat * nat)) =
+  match l with
+  |[] -> true
+  |x::xs -> not (mem_id_s_s (fst x) xs) && unique_lst xs
+
 // the concrete state 
-type concrete_st_s = admit()
+type concrete_st_s = l:list (nat * nat){unique_lst l} //timestamp x element inserted
 
 // init state 
-let init_st_s = admit()
+let init_st_s = []
+
+let do_pre_s (s:concrete_st_s) (o:op_t) : prop = 
+  match o with
+  |(ts, (_, Add_after after_id ele)) -> ~ (mem_id_s_s ts s) /\ (~ (after_id = 0) ==> mem_id_s_s after_id s)
+  |(_, (_, Remove id)) -> mem_id_s_s id s
+
+let rec insert (s:concrete_st_s) (ts:nat{not (mem_id_s_s ts s)}) (after_id:nat{~ (after_id = 0) ==> mem_id_s_s after_id s}) (ele:nat) 
+  : Tot (r:concrete_st_s{(forall id. mem_id_s_s id s \/ id = ts <==> mem_id_s_s id r) /\ L.mem (ts, ele) r}) (decreases s) =
+  match s with
+  |[] -> if after_id = 0 then [(ts, ele)] else []
+  |x::xs -> if fst x = after_id then x::(ts,ele)::xs else x::insert xs ts after_id ele
+
+let rec remove (s:concrete_st_s) (ts:nat{mem_id_s_s ts s}) : Tot (r:concrete_st_s{forall id. mem_id_s_s id s /\ id <> ts <==> mem_id_s_s id r}) =
+  match s with
+  |x::xs -> if fst x = ts then xs else x::remove xs ts
 
 // apply an operation to a state 
-let do_s (s:concrete_st_s) (op:op_t) : concrete_st_s = admit()
+let do_s1 (s:concrete_st_s) (op:op_t{do_pre_s s op}) : concrete_st_s = 
+  match op with
+  |(ts, (_, Add_after after_id ele)) -> insert s ts after_id ele
+  |(_, (_, Remove id)) -> remove s id
 
 //equivalence relation between the concrete states of sequential type and MRDT
-let eq_sm (st_s:concrete_st_s) (st:concrete_st) = admit()
+let eq_sm1 (st_s:concrete_st_s) (st:concrete_st) = 
+  (forall id. mem_id_s_s id st_s <==> (mem_id_s id (fst st) /\ not (S.mem id (snd st)))) /\
+  (forall id ele. id_ele st id ele <==> L.mem (id, ele) st_s)
 
 //initial states are equivalent
-let initial_eq _
-  : Lemma (ensures eq_sm init_st_s init_st) = ()
+let initial_eq1 _
+  : Lemma (ensures eq_sm1 init_st_s init_st) = ()
 
 //equivalence between states of sequential type and MRDT at every operation
-let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
-  : Lemma (requires eq_sm st_s st /\ do_pre st op)
-          (ensures eq_sm (do_s st_s op) (do st op)) = admit()
+let do_eq1 (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
+  : Lemma (requires eq_sm1 st_s st /\ do_pre st op /\ do_pre_s st_s op)
+          (ensures eq_sm1 (do_s1 st_s op) (do st op)) = admit()
 
 ////////////////////////////////////////////////////////////////
