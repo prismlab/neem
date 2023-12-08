@@ -1,96 +1,35 @@
 module Set_extended_new
 
-val t (a:eqtype) : Type0
+open FStar.FunctionalExtensionality
+module F = FStar.FunctionalExtensionality
 
-val empty (#a:eqtype) : t a
-val singleton (#a:eqtype) (x:a) : t a
-val mem (#a:eqtype) (x:a) (s:t a) : bool
-val equal (#a:eqtype) (s1 s2:t a) : Type0
-val union (#a:eqtype) (s1 s2:t a) : t a
-val intersection (#a:eqtype) (s1 s2:t a) : t a
-val difference (#a:eqtype) (s1 s2:t a) : t a
-val filter (#a:eqtype) (s:t a) (p:a -> bool) : t a
-val remove (#a:eqtype) (s:t a) (x:a) : t a
+let t (a:eqtype) = F.restricted_t a (fun _ -> bool)
 
-val mem_empty (#a:eqtype) (x:a)
-  : Lemma (not (mem x empty))
-          [SMTPat (mem x empty)]
+let empty #a = F.on_dom a (fun x -> false)
+let singleton #a x = F.on_dom a (fun y -> y = x)
+let mem #a x s = s x
+let equal #a s1 s2 = F.feq s1 s2
+let union #a s1 s2 = F.on_dom a (fun x -> s1 x || s2 x)
+let intersection #a s1 s2 = F.on_dom a (fun x -> s1 x && s2 x)
+let difference #a s1 s2 = F.on_dom a (fun x -> s1 x && not (s2 x))
+let filter #a s1 p = F.on_dom a (fun x -> s1 x && p x)
+let remove #a s1 x = F.on_dom a (fun y -> s1 y && x <> y)
 
-val equal_intro (#a:eqtype) (s1 s2:t a)
-  : Lemma (requires (forall (x:a). mem x s1 == mem x s2))
-          (ensures equal s1 s2)
-          [SMTPat (equal s1 s2)]
+let mem_empty #a x = ()
+let equal_intro #a s1 s2 = ()
+let equal_elim #a s1 s2 = () 
+let insert_mem # a x s = ()
 
-val equal_elim (#a:eqtype) (s1 s2:t a)
-  : Lemma (requires equal s1 s2)
-          (ensures s1 == s2)
-          [SMTPat (equal s1 s2)]
-
-let equal_refl (#a:eqtype) (s1 s2:t a)
-  : Lemma (requires s1 == s2)
-          (ensures (forall (x:a). mem x s1 == mem x s2) /\ equal s1 s2)
-          [SMTPat (equal s1 s2)] = ()
-
-// no need to define it, it is already derivable
-let equal_refl1 (#a:eqtype) (s:t a)
-  : Lemma (equal s s) = ()
-
-let subset (#a:eqtype) (s1:t a) (s2:t a) =
-  (forall x. mem x s1 ==> mem x s2)
-
-val mem_subset (#a:eqtype) (s1:t a) (s2:t a)
-  : Lemma (requires (forall x. mem x s1 ==> mem x s2))
-          (ensures (subset s1 s2))
-          [SMTPat (subset s1 s2)]
-
-val subset_mem (#a:eqtype) (s1:t a) (s2:t a)
-  : Lemma (requires (subset s1 s2))
-          (ensures (forall x. mem x s1 ==> mem x s2))
-          [SMTPat (subset s1 s2)]
-   
-val mem_union (#a:eqtype) (s1 s2:t a) (x:a)
-  : Lemma (mem x (union s1 s2) <==> (mem x s1 || mem x s2))
-          [SMTPat (mem x (union s1 s2))]
-
-val mem_singleton: #a:eqtype -> x:a -> y:a -> Lemma
-   (requires True)
-   (ensures (mem y (singleton x) = (x=y)))
-   [SMTPat (mem y (singleton x))]
-   
-let add (#a:eqtype) (x:a) (s:t a) : t a =
-  union s (singleton x)
-
-val mem_intersection (#a:eqtype) (s1 s2:t a) (x:a)
-  : Lemma (mem x (intersection s1 s2) <==> (mem x s1 /\ mem x s2))
-          [SMTPat (mem x (intersection s1 s2))]
-
-val mem_difference (#a:eqtype) (s1 s2:t a) (x:a)
-  : Lemma (mem x (difference s1 s2) <==> (mem x s1 /\ ~ (mem x s2)))
-          [SMTPat (mem x (difference s1 s2))]
-   
-val mem_filter (#a:eqtype) (s:t a) (p:a -> bool) (x:a)
-  : Lemma (mem x (filter s p) <==> (mem x s /\ p x))
-          [SMTPat (mem x (filter s p))]
-
-val mem_remove_x (#a:eqtype) (s:t a) (x:a)
-  : Lemma (not (mem x (remove s x)))
-          [SMTPat (mem x (remove s x))]
-
-val mem_remove_y (#a:eqtype) (s:t a) (x:a) (y:a)
-  : Lemma (requires x =!= y)
-          (ensures mem y (remove s x) == mem y s)
-          [SMTPat (mem y (remove s x))]
+let mem_subset #a s1 s2 = ()
+let subset_mem #a s1 s2 = ()
+let mem_union #a s1 s2 x = ()
+let mem_singleton #a x y = ()
+let mem_intersection #a s1 s2 x = ()
+let mem_difference #a s1 s2 x = ()
+let mem_filter #a s p x = ()
+let mem_remove_x #a s x = ()
+let mem_remove_y #a s x y = ()
           
-(*let forall_s (#a:eqtype) (s:t a) (p:a -> bool) : Type0 =
-  filter s p == s
-
-let exists_s (#a:eqtype) (s:t a) (p:a -> bool) : Type0 =
-  ~ (filter s p == empty)
-
-val exists_mem (#a:eqtype) (s:t a) (p:a -> bool)
-  : Lemma (ensures ((exists_s s p == true) <==> (exists x. mem x s /\ p x)))
-    [SMTPat (exists_s s p)]*)
-    
 (*val t (a:eqtype) : eqtype
 
 val equal (#a:eqtype) (s1:t a) (s2:t a) : Type0

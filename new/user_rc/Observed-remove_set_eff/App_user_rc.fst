@@ -22,11 +22,12 @@ let sel_id (s:M.t nat cf) id = if M.contains s id then M.sel s id else (0, false
 
 let ele_id (s:concrete_st) (e id:nat) =
   M.contains s e /\ M.contains (sel_e s e) id
-  
+
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) =
   (forall e. M.contains a e = M.contains b e) /\
-  (forall e. M.contains a e ==> (forall id. M.contains (sel_e a e) id = M.contains (sel_e a e) id /\ sel_id (sel_e a e) id == sel_id (sel_e a e) id))
+  (forall e. M.contains a e ==> (forall id. M.contains (sel_e a e) id = M.contains (sel_e b e) id /\ 
+                                  sel_id (sel_e a e) id == sel_id (sel_e b e) id))
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -56,29 +57,12 @@ let do (s:concrete_st) (o:op_t) : concrete_st =
   |(_, (rid, Add e)) -> M.upd s e (M.upd (sel_e s e) rid (fst (sel_id (sel_e s e) rid) + 1, true))
   |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = get_ele o then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
 
-#push-options "--ifuel 3"
-let lem_do (a b:concrete_st) (op:op_t)
-   : Lemma (requires eq a b)
-           (ensures eq (do a op) (do b op)) = ()
-#pop-options
-
-//operations x and y are commutative
-let comm_ops (x y:op_t) : bool =
-  match snd (snd x), snd (snd y) with
-  |Add x, Rem y -> if x = y then false else true
-  |Rem x, Add y -> if x = y then false else true
-  |_ -> true
-
-// if x and y are commutative ops, applying them in any order should give equivalent results
-let commutative_prop (x y:op_t) 
-  : Lemma (requires comm_ops x y)
-          (ensures (forall s. eq (apply_log s (cons x (cons y empty))) (apply_log s (cons y (cons x empty))))) = ()
-
 //conflict resolution
-let rc (x:op_t) (y:op_t{fst x <> fst y /\ ~ (comm_ops x y)}) : rc_res =
-  match snd (snd x), snd (snd y) with
-  |Add x, Rem y -> if x = y then Snd_fst else Fst_snd
-  |Rem x, Add y -> Fst_snd // Rem x, Add y && x = y
+let rc (o1:op_t) (o2:op_t{distinct_ops o1 o2}) =
+  match snd (snd o1), snd (snd o2) with
+  |Add e1, Rem e2 -> if e1 = e2 then Snd_then_fst else Either
+  |Rem e1, Add e2 -> if e1 = e2 then Fst_then_snd else Either
+  |_ -> Either
 
 let merge_flag (l a b:cf) : bool =
   let lc = fst l in
@@ -110,257 +94,180 @@ let merge (l a b:concrete_st) : concrete_st =
 /////////////////////////////////////////////////////////////////////////////
 
 let no_rc_chain (o1 o2 o3:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ fst o2 <> fst o3 /\ ~ (comm_ops o1 o2) /\ ~ (comm_ops o2 o3))
-          (ensures ~ (Fst_snd? (rc o1 o2) /\ Fst_snd? (rc o2 o3))) = ()
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3)
+          (ensures ~ (Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc o2 o3))) = ()
 
 let relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o1 o2) /\ ~ (comm_ops o2 o3))
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
-let rc_comm (o1 o2:op_t)
-  : Lemma (requires fst o1 <> fst o2)
-          (ensures ~ (comm_ops o1 o2) ==> (Fst_snd? (rc o1 o2) \/ Fst_snd? (rc o2 o1))) = ()
+let non_comm (o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2)
+          (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) =
+  assert (((Add? (snd (snd o1)) /\ Rem? (snd (snd o2))) \/ (Rem? (snd (snd o1)) /\ Add? (snd (snd o2)))) /\
+         get_ele o1 = get_ele o2 ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); ()
+         
+let cond_comm (o1:op_t) (o2:op_t{distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2))}) (o3:op_t)=
+  if Rem? (snd (snd o3)) && get_ele o1 = get_ele o3 then true else false
+
+#push-options "--z3rlimit 50 --ifuel 3 --split_queries on_failure"
+let rec lem_cond_comm (s:concrete_st) (o1 o2 o3:op_t) (l:log)
+  : Lemma (requires distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2)) /\ cond_comm o1 o2 o3)
+          (ensures eq (do (apply_log (do (do s o1) o2) l) o3) (do (apply_log (do (do s o2) o1) l) o3)) 
+          (decreases length l) =
+  if length l = 0 then ()
+  else 
+    (let pre,last1 = un_snoc l in
+     lem_cond_comm s o1 o2 o3 pre; 
+     lem_apply_log (do (do s o1) o2) l; 
+     lem_apply_log (do (do s o2) o1) l)
 
 /////////////////////////////////////////////////////////////////////////////
 
-// Prove that merge is commutative
-let merge_comm (l a b:st)
-  : Lemma (requires cons_reps l a b)
-          (ensures (eq (merge (v_of l) (v_of a) (v_of b)) 
-                       (merge (v_of l) (v_of b) (v_of a)))) = ()
+let merge_comm (l a b:concrete_st)
+  : Lemma (ensures (eq (merge l a b) (merge l b a))) = ()
 
-let merge_idem (s:st)
-  : Lemma (ensures eq (merge (v_of s) (v_of s) (v_of s)) (v_of s)) = ()
+let merge_idem (s:concrete_st)
+  : Lemma (ensures eq (merge s s s) s) = ()
 
-#push-options "--z3rlimit 50 --ifuel 3 --split_queries always"
-let fast_fwd_base (a b:st) (last2:op_t)
-  : Lemma (ensures eq (do (v_of a) last2) (merge (v_of a) (v_of a) (do (v_of a) last2))) = ()
+#push-options "--z3rlimit 50 --ifuel 3 --split_queries on_failure"
+let fast_fwd_base (a:concrete_st) (op:op_t)
+  : Lemma (ensures eq (do a op) (merge a a (do a op))) = ()
 
-let fast_fwd_ind (a b:st) (last2:op_t)
-  : Lemma (requires length (ops_of b) > length (ops_of a) /\
-                    (let b' = inverse_st b in
-                    cons_reps a a b' /\
-                    eq (do (v_of b') last2) (merge (v_of a) (v_of a) (do (v_of b') last2))))
-        
-          (ensures eq (do (v_of b) last2) (merge (v_of a) (v_of a) (do (v_of b) last2))) = ()
+let rec fast_fwd_ind_help (a b:concrete_st) (l:log)
+  : Lemma (requires b == apply_log a l)
+          (ensures (forall ele rid. fst (sel_id (sel_e b ele) rid) >= fst (sel_id (sel_e a ele) rid)))
+          (decreases length l) =
+  if length l = 0 then ()
+  else (lem_apply_log a l;
+        fast_fwd_ind_help a (apply_log a (fst (un_snoc l))) (fst (un_snoc l)))
+          
+let fast_fwd_ind (a b:concrete_st) (o2 o2':op_t) (l:log)
+  : Lemma (requires do b o2 == apply_log a l /\
+                    eq (do b o2) (merge a a (do b o2)))
+          (ensures eq (do (do b o2') o2) (merge a a (do (do b o2') o2))) =
+  fast_fwd_ind_help a (do b o2) l
+
+let rc_ind_right (l a b:concrete_st) (o1 o2' o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    eq (merge l (do a o1) (do b o2)) (do (merge l (do a o1) b) o2))
+          (ensures eq (merge l (do a o1) (do (do b o2') o2)) (do (merge l (do a o1) (do b o2')) o2)) = ()
+
+let rc_ind_left (l a b:concrete_st) (o1 o1' o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    eq (merge l (do a o1) (do b o2)) (do (merge l (do a o1) b) o2))
+          (ensures eq (merge l (do (do a o1') o1) (do b o2)) (do (merge l (do (do a o1') o1) b) o2)) = ()
+
+let comm_ind_right (l a b:concrete_st) (o1 o2' o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ distinct_ops o2' o1 /\
+                    ~ (exists o3 a'. eq (do a o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
+                    ~ (exists o3 b'. eq (do b o2) (do b' o3) /\ distinct_ops o1 o3 /\ Fst_then_snd? (rc o1 o3)))                    
+          (ensures ((eq (merge l (do a o1) (do b o2)) (do (merge l (do a o1) b) o2) ==>
+                     eq (merge l (do a o1) (do (do b o2') o2)) (do (merge l (do a o1) (do b o2')) o2)) \/
+                    (eq (merge l (do a o1) (do b o2)) (do (merge l a (do b o2)) o1) ==>
+                     eq (merge l (do a o1) (do (do b o2') o2)) (do (merge l a (do (do b o2') o2)) o1)))) = 
+  assert (eq (merge l (do a o1) (do b o2)) (do (merge l (do a o1) b) o2) ==>
+          eq (merge l (do a o1) (do (do b o2') o2)) (do (merge l (do a o1) (do b o2')) o2));
+  ()
+
+let comm_ind_left (l a b:concrete_st) (o1 o1' o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ distinct_ops o1' o2 /\
+                    ~ (exists o3 a'. eq (do a o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
+                    ~ (exists o3 b'. eq (do b o2) (do b' o3) /\ distinct_ops o1 o3 /\ Fst_then_snd? (rc o1 o3)))                             
+          (ensures ((eq (merge l (do a o1) (do b o2)) (do (merge l (do a o1) b) o2) ==>
+                     eq (merge l (do (do a o1') o1) (do b o2)) (do (merge l (do (do a o1') o1) b) o2)) \/
+                    (eq (merge l (do a o1) (do b o2)) (do (merge l a (do b o2)) o1) ==>
+                     eq (merge l (do (do a o1') o1) (do b o2)) (do (merge l (do a o1') (do b o2)) o1)))) =
+  assert (eq (merge l (do a o1) (do b o2)) (do (merge l a (do b o2)) o1) ==>
+          eq (merge l (do (do a o1') o1) (do b o2)) (do (merge l (do a o1') (do b o2)) o1));
+  ()
+
+let rc_base (l:concrete_st) (o o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\ distinct_ops o o1 /\ distinct_ops o o2 /\
+                    eq (merge l (do l o1) (do l o2)) (do (do l o1) o2))
+          (ensures eq (merge (do l o) (do (do l o) o1) (do (do l o) o2)) (do (do (do l o) o1) o2)) = ()
   
-let merge_eq (l a b a':concrete_st)
-  : Lemma (requires eq a a')
-          (ensures eq (merge l a b)
-                      (merge l a' b)) = ()
+let comm_base1 (l:concrete_st) (o o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ distinct_ops o o1 /\ distinct_ops o o2)
+          (ensures (eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) ==>
+                    eq (merge (do l o) (do (do l o) o1) (do (do l o) o2)) (do (do (do l o) o1) o2))) = ()
 
-let cons_reps' (l a b:st1) =
-  distinct_ops (ops_of l) /\ distinct_ops (ops_of a) /\ distinct_ops (ops_of b) /\
-  is_prefix (ops_of l) (ops_of a) /\
-  is_prefix (ops_of l) (ops_of b)
-  
-let rec lin_rc (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps l a b /\ 
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
-          (decreases %[length (ops_of l); length (ops_of a); length (ops_of b)]) =
-  if ops_of a = ops_of l && ops_of b = ops_of l then 
-    (if length (ops_of l) = 0 then ()
-     else 
-       (let l' = inverse_st l in
-        let _, lastl' = un_snoc (ops_of l) in
-        assume (fst lastl' <> fst last2); //can be done
-        lin_rc l' l' l' last1 last2; ()))
-  else if ops_of a = ops_of l then 
-    (let b' = inverse_st b in 
-     cons_reps_s2' l a b;
-     lin_rc l a b' last1 last2) 
-  else 
-    (let a' = inverse_st a in
-     cons_reps_s1' l a b;
-     lin_rc l a' b last1 last2)
+let comm_base2 (l:concrete_st) (o o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ distinct_ops o o1 /\ distinct_ops o o2)
+          (ensures (eq (merge l (do l o1) (do l o2)) (do (do l o2) o1) ==>
+                    eq (merge (do l o) (do (do l o) o1) (do (do l o) o2)) (do (do (do l o) o2) o1))) = ()
 
-let rec lin_rc' (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps' l a b /\ 
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
-          (decreases %[length (ops_of l); length (ops_of a); length (ops_of b)]) =
-  if ops_of a = ops_of l && ops_of b = ops_of l then 
-    (if length (ops_of l) = 0 then ()
-     else 
-       (let l' = inverse_st l in
-        let _, lastl' = un_snoc (ops_of l) in
-        assume (fst lastl' <> fst last2); //can be done
-        lin_rc' l' l' l' last1 last2; ()))
-  else if ops_of a = ops_of l then 
-    (let b' = inverse_st b in 
-     lin_rc' l a b' last1 last2) 
-  else 
-    (let a' = inverse_st a in
-     lin_rc' l a' b last1 last2)
-     
-let comm_empty_log (x:op_t) (l:log)
-  : Lemma (ensures length l = 0 ==> commutative_seq x l) = ()
-  
-let not_add_eq (lca s1:st) (s2:st1)
-  : Lemma (requires length (ops_of s1) > length (ops_of lca) /\
-                    length (ops_of s2) > length (ops_of lca) /\
-                    is_prefix (ops_of lca) (ops_of s1) /\
-                    (let _, last2 = un_snoc (ops_of s2) in
-                     let _, last1 = un_snoc (ops_of s1) in
-                     Rem? (snd (snd last2)) /\
-                     fst last1 <> fst last2 /\
-                     ~ (reorder last2 (diff (ops_of s1) (ops_of lca)))))
-          (ensures (let _, last2 = un_snoc (ops_of s2) in
-                    let _, last1 = un_snoc (ops_of s1) in
-                    ~ (Add? (snd (snd last1)) /\ get_ele last1 = get_ele last2))) = 
-  let _, last2 = un_snoc (ops_of s2) in
-  let _, last1 = un_snoc (ops_of s1) in
-  let s1' = inverse_st s1 in
-  lemma_mem_snoc (ops_of s1') last1;
-  assert (mem last1 (ops_of s1)); 
-  lem_last (ops_of s1);
-  assert (last (ops_of s1) = last1);
-  lem_diff (ops_of s1) (ops_of lca);
-  assert (last (diff (ops_of s1) (ops_of lca)) = last1);
-  assert (mem last1 (diff (ops_of s1) (ops_of lca)));
-  let pre, suf = pre_suf (diff (ops_of s1) (ops_of lca)) last1 in
-  lem_lastop_suf_0 (diff (ops_of s1) (ops_of lca)) pre suf last1;
-  assert (length suf = 0);
-  lemma_empty suf; 
-  comm_empty_log last1 suf; 
-  assert (commutative_seq last1 suf);
+let comm_base (l:concrete_st) (o o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ distinct_ops o o1 /\ distinct_ops o o2)
+          (ensures (eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) ==>
+                    eq (merge (do l o) (do (do l o) o1) (do (do l o) o2)) (do (do (do l o) o1) o2)) /\
+                   (eq (merge l (do l o1) (do l o2)) (do (do l o2) o1) ==>
+                    eq (merge (do l o) (do (do l o) o1) (do (do l o) o2)) (do (do (do l o) o2) o1))) =
+  comm_base1 l o o1 o2;
+  comm_base2 l o o1 o2
 
-  assert ((Add? (snd (snd last1)) /\ get_ele last1 = get_ele last2) ==> not (comm_ops last2 last1));
-  assert ((Add? (snd (snd last1)) /\ get_ele last1 = get_ele last2) ==> Fst_snd? (rc last2 last1)); 
-  assert ((Add? (snd (snd last1)) /\ get_ele last1 = get_ele last2) ==> 
-                not (comm_ops last2 last1) /\ Fst_snd? (rc last2 last1) /\ commutative_seq last1 suf);
-  assert ((Add? (snd (snd last1)) /\ get_ele last1 = get_ele last2) ==> reorder last2 (diff (ops_of s1) (ops_of lca)));
-  assert (~ (Add? (snd (snd last1)) /\ get_ele last1 = get_ele last2)); ()
-
-let rec lin_comm1_r (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps l a b /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\ Rem? (snd (snd last2)) /\
-                    ~ (reorder last2 (diff (snoc (ops_of a) last1) (ops_of l))))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
-          (decreases %[length (ops_of b); length (ops_of a)]) = 
-  assert (Rem? (snd (snd last1)) \/ (Add? (snd (snd last1)) /\ get_ele last1 <> get_ele last2));
-  if ops_of a = ops_of l && ops_of b = ops_of l then ()
-  else if ops_of a = ops_of l then ()
-  else 
-    (let a' = inverse_st a in
-     cons_reps_s1' l a b;
-     let pre1, last1' = un_snoc (ops_of a) in
-     assume (fst last1' <> fst last2); //can be done
-     assume (~ (reorder last2 (diff (ops_of a) (ops_of l)))); //can be done
-     un_snoc_snoc (ops_of a') last1';
-     un_snoc_snoc (ops_of b) last2;
-     not_add_eq l (do_st a' last1') (do_st b last2);
-     lin_comm1_r l a' b last1' last2)    
-
-let rec lin_comm1_r' (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps' l a b /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\ Rem? (snd (snd last2)) /\
-                    ~ (reorder last2 (diff (snoc (ops_of a) last1) (ops_of l))))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
-          (decreases %[length (ops_of b); length (ops_of a)]) = 
-  assert (Rem? (snd (snd last1)) \/ (Add? (snd (snd last1)) /\ get_ele last1 <> get_ele last2));
-  if ops_of a = ops_of l && ops_of b = ops_of l then ()
-  else if ops_of a = ops_of l then ()
-  else 
-    (let a' = inverse_st a in
-     let pre1, last1' = un_snoc (ops_of a) in
-     assume (fst last1' <> fst last2); //can be done
-     assume (~ (reorder last2 (diff (ops_of a) (ops_of l)))); //can be done
-     un_snoc_snoc (ops_of a') last1';
-     un_snoc_snoc (ops_of b) last2;
-     not_add_eq l (do_st a' last1') (do_st b last2);
-     lin_comm1_r' l a' b last1' last2)    
-     
-let rec lin_comm1_a (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps l a b /\
-                    fst last1 <> fst last2 /\ Add? (snd (snd last2)))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
-          (decreases %[length (ops_of a); length (ops_of b)]) = 
-  if ops_of a = ops_of l && ops_of b = ops_of l then ()
-  else if ops_of b = ops_of l then 
-    (let a' = inverse_st a in
-     let _, last1' = un_snoc (ops_of a) in
-     cons_reps_s1' l a b;
-     assume (fst last1' <> fst last2); //can be done
-     if Rem? (snd (snd last1)) && get_ele last1 = get_ele last2 then
-       lin_comm1_a l a' b last1 last2
-     else lin_comm1_a l a' b last1' last2)
-  else 
-    (let b' = inverse_st b in
-     cons_reps_s2' l a b;
-     lin_comm1_a l a b' last1 last2) 
-
-let rec lin_comm1_a' (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps' l a b /\
-                    fst last1 <> fst last2 /\ Add? (snd (snd last2)))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2)))
-          (decreases %[length (ops_of a); length (ops_of b)]) = 
-  if ops_of a = ops_of l && ops_of b = ops_of l then ()
-  else if ops_of b = ops_of l then 
-    (let a' = inverse_st a in
-     let _, last1' = un_snoc (ops_of a) in
-     assume (fst last1' <> fst last2); //can be done
-     if Rem? (snd (snd last1)) && get_ele last1 = get_ele last2 then
-       lin_comm1_a' l a' b last1 last2
-     else lin_comm1_a' l a' b last1' last2)
-  else 
-    (let b' = inverse_st b in
-     lin_comm1_a' l a b' last1 last2) 
-#pop-options
-
-let lin_comm (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps l a b /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\
-                    ~ (reorder last2 (diff (snoc (ops_of a) last1) (ops_of l))))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2))) =
-  if Rem? (snd (snd last2)) then lin_comm1_r l a b last1 last2
-  else lin_comm1_a l a b last1 last2
+let rc_intermediate (l:concrete_st) (o1 o2 o o':op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
+                    eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) /\ distinct_ops o' o2)
+          (ensures eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o1) o2)) = ()
                       
-let lin_comm' (l a b:st) (last1 last2:op_t)
-  : Lemma (requires cons_reps' l a b /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\
-                    ~ (reorder last2 (diff (snoc (ops_of a) last1) (ops_of l))))
-          (ensures eq (do (merge (v_of l) (do (v_of a) last1) (v_of b)) last2)
-                      (merge (v_of l) (do (v_of a) last1) (do (v_of b) last2))) =
-  if Rem? (snd (snd last2)) then lin_comm1_r' l a b last1 last2
-  else lin_comm1_a' l a b last1 last2
-  
+let rc_intermediate2 (l l' a b:concrete_st) (o1 o2 o o':op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
+                    eq (merge l (do a o1) (do b o2)) (do (do l' o1) o2) /\ 
+                    distinct_ops o' o2 /\ distinct_ops o' o1)
+          (ensures eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) = admit()
+
+let comm_intermediate1 (l:concrete_st) (o1 o2 o o':op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
+                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
+                    eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) /\ 
+                    distinct_ops o' o1 /\ distinct_ops o' o2)
+          (ensures eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o1) o2)) = ()
+
+let comm_intermediate2 (l:concrete_st) (o1 o2 o o':op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
+                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
+                    eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) /\ 
+                    distinct_ops o' o1 /\ distinct_ops o' o2)
+          (ensures eq (merge (do l o') (do (do l o') o2) (do (do (do l o) o') o1)) (do (do (do (do l o) o') o2) o1)) = ()
+
+let comm_intermediate (l:concrete_st) (o1 o2 o o':op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
+                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
+                    eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) /\ 
+                    distinct_ops o' o1 /\ distinct_ops o' o2)
+          (ensures eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o1) o2) /\
+                   eq (merge (do l o') (do (do l o') o2) (do (do (do l o) o') o1)) (do (do (do (do l o) o') o2) o1)) =
+  comm_intermediate1 l o1 o2 o o';
+  comm_intermediate2 l o1 o2 o o'
+
+////////////////////////////////////////////////////////////////
+
 let inter_merge1 (l:concrete_st) (o1 o2 o3:op_t)
-  : Lemma (requires fst o1 <> fst o3 /\ fst o2 <> fst o3 /\ 
-                    ~ (comm_ops o3 o1) /\ ~ (comm_ops o3 o2) /\
-                    Fst_snd? (rc o3 o1) (*/\ Fst_snd? (rc o3 o2*))
+  : Lemma (requires distinct_ops o1 o3 /\ Fst_then_snd? (rc o3 o1) (*/\ 
+                    distinct_ops o2 o3 /\ Fst_then_snd? (rc o3 o2*))
           (ensures eq (merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) (do (do (do l o3) o1) o2)) = ()
 
 let inter_merge2 (l s s':concrete_st) (o1 o2 o3:op_t)
-  : Lemma (requires fst o2 <> fst o3 /\ fst o1 <> fst o3 /\
-                    ~ (comm_ops o3 o1) /\ ~ (comm_ops o3 o2) /\
-                    Fst_snd? (rc o3 o1) /\ Fst_snd? (rc o3 o2) /\
+  : Lemma (requires distinct_ops o1 o3 /\ Fst_then_snd? (rc o3 o1) /\ 
+                    distinct_ops o2 o3 /\ Fst_then_snd? (rc o3 o2) /\
                     eq (merge l s (do l o3)) s' /\
                     eq (merge s (do s o2) s') (do s' o2))
           (ensures eq (merge (do s o1) (do (do s o1) o2) (do s' o1)) (do (do s' o1) o2)) = ()
 
-#push-options "--ifuel 3"
 let inter_merge3 (l a b c:concrete_st) (op op':op_t) 
   : Lemma (requires eq (merge l a b) c /\
                     (forall (o:op_t). eq (merge l a (do b o)) (do c o)))
           (ensures eq (merge l a (do (do b op) op')) (do (do c op) op')) = ()
-#pop-options
 
 let inter_merge4 (l s:concrete_st) (o1 o2 o3 o4:op_t)
-  : Lemma (requires fst o1 <> fst o3 /\ fst o1 <> fst o4 /\ fst o2 <> fst o3 /\
-                    ~ (comm_ops o3 o1) /\ ~ (comm_ops o3 o2) /\ ~ (comm_ops o4 o1) /\
-                    Fst_snd? (rc o3 o1) /\ Fst_snd? (rc o3 o2) /\ Fst_snd? (rc o4 o1) /\
+  : Lemma (requires distinct_ops o1 o3 /\ Fst_then_snd? (rc o3 o1) /\ 
+                    distinct_ops o2 o3 /\ Fst_then_snd? (rc o3 o2) /\
+                    distinct_ops o1 o4 /\ Fst_then_snd? (rc o4 o1) /\
                     eq (merge (do l o1) (do (do l o1) o2) (do (do s o3) o1)) (do (do (do s o3) o1) o2))
-          (ensures eq (merge (do l o1) (do (do l o1) o2) (do (do (do s o4) o3) o1)) 
-                      (do (do (do (do s o4) o3) o1) o2)) = ()
+          (ensures eq (merge (do l o1) (do (do l o1) o2) (do (do (do s o4) o3) o1)) (do (do (do (do s o4) o3) o1) o2)) = ()
 
 ////////////////////////////////////////////////////////////////
 //// Sequential implementation //////
@@ -374,7 +281,7 @@ let init_st_s = S'.empty
 // apply an operation to a state 
 let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s =
   match o with
-  |(ts, (rid, Add e)) -> S'.insert e st_s
+  |(ts, (rid, Add e)) -> S'.add e st_s
   |(_, (rid, Rem e)) -> S'.filter st_s (fun ele -> ele <> e)
 
 // equivalence relation between the concrete states of sequential type and MRDT
@@ -395,167 +302,3 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
 
 ////////////////////////////////////////////////////////////////
 
-#push-options "--z3rlimit 50 --ifuel 3"
-let prop1 (l:st) (o1 o2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1))
-          (ensures eq (merge (do (v_of l) o1) (do (v_of l) o1) (do (do (v_of l) o2) o1))
-                      (do (do (v_of l) o2) o1)) = ()
-
-let prop2 (l:st) (o1 o2:op_t) (l2:log)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1))
-          (ensures eq (merge (do (v_of l) o1) (do (v_of l) o1) (apply_log (do (do (v_of l) o2) o1) l2))
-                      (apply_log (do (do (v_of l) o2) o1) l2)) = admit() //fast fwd case, already proven
-
-let prop3 (l:st) (o1 o2:op_t) (l1:log)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1))
-          (ensures eq (merge (do (v_of l) o1) (apply_log (do (v_of l) o1) l1) (do (do (v_of l) o2) o1))
-                      (apply_log (do (do (v_of l) o2) o1) l1)) = admit() //!!! 4 suf cond will handle this case
-
-let rec prop3_base_rc (l:st) (o1 o2:op_t) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2) /\
-                    comm_ops o1 last1 /\ not (mem_id (fst last2) (ops_of l)))
-          (ensures eq (merge (do (v_of l) o1) (do (do (v_of l) o1) last1) (do (do (do (v_of l) o2) o1) last2))
-                      (do (merge (do (v_of l) o1) (do (do (v_of l) o1) last1) (do (do (v_of l) o2) o1)) last2))
-          (decreases length (ops_of l)) =
-  if length (ops_of l) = 0 then ()
-  else prop3_base_rc (inverse_st l) o1 o2 last1 last2
-
-let prop4_base_comm (l:st) (o1 o2:op_t) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops last1 o1 /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\ not (reorder last2 (create 1 last1)))
-          (ensures eq (merge (do (v_of l) o1) (do (do (v_of l) o1) last1) (do (do (do (v_of l) o2) o1) last2))
-                      (do (merge (do (v_of l) o1) (do (do (v_of l) o1) last1) (do (do (v_of l) o2) o1)) last2)) = ()
-
-let prop3_ind_rc1 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops o1 last1 /\
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2) /\
-                    length l2' > 0 /\ 
-                    (let pre2, lastl2 = un_snoc l2' in
-                     eq (merge (do l o1) (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) pre2) last2))
-                        (do (merge (do l o1) (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) pre2)) last2)))
-          (ensures eq (merge (do l o1) (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge (do l o1) (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-let prop3_ind_rc2 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2) /\
-                    length l2' = 0 /\ length l1' > 0 /\
-                    (let pre1, lastl1 = un_snoc l1' in
-                     eq (merge (do l o1) (do (apply_log (do l o1) pre1) last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                        (do (merge (do l o1) (do (apply_log (do l o1) pre1) last1) (apply_log (do (do l o2) o1) l2')) last2)))
-          (ensures eq (merge (do l o1) (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge (do l o1) (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-let prop4_ind_comm1 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops o1 last1 /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\
-                    //~ (reorder last2 l1') /\
-                    length l2' > 0 /\ 
-                    (let pre2, lastl2 = un_snoc l2' in
-                     eq (merge (do l o1) (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) pre2) last2))
-                        (do (merge (do l o1) (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) pre2)) last2)))
-          (ensures eq (merge (do l o1) (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge (do l o1) (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-let prop4_ind_comm2 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops o1 last1 /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\
-                    //~ (reorder last2 l1') /\
-                    length l2' = 0 /\ length l1' > 0 /\
-                    (let pre1, lastl1 = un_snoc l1' in
-                     eq (merge (do l o1) (do (apply_log (do l o1) pre1) last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                        (do (merge (do l o1) (do (apply_log (do l o1) pre1) last1) (apply_log (do (do l o2) o1) l2')) last2)))
-          (ensures eq (merge (do l o1) (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge (do l o1) (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-////////////////////////////////////////////////////////////////
-
-(*
-let rec prop2 (l:st) (o1 o2:op_t) (l2:log)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1))
-          (ensures eq (merge (do (v_of l) o1) (do (v_of l) o1) (apply_log (do (do (v_of l) o2) o1) l2))
-                      (apply_log (do (do (v_of l) o2) o1) l2))
-          (decreases length l2) =
-  if length l2 = 0 then ()
-  else 
-    (let pre2,last2 = un_snoc l2 in
-     assume (apply_log (do (do (v_of l) o2) o1) l2 == do (apply_log (do (do (v_of l) o2) o1) pre2) last2); //can be done
-     prop2 l o1 o2 pre2; ())
-
-let rec prop3 (l:st) (o1 o2:op_t) (l1:log)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1))
-          (ensures eq (merge (do (v_of l) o1) (apply_log (do (v_of l) o1) l1) (do (do (v_of l) o2) o1))
-                      (apply_log (do (do (v_of l) o2) o1) l1)) 
-          (decreases length l1) =
-  if length l1 = 0 then ()
-  else 
-    (let pre1, last1 = un_snoc l1 in
-     assume (apply_log (do (v_of l) o1) l1 == do (apply_log (do (v_of l) o1) pre1) last1); //can be done
-     assume (apply_log (do (do (v_of l) o2) o1) l1 == do (apply_log (do (do (v_of l) o2) o1) pre1) last1); //can be done
-     prop3 l o1 o2 pre1)
-
-let prop4_ind_comm2' (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops o1 last1 /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\
-                    length l2' = 0 /\ length l1' > 0 /\
-                    (let pre1, lastl1 = un_snoc l1' in
-                     eq (merge (do l o1) (apply_log (do l o1) l1') (do (apply_log (do (do l o2) o1) l2') last2))
-                        (do (merge (do l o1) (apply_log (do l o1) l1') (apply_log (do (do l o2) o1) l2')) last2)))
-          (ensures eq (merge (do l o1) (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge (do l o1) (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-let rec prop3_base_rc (l:st) (o1 o2:op_t) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2))
-          (ensures eq (merge (v_of l) (do (do (v_of l) o1) last1) (do (do (do (v_of l) o2) o1) last2))
-                      (do (merge (v_of l) (do (do (v_of l) o1) last1) (do (do (v_of l) o2) o1)) last2))
-          (decreases length (ops_of l)) =
-  if length (ops_of l) = 0 then ()
-  else prop3_base_rc (inverse_st l) o1 o2 last1 last2
-
-let prop4_base_comm (l:st) (o1 o2:op_t) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops last1 o1 /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\ not (reorder last2 (create 1 last1)))
-          (ensures eq (merge (v_of l) (do (do (v_of l) o1) last1) (do (do (do (v_of l) o2) o1) last2))
-                      (do (merge (v_of l) (do (do (v_of l) o1) last1) (do (do (v_of l) o2) o1)) last2)) = ()
-     
-let prop3_ind_rc1 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2) /\
-                    length l2' > 0 /\ 
-                    (let pre2, lastl2 = un_snoc l2' in
-                     eq (merge l (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) pre2) last2))
-                        (do (merge l (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) pre2)) last2)))
-          (ensures eq (merge l (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge l (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-let prop3_ind_rc2 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\
-                    fst last1 <> fst last2 /\ ~ (comm_ops last1 last2) /\ Fst_snd? (rc last1 last2) /\
-                    length l2' = 0 /\ length l1' > 0 /\
-                    (let pre1, lastl1 = un_snoc l1' in
-                     eq (merge l (do (apply_log (do l o1) pre1) last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                        (do (merge l (do (apply_log (do l o1) pre1) last1) (apply_log (do (do l o2) o1) l2')) last2)))
-          (ensures eq (merge l (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge l (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-let prop4_ind_comm1 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops o1 last1 /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\
-                    length l2' > 0 /\ 
-                    (let pre2, lastl2 = un_snoc l2' in
-                     eq (merge l (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) pre2) last2))
-                        (do (merge l (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) pre2)) last2)))
-          (ensures eq (merge l (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge l (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()
-
-let prop4_ind_comm2 (l:concrete_st) (o1 o2:op_t) (l1' l2':log) (last1 last2:op_t)
-  : Lemma (requires fst o1 <> fst o2 /\ ~ (comm_ops o1 o2) /\ Fst_snd? (rc o2 o1) /\ comm_ops o1 last1 /\
-                    fst last1 <> fst last2 /\ comm_ops last1 last2 /\
-                    length l2' = 0 /\ length l1' > 0 /\
-                    (let pre1, lastl1 = un_snoc l1' in
-                     eq (merge l (apply_log (do l o1) l1') (do (apply_log (do (do l o2) o1) l2') last2))
-                        (do (merge l (apply_log (do l o1) l1') (apply_log (do (do l o2) o1) l2')) last2)))
-          (ensures eq (merge l (do (apply_log (do l o1) l1') last1) (do (apply_log (do (do l o2) o1) l2') last2))
-                      (do (merge l (do (apply_log (do l o1) l1') last1) (apply_log (do (do l o2) o1) l2')) last2)) = ()*)
