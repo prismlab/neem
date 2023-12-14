@@ -1,2 +1,2 @@
 %.fsti-in %.fst-in:
-	@echo --include ../../interface/
+	@echo --include ../../

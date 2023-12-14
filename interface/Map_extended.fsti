@@ -153,3 +153,28 @@ val lemma_UpdDomain : #key:eqtype -> #value:Type -> m:t key value -> k:key -> v:
   Lemma (requires True)
         (ensures (S.equal (domain (upd m k v)) (S.union (domain m) (S.singleton k))))
         [SMTPat (domain (upd m k v))]
+
+(*** Extensional equality ***)
+
+(* equal m1 m2:
+      Maps `m1` and `m2` have the same domain and
+      and are pointwise equal on that domain.
+ *)
+val equal (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) : prop
+
+(* lemma_equal_intro:
+     Introducing `equal m1 m2` by showing maps to be pointwise equal on the same domain
+*)
+val lemma_equal_intro: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
+                       Lemma (requires (forall k. sel m1 k == sel m2 k /\
+                                             contains m1 k = contains m2 k))
+                             (ensures (equal m1 m2))
+                             [SMTPat (equal m1 m2)]
+
+(* lemma_equal_elim:
+     Eliminating `equal m1 m2` to provable equality of maps
+     Internally, this involves a use of functional extensionality
+*)
+val lemma_equal_elim: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
+                      Lemma (ensures (equal m1 m2 <==> m1 == m2))
+                            [SMTPat (equal m1 m2)]

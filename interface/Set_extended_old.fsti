@@ -38,6 +38,7 @@ val mem_difference (#a:eqtype) (s1 s2:set a) (x:a)
 
 let subset (#a:eqtype) (s1 s2:set a) =
   (forall x. mem x s1 ==> mem x s2)
+  
 val mem_subset (#a:eqtype) (s1 s2:set a)
   : Lemma (requires (forall x. mem x s1 ==> mem x s2))
           (ensures (subset s1 s2))
@@ -67,7 +68,7 @@ val forall_mem (#a:eqtype) (s:set a) (f:a -> bool)
   : Lemma (ensures ((forall_s s f = true) <==> (forall x. mem x s ==> f x)))
     [SMTPat (forall_s s f)]
 
-val extract (#a:Type0) (x:option a{Some? x}) : (r:a{x == Some r})
+(*val extract (#a:Type0) (x:option a{Some? x}) : (r:a{x == Some r})
 
 val find_if (#a:eqtype) (s:set a) (f:a -> bool) : option a
 val mem_find_if (#a:eqtype) (s:set a) (f:a -> bool)
@@ -165,3 +166,4 @@ val mem_remove_min_nat (s:set nat)
                    (s <> empty /\ Some? (find_min_nat s) ==> (forall e. mem e r <==> (mem e s /\ e <> extract (find_min_nat s)))) /\
                    (s <> empty /\ None? (find_min_nat s) ==> (forall e. mem e r <==> mem e s))))
                    
+*)
