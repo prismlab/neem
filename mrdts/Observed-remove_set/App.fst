@@ -175,24 +175,6 @@ let comm_intermediate1 (l:concrete_st) (o1 o2 o o' o3:op_t)
                      eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o2) o1)) ==>
       eq (merge (do (do l o3) o') (do (do (do l o3) o') o1) (do (do (do (do l o3) o) o') o2)) (do (do (do (do (do l o3) o) o') o2) o1))) = ()
 
-//this lemma should fail. 1st ensures (in comments) fails. 2nd ensures of the ((a ==> b) /\ (c ==> d)) passes.
-//In the 2nd ensures if we have either (a == b) or (c ==> d), the lemma fails.
-let comm_intermediate1_trial (l:concrete_st) (o1 o2 o o':op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ 
-                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
-                    distinct_ops o' o1 /\ distinct_ops o' o2 /\
-                    eq (do (do l o2) o1) (do (do l o1) o2) /\
-                    ~ (exists o3 a'. eq (do l o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
-                    ~ (exists o3 b'. eq (do l o2) (do b' o3) /\ distinct_ops o1 o3 /\ Fst_then_snd? (rc o1 o3)))
-          (*ensures ((forall e. S.mem e (merge l (do l o1) (do l o2)) <==> S.mem e (do (do l o1) o2)) ==>
-          (forall e. S.mem e (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) <==> S.mem e (do (do (do (do l o) o') o1) o2))) /\
-                   ((forall e. S.mem e (merge l (do l o1) (do l o2)) <==> S.mem e (do (do l o2) o1)) ==>
-          (forall e. S.mem e (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) <==> S.mem e (do (do (do (do l o) o') o2) o1)))) = ()*)
-          (ensures (eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) ==>
-                    eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o1) o2)) /\
-                   (eq (merge l (do l o1) (do l o2)) (do (do l o2) o1)) ==>
-                    eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o2) o1)) = ()
-
 let comm_intermediate2 (l l' a b:concrete_st) (o1 o2 o o':op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ 
                     distinct_ops o o' /\ Fst_then_snd? (rc o o') /\

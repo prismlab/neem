@@ -28,7 +28,7 @@ type app_op_t = unit (*since there is only inc op, we use unit*)
 
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
-  s + 1
+  s + 1 
 
 //conflict resolution
 let rc (o1:op_t) (o2:op_t{distinct_ops o1 o2}) = Either

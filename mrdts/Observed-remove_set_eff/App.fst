@@ -227,7 +227,16 @@ let rc_intermediate2' (l l' a b:concrete_st) (o1 o2 o o':op_t)
                     eq (merge l (do a o') (do b o)) (do (do l' o) o'))
           (ensures eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) = 
   if get_ele o' = get_ele o2 then () else ()
-
+  
+let rc_intermediate2'' (l l' a b:concrete_st) (o1 o2 o o':op_t)
+ : Lemma (requires distinct_ops o1 o2 /\ Rem? (snd (snd o1)) /\ Add? (snd (snd o2)) /\ get_ele o1 = get_ele o2 /\ //Fst_then_snd? (rc o1 o2) /\ 
+                    distinct_ops o o' /\ Rem? (snd (snd o)) /\ Add? (snd (snd o')) /\ get_ele o = get_ele o' /\ //Fst_then_snd? (rc o o') /\
+                    eq (merge l (do a o1) (do b o2)) (do (do l' o1) o2) /\
+                    eq (merge l (do a o') (do b o)) (do (do l' o) o') /\
+                    eq (merge (do l o') (do (do a o') o1) (do (do b o') o2)) (do (do (do l' o') o1) o2))
+          (ensures eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) = 
+ if get_ele o' = get_ele o2 then () else ()
+          
 let comm_intermediate1 (l:concrete_st) (o1 o2 o o' o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
                     distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
