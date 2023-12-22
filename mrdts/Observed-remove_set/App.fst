@@ -192,6 +192,10 @@ let comm_intermediate2 (l l' a b:concrete_st) (o1 o2 o o':op_t)
                     
 ////////////////////////////////////////////////////////////////
 
+let inter_merge1_base (l:concrete_st) (o o1 o2 o3:op_t)
+  : Lemma (requires distinct_ops o1 o3 /\ Fst_then_snd? (rc o3 o1) /\ distinct_ops o o1 /\ distinct_ops o o2)
+          (ensures eq (merge (do init_st o1) (do (do init_st o1) o2) (do (do init_st o3) o1)) (do (do (do init_st o3) o1) o2)) = ()
+          
 let inter_merge1 (l:concrete_st) (o o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o3 /\ Fst_then_snd? (rc o3 o1) /\ distinct_ops o o1 /\ distinct_ops o o2 /\
                     eq (merge (do l o1) (do (do l o1) o2) (do (do l o3) o1)) (do (do (do l o3) o1) o2))

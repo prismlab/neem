@@ -193,7 +193,7 @@ let inter_merge1 (l:concrete_st) (o o1 o2 o3:op_t)
 let inter_merge2 (l s s':concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o3 /\ Fst_then_snd? (rc o3 o1) /\ 
                     //distinct_ops o2 o3 /\ Fst_then_snd? (rc o3 o2) /\
-                    eq (merge l s (do l o3)) s' /\
+                     eq (merge l s (do l o3)) s' /\
                     eq (merge s (do s o2) s') (do s' o2))
           (ensures eq (merge (do s o1) (do (do s o1) o2) (do s' o1)) (do (do s' o1) o2)) = ()
 

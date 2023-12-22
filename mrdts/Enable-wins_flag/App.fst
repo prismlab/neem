@@ -82,11 +82,11 @@ let relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
-let non_comm (o1 o2:op_t) //!!!!CHECK -- this will pass, assert->admit & assume-> ()
+let non_comm (o1 o2:op_t) //!!!!CHECK -- this will pass, assert->admit & assume->(), safe to admit()
   : Lemma (requires distinct_ops o1 o2)
           (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) =
    assert (((Enable? (snd (snd o1)) /\ Disable? (snd (snd o2))) \/ (Disable? (snd (snd o1)) /\ Enable? (snd (snd o2)))) ==> 
-         ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); ()
+         ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); admit()
 
 let cond_comm (o1:op_t) (o2:op_t{distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2))}) (o3:op_t)=
   if Disable? (snd (snd o3)) then true else false
@@ -179,24 +179,28 @@ let rc_intermediate2 (l l' a b:concrete_st) (o1 o2 o o':op_t)
                     eq (merge l (do a o') (do b o)) (do (do l' o) o'))
           (ensures eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) = admit()
 
-let rc_intermediate2' (l l' a b:concrete_st) (o1 o2 o o':op_t)
- : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\ 
+let comm_intermediate1' (l:concrete_st) (o1 o2 o o' o3:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
                     distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
-                    get_rid o' = get_rid o2 /\
-                    eq (merge l (do a o1) (do b o2)) (do (do l' o1) o2) /\ 
-                    eq (merge l (do a o') (do b o)) (do (do l' o) o'))
-          (ensures eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) = ()
-  
-let rc_intermediate2'' (l l' a b:concrete_st) (o1 o2 o o':op_t)
- : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\ 
-                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
-                    eq (merge l (do a o1) (do b o2)) (do (do l' o1) o2) /\
-                    eq (merge l (do a o') (do b o)) (do (do l' o) o') /\
-                    //get_rid o1 <> get_rid o2 /\ get_rid o <> get_rid o' /\
-                    //eq (merge l (do a o1) (do (do b o) o2)) (do (do (do l' o) o1) o2) )
-                    eq (merge (do l o') (do (do a o') o1) (do (do b o') o2)) (do (do (do l' o') o1) o2))
-          (ensures eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) = ()
+                    distinct_ops o' o1 /\ distinct_ops o' o2 /\ distinct_ops o3 o1 /\ 
+                    eq (do (do l o2) o1) (do (do l o1) o2) /\ 
+                    ~ (exists o3 a'. eq (do l o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
+                    ~ (exists o3 b'. eq (do l o2) (do b' o3) /\ distinct_ops o1 o3 /\ Fst_then_snd? (rc o1 o3)))
+          (ensures (eq (merge l (do l o1) (do l o2)) (do (do l o1) o2) /\
+                    eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o1) o2)) ==>
+      eq (merge (do (do l o3) o') (do (do (do l o3) o') o1) (do (do (do (do l o3) o) o') o2)) (do (do (do (do (do l o3) o) o') o1) o2)) = ()
 
+let comm_intermediate1'' (l:concrete_st) (o1 o2 o o' o3:op_t)
+  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
+                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
+                    distinct_ops o' o1 /\ distinct_ops o' o2 /\ distinct_ops o3 o1 /\ 
+                    eq (do (do l o2) o1) (do (do l o1) o2) /\ 
+                    ~ (exists o3 a'. eq (do l o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
+                    ~ (exists o3 b'. eq (do l o2) (do b' o3) /\ distinct_ops o1 o3 /\ Fst_then_snd? (rc o1 o3)))
+          (ensures (eq (merge l (do l o1) (do l o2)) (do (do l o2) o1) /\
+                    eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o2) o1)) ==>
+      eq (merge (do (do l o3) o') (do (do (do l o3) o') o1) (do (do (do (do l o3) o) o') o2)) (do (do (do (do (do l o3) o) o') o2) o1)) = ()
+      
 let comm_intermediate1 (l:concrete_st) (o1 o2 o o' o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
                     distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
@@ -209,7 +213,9 @@ let comm_intermediate1 (l:concrete_st) (o1 o2 o o' o3:op_t)
       eq (merge (do (do l o3) o') (do (do (do l o3) o') o1) (do (do (do (do l o3) o) o') o2)) (do (do (do (do (do l o3) o) o') o1) o2)) /\
                    ((eq (merge l (do l o1) (do l o2)) (do (do l o2) o1) /\
                      eq (merge (do l o') (do (do l o') o1) (do (do (do l o) o') o2)) (do (do (do (do l o) o') o2) o1)) ==>
-      eq (merge (do (do l o3) o') (do (do (do l o3) o') o1) (do (do (do (do l o3) o) o') o2)) (do (do (do (do (do l o3) o) o') o2) o1))) = ()
+      eq (merge (do (do l o3) o') (do (do (do l o3) o') o1) (do (do (do (do l o3) o) o') o2)) (do (do (do (do (do l o3) o) o') o2) o1))) = 
+    comm_intermediate1' l o1 o2 o o' o3;
+    comm_intermediate1'' l o1 o2 o o' o3
 
 let comm_intermediate2 (l l' a b:concrete_st) (o1 o2 o o':op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ 
@@ -226,41 +232,6 @@ let comm_intermediate2 (l l' a b:concrete_st) (o1 o2 o o':op_t)
                    (eq (merge l (do a o1) (do b o2)) (do (do l' o2) o1) ==>
                     eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o2) o1))) = admit()
 
-let comm_intermediate2' (l l' a b:concrete_st) (o1 o2 o o':op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ 
-                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
-                    //distinct_ops o' o2 /\ distinct_ops o' o1 /\
-                    eq (do (do l o2) o1) (do (do l o1) o2) /\ 
-                    eq (merge l (do a o') (do b o)) (do (do l' o) o') /\
-                    eq (merge l (do a o) (do b o')) (do (do l' o) o') /\
-                    //~ (exists o3 a'. eq (do a o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
-                    //~ (exists o3 b'. eq (do b o2) (do b' o3) /\ distinct_ops o1 o3 /\ Fst_then_snd? (rc o1 o3)) /\
-                    eq (merge (do l o') (do (do l o') o1) (do (do l o) o')) (do (do (do l o) o') o1))
-          (ensures ((eq (merge l (do a o1) (do b o2)) (do (do l' o1) o2) /\
-                    eq (merge l (do a o1) (do (do b o) o2)) (do (do (do l' o) o1) o2)) ==>
-                    eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) /\
-                   ((eq (merge l (do a o1) (do b o2)) (do (do l' o2) o1) /\
-                    eq (merge l (do a o1) (do (do b o) o2)) (do (do (do l' o) o2) o1)) ==>
-                    eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o2) o1))) = ()
-
-let comm_intermediate2'' (l l' a b:concrete_st) (o1 o2 o o':op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ 
-                    distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
-                    //distinct_ops o' o2 /\ distinct_ops o' o1 /\
-                    eq (do (do l o2) o1) (do (do l o1) o2) /\ 
-                    eq (merge l (do a o') (do b o)) (do (do l' o) o') /\
-                    eq (merge l (do a o) (do b o')) (do (do l' o) o') /\
-                    eq (merge l (do l o') (do l o)) b /\
-                    //~ (exists o3 a'. eq (do a o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
-                    //~ (exists o3 b'. eq (do b o2) (do b' o3) /\ distinct_ops o1 o3 /\ Fst_then_snd? (rc o1 o3)) /\
-                    eq (merge (do l o') (do (do l o') o1) (do (do l o) o')) (do (do (do l o) o') o1))
-          (ensures ((eq (merge l (do a o1) (do b o2)) (do (do l' o1) o2) /\
-                    eq (merge (do l o') (do (do a o') o1) (do (do b o') o2)) (do (do (do l' o') o1) o2)) ==>
-                    eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o1) o2)) /\
-                   ((eq (merge l (do a o1) (do b o2)) (do (do l' o2) o1) /\
-                    eq (merge (do l o') (do (do a o') o1) (do (do b o') o2)) (do (do (do l' o') o2) o1)) ==>
-                    eq (merge (do l o') (do (do a o') o1) (do (do (do b o) o') o2)) (do (do (do (do l' o) o') o2) o1))) = ()
-                    
 ////////////////////////////////////////////////////////////////
 
 let inter_merge1 (l:concrete_st) (o o1 o2 o3:op_t)
