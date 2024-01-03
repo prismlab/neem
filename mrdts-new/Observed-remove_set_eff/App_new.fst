@@ -246,14 +246,22 @@ let intermediate_base_right_one_op_right (l s1 s2 s3:concrete_st) (o o' o1:op_t)
           (ensures eq (merge (do l o') (do s1 o') (do (do (do s2 o) o') o1)) (do (do (do s3 o) o') o1)) = ()
 
 let intermediate_base_right_one_op_left (l s1 s2 s3:concrete_st) (o o' o1:op_t) 
-  : Lemma (requires Fst_then_snd? (rc o o')
+  : Lemma (requires Fst_then_snd? (rc o o') 
+                    /\ eq (merge (do l o1) (do (do l o1) o) (do (do l o1) o')) (do (do (do l o1) o) o') //***EXTRA*** (from rc_base)
                     /\ eq (merge (do l o') (do (do s1 o') o1) (do s2 o')) (do (do s3 o') o1)
                     /\ eq (merge l (do s1 o1) s2) (do s3 o1)
                     /\ eq (merge (do l o') (do (do l o') o1) (do (do l o) o')) (do (do (do l o) o') o1) //**EXTRA***
-                    /\ eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
+                    /\ eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o') //***EXTRA***
+                    /\ eq (merge l (do s1 o) (do s2 o')) (do (do s3 o) o')) //***EXTRA***
           (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o) o')) (do (do (do s3 o) o') o1)) = 
+  let lhs = (merge (do l o') (do (do s1 o') o1) (do (do s2 o) o')) in
+  let rhs = (do (do (do s3 o) o') o1) in
+  
   if Add? (snd (snd o1)) && get_ele o1 = get_ele o' && get_rid o1 = get_rid o' then () //done
-  else if Add? (snd (snd o1)) && get_ele o1 = get_ele o' && get_rid o1 <> get_rid o' then admit() //not done
+  else if Add? (snd (snd o1)) && get_ele o1 = get_ele o' && get_rid o1 <> get_rid o' then 
+    (assume (fst (sel_id (sel_e (do s1 o') (get_ele o1)) (get_rid o1)) >= fst (sel_id (sel_e l (get_ele o1)) (get_rid o1))); //todo
+     assert (snd (sel_id (sel_e lhs (get_ele o1)) (get_rid o1)) = snd (sel_id (sel_e rhs (get_ele o1)) (get_rid o1)));
+     ())
   else if Add? (snd (snd o1)) && get_ele o1 <> get_ele o' && get_rid o1 = get_rid o' then () //done
   else if Add? (snd (snd o1)) && get_ele o1 <> get_ele o' && get_rid o1 <> get_rid o' then () //done
   else if Rem? (snd (snd o1)) && get_ele o1 = get_ele o' then ()
@@ -276,6 +284,7 @@ let intermediate_base_left_one_op (l s1 s2 s3:concrete_st) (o o' o1:op_t)
 let intermediate_base_left_right_one_op (l s1 s2 s3:concrete_st) (o o' o1' o1:op_t) 
   : Lemma (requires Fst_then_snd? (rc o o') /\ Fst_then_snd? (rc o1' o')
                     ///\ get_rid o <> get_rid o' /\ get_rid o1' <> get_rid o' 
+                    /\ eq (merge (do l o1) (do (do l o1) o) (do (do l o1) o')) (do (do (do l o1) o) o') //***EXTRA*** (from rc_base)
                     /\ eq (merge (do l o') (do s1 o') (do (do s2 o') o1)) (do (do s3 o') o1)
                     /\ eq (merge (do l o') (do (do s1 o1') o') (do (do s2 o') o1)) (do (do (do s3 o1') o') o1) //EXTRA
 
@@ -284,13 +293,19 @@ let intermediate_base_left_right_one_op (l s1 s2 s3:concrete_st) (o o' o1' o1:op
                     /\ eq (merge (do l o') (do l o')  (do (do (do l o) o') o1)) (do (do (do l o) o') o1))
           (ensures eq (merge (do l o') (do (do s1 o1') o') (do (do (do s2 o) o') o1)) (do (do (do (do s3 o1') o) o') o1)) = 
   assert (Either? (rc o o1'));
+  let lhs = (merge (do l o') (do (do s1 o1') o') (do (do (do s2 o) o') o1)) in
+  let rhs = (do (do (do (do s3 o1') o) o') o1) in
   if Add? (snd (snd o1)) && get_ele o1 = get_ele o' && get_rid o1 = get_rid o' then () //done
-  else if Add? (snd (snd o1)) && get_ele o1 = get_ele o' && get_rid o1 <> get_rid o' then admit() // not done
+  else if Add? (snd (snd o1)) && get_ele o1 = get_ele o' && get_rid o1 <> get_rid o' then 
+    (assert (forall ele rid. fst (sel_id (sel_e lhs ele) rid) = fst (sel_id (sel_e rhs ele) rid)); //done
+     assert (forall ele rid. snd (sel_id (sel_e lhs ele) rid) = snd (sel_id (sel_e rhs ele) rid)); //done
+     ())
   else if Add? (snd (snd o1)) && get_ele o1 <> get_ele o' && get_rid o1 = get_rid o' then () // done
   else if Add? (snd (snd o1)) && get_ele o1 <> get_ele o' && get_rid o1 <> get_rid o' then () // done
   else if Rem? (snd (snd o1)) && get_ele o1 = get_ele o' then () // done
   else () // done
-          
+
+
 (*let intermediate_base_left_right_one_op_right (l s1 s2 s3:concrete_st) (o o' o1' o1:op_t) 
   : Lemma (requires Fst_then_snd? (rc o o') /\ Fst_then_snd? (rc o1' o')
                     /\ eq (merge (do l o') (do s1 o') (do (do s2 o') o1)) (do (do s3 o') o1)
