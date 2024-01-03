@@ -247,12 +247,10 @@ let intermediate_base_right_one_op_right (l s1 s2 s3:concrete_st) (o o' o1:op_t)
 
 let intermediate_base_right_one_op_left (l s1 s2 s3:concrete_st) (o o' o1:op_t) 
   : Lemma (requires Fst_then_snd? (rc o o') 
-                    /\ eq (merge (do l o1) (do (do l o1) o) (do (do l o1) o')) (do (do (do l o1) o) o') //***EXTRA*** (from rc_base)
                     /\ eq (merge (do l o') (do (do s1 o') o1) (do s2 o')) (do (do s3 o') o1)
                     /\ eq (merge l (do s1 o1) s2) (do s3 o1)
                     /\ eq (merge (do l o') (do (do l o') o1) (do (do l o) o')) (do (do (do l o) o') o1) //**EXTRA***
-                    /\ eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o') //***EXTRA***
-                    /\ eq (merge l (do s1 o) (do s2 o')) (do (do s3 o) o')) //***EXTRA***
+                    /\ eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
           (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o) o')) (do (do (do s3 o) o') o1)) = 
   let lhs = (merge (do l o') (do (do s1 o') o1) (do (do s2 o) o')) in
   let rhs = (do (do (do s3 o) o') o1) in
