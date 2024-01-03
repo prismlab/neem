@@ -435,17 +435,30 @@ let comm_base_base (o1 o2:op_t)
           (ensures eq (merge init_st (do init_st o1) (do init_st o2)) (do (do init_st o1) o2)) = ()
 
 let comm_intermediate_base_right (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t) 
-  : Lemma (requires Fst_then_snd? (rc o o') /\ Either? (rc o1 o2)
+  : Lemma (requires //Fst_then_snd? (rc o o') /\ Either? (rc o1 o2)
+                    Rem? (snd (snd o)) /\ Add? (snd (snd o')) /\ get_ele o = get_ele o' /\
+                    Add? (snd (snd o1)) /\ Add? (snd (snd o2))
                     /\ eq (merge l (do s1 o1) (do (do s2 o) o2)) (do (do (merge l s1 (do s2 o)) o1) o2) //comes from comm_ind_right
                     /\ eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) 
                     /\ eq (merge (do l o') (do s1 o') (do (do s2 o) o')) (do (do s3 o) o') //comes from intermediate_base_zero_op
                     /\ eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2)) 
           (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do s3 o) o') o1) o2)) = 
-  if Rem? (snd (snd o1)) && Rem? (snd (snd o2)) then () //done
-  else if Add? (snd (snd o1)) && Rem? (snd (snd o2)) && get_ele o1 = get_ele o' then () //done
-  else if Add? (snd (snd o1)) && Rem? (snd (snd o2)) && get_ele o1 <> get_ele o' then () //done
-  else if Rem? (snd (snd o1)) && Add? (snd (snd o2)) && get_ele o2 = get_ele o' then () //done
-  else if Rem? (snd (snd o1)) && Add? (snd (snd o2)) && get_ele o2 <> get_ele o' then () //done
+  if Rem? (snd (snd o1)) && Rem? (snd (snd o2)) then admit() //done
+  else if Add? (snd (snd o1)) && Rem? (snd (snd o2)) && get_ele o1 = get_ele o' then admit() //done
+  else if Add? (snd (snd o1)) && Rem? (snd (snd o2)) && get_ele o1 <> get_ele o' then admit() //done
+  else if Rem? (snd (snd o1)) && Add? (snd (snd o2)) && get_ele o2 = get_ele o' then admit() //done
+  else if Rem? (snd (snd o1)) && Add? (snd (snd o2)) && get_ele o2 <> get_ele o' then admit() //done
+  
+  else if get_ele o1 = get_ele o' && get_ele o2 = get_ele o' && get_rid o1 = get_rid o' && get_rid o2 = get_rid o' then admit() // done
+  else if get_ele o1 = get_ele o' && get_ele o2 = get_ele o' && get_rid o1 = get_rid o' && get_rid o2 <> get_rid o' then admit() // done
+  else if get_ele o1 = get_ele o' && get_ele o2 = get_ele o' && get_rid o1 <> get_rid o' && get_rid o2 = get_rid o' then admit() // done
+  else if get_ele o1 = get_ele o' && get_ele o2 = get_ele o' && get_rid o1 <> get_rid o' && get_rid o2 <> get_rid o' then admit() // not done
+
+  else if get_ele o1 = get_ele o' && get_ele o2 <> get_ele o' && get_rid o1 = get_rid o' && get_rid o2 = get_rid o' then admit() // done
+  else if get_ele o1 = get_ele o' && get_ele o2 <> get_ele o' && get_rid o1 = get_rid o' && get_rid o2 <> get_rid o' then admit() // done
+  else if get_ele o1 = get_ele o' && get_ele o2 <> get_ele o' && get_rid o1 <> get_rid o' && get_rid o2 = get_rid o' then admit() // done
+  else if get_ele o1 = get_ele o' && get_ele o2 <> get_ele o' && get_rid o1 <> get_rid o' && get_rid o2 <> get_rid o' then admit() // not done
+  
   else admit() //not done
 
 let comm_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
@@ -457,15 +470,31 @@ let comm_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:o
 
         (ensures eq (merge (do l o') (do (do (do s1 o1') o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do (do s3 o1') o) o') o1) o2)) = admit()
 
-let comm_intermediate_2_right (l s1 s2 s3:concrete_st) (o1 o2:op_t) (o o':op_t) (o_n:op_t{~ (commutes_with o_n o)})
+let comm_intermediate_2_right (l s1 s2 s3:concrete_st) (o1 o2:op_t) (o o':op_t) (o_n:op_t)//{~ (commutes_with o_n o)})
 : Lemma (requires Either? (rc o1 o2) /\ Fst_then_snd? (rc o o') /\
                   //get_rid o <> get_rid o' (*o,o' must be concurrent *) /\
                   get_rid o_n <> get_rid o' (*o_n,o' must be concurrent*) /\
-                  Either? (rc o_n o') /\ 
+                 // Either? (rc o_n o') /\ 
                   eq (merge (do l o') (do (do s1 o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do s3 o) o') o1) o2))
-      (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do (do (do s2 o_n) o) o') o2)) (do (do (do (do (do s3 o_n) o) o') o1) o2)) = admit()
+      (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do (do (do s2 o_n) o) o') o2)) (do (do (do (do (do s3 o_n) o) o') o1) o2)) = 
+  assume (Either? (rc o_n o') /\ Fst_then_snd? (rc o o') /\ get_ele o = get_ele o');
+  let lhs = (merge (do l o') (do (do s1 o') o1) (do (do (do (do s2 o_n) o) o') o2)) in
+  let rhs = (do (do (do (do (do s3 o_n) o) o') o1) o2) in
+  assume (forall ele. M.contains lhs ele = M.contains rhs ele);
+  assume (forall ele. M.contains lhs ele ==> (forall rid. M.contains (sel_e lhs ele) rid = M.contains (sel_e rhs ele) rid));
+  admit()
 
+#push-options "--z3rlimit 100 --max_ifuel 5 --split_queries always"
 let comm_intermediate_1_v1 (l s1 s2 s3:concrete_st) (o1 o2:op_t) (o:op_t{Add? (snd (snd o))})
   : Lemma (requires Either? (rc o1 o2) /\
+                    eq (merge (do l o) (do (do l o) o1) (do (do l o) o2)) (do (do (do l o) o2) o1) /\ //***EXTRA***
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2))
-          (ensures eq (merge (do l o) (do (do s1 o) o1) (do (do s2 o) o2)) (do (do (do s3 o) o1) o2)) = admit()
+          (ensures eq (merge (do l o) (do (do s1 o) o1) (do (do s2 o) o2)) (do (do (do s3 o) o1) o2)) = 
+  let lhs = (merge (do l o) (do (do s1 o) o1) (do (do s2 o) o2)) in
+  let rhs = (do (do (do s3 o) o1) o2) in
+  assume (forall ele. M.contains lhs ele = M.contains rhs ele);
+  assume (forall ele. M.contains lhs ele ==> (forall rid. M.contains (sel_e lhs ele) rid = M.contains (sel_e rhs ele) rid));
+  assume (forall ele rid. (ele <> get_ele o /\ rid <> get_rid o) ==> ( (sel_id (sel_e lhs ele) rid) =  (sel_id (sel_e rhs ele) rid)));
+  assume (forall ele rid. (ele <> get_ele o /\ rid = get_rid o) ==> (fst (sel_id (sel_e lhs ele) rid) = fst (sel_id (sel_e rhs ele) rid)));
+  assert (forall ele rid. (ele = get_ele o /\ rid <> get_rid o) ==> (fst (sel_id (sel_e lhs ele) rid) = fst (sel_id (sel_e rhs ele) rid)));
+  admit()
