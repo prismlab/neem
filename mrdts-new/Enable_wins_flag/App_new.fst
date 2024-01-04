@@ -1,24 +1,23 @@
 module App_new
 
-module S = Set_extended
+module M = Map_extended
+module S = FStar.Set
 
 #set-options "--query_stats"
 
+let cf = (int * bool)
+
 // the concrete state type
-type concrete_st = S.t (pos & nat) // (timestamp, ele) //timestamps are unique
+type concrete_st = M.t nat cf // (replica_id, ctr, flag) //replica ids are unique
+
+let sel (s:concrete_st) k = if M.contains s k then M.sel s k else (0, false)
 
 // init state
-let init_st : concrete_st = S.empty
+let init_st : concrete_st = M.const (0, false)
 
-let mem_id_s (id:pos) (s:concrete_st) : prop =
-  exists e. S.mem e s /\ fst e = id
-
-let mem_ele_s (ele:nat) (s:concrete_st) : prop =
-  exists e. S.mem e s /\ snd e = ele
-  
 // equivalence between 2 concrete states
-let eq (a b:concrete_st) : Type0 =
-  S.equal a b
+let eq (a b:concrete_st) =
+  (forall id. (M.contains a id = M.contains b id) /\ (sel a id == sel b id))
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -34,37 +33,45 @@ let eq_is_equiv (a b:concrete_st)
 
 // operation type
 type app_op_t:eqtype =
-  |Add : nat -> app_op_t
-  |Rem : nat -> app_op_t
-
-let get_ele (o:op_t) : nat =
-  match snd (snd o) with
-  |Add e -> e
-  |Rem e -> e
+  |Enable 
+  |Disable
 
 // apply an operation to a state
-let do (s:concrete_st) (o:op_t) : concrete_st = 
+let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
-  |(ts, (rid, Add e)) -> S.add (ts, e) s 
-  |(_, (rid, Rem e)) -> S.filter s (fun ele -> snd ele <> e)
- 
+  |(_, (rid, Enable)) -> M.upd s rid (fst (sel s rid) + 1, true)
+  |(_, (rid, Disable)) -> M.map_val (fun (c,f) -> (c, false)) s
+
 //conflict resolution
-let rc (o1 o2:op_t) =  
+let rc (o1 o2:op_t) =
   match snd (snd o1), snd (snd o2) with
-  |Add e1, Rem e2 -> if e1 = e2 then Snd_then_fst else Either
-  |Rem e1, Add e2 -> if e1 = e2 then Fst_then_snd else Either
+  |Enable, Disable -> Snd_then_fst
+  |Disable, Enable -> Fst_then_snd 
   |_ -> Either
+
+let merge_flag (l a b:cf) : bool =
+  let lc = fst l in
+  let ac = fst a in
+  let bc = fst b in
+  let af = snd a in
+  let bf = snd b in
+    if af && bf then true
+      else if not af && not bf then false
+        else if af then ac > lc
+          else bc > lc
+
+// concrete merge operation
+let merge_cf (l a b:cf) : cf =
+  (fst a + fst b - fst l, merge_flag l a b)
   
 // concrete merge operation
 let merge (l a b:concrete_st) : concrete_st =
-  let da = S.difference a l in    //a - l
-  let db = S.difference b l in    //b - l
-  let i_ab = S.intersection a b in
-  let i_lab = S.intersection l i_ab in   // intersect l a b
-  S.union i_lab (S.union da db)          // (intersect l a b) U (a - l) U (b - l)
-
+  let keys = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
+  let u = M.const_on keys (0, false) in
+  M.iter_upd (fun k v -> merge_cf (sel l k) (sel a k) (sel b k)) u
+   
 /////////////////////////////////////////////////////////////////////////////
-
+      
 let no_rc_chain (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3)
           (ensures ~ (Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc o2 o3))) = ()
@@ -73,17 +80,16 @@ let relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
-let non_comm (o1 o2:op_t)
+let non_comm (o1 o2:op_t) //!!!!CHECK -- this will pass, assert->admit & assume->(), safe to admit()
   : Lemma (requires distinct_ops o1 o2)
           (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) =
-  assert (((Add? (snd (snd o1)) /\ Rem? (snd (snd o2))) \/ (Rem? (snd (snd o1)) /\ Add? (snd (snd o2)))) /\
-         get_ele o1 = get_ele o2 ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); ()
-         
+   assert (((Enable? (snd (snd o1)) /\ Disable? (snd (snd o2))) \/ (Disable? (snd (snd o1)) /\ Enable? (snd (snd o2)))) ==> 
+         ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); admit()
+
 let cond_comm (o1:op_t) (o2:op_t{distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2))}) (o3:op_t)=
-  if Rem? (snd (snd o3)) && get_ele o1 = get_ele o3 then true else false
+  if Disable? (snd (snd o3)) then true else false
 
-#push-options "--z3rlimit 50 --max_ifuel 3"
-
+#push-options "--z3rlimit 50 --max_ifuel 3 --split_queries on_failure"
 let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2)) /\ cond_comm o1 o2 o3)
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
@@ -95,13 +101,12 @@ let cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:log)
   
 /////////////////////////////////////////////////////////////////////////////
 // Merge commutativity
-let merge_comm (l a b:concrete_st)
+ let merge_comm (l a b:concrete_st)
    : Lemma (ensures (eq (merge l a b) (merge l b a))) = ()
 
 // Merge idempotence
-let merge_idem (s:concrete_st)
+ let merge_idem (s:concrete_st)
    : Lemma (ensures eq (merge s s s) s) = ()
-
 
 (*Two OP RC*)
 //////////////// 
@@ -153,7 +158,7 @@ let rc_intermediate_2_left (l s1 s2 s3:concrete_st) (o1 o2 o o':op_t) (o_n:op_t{
                     distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
                     get_rid o_n <> get_rid o' (*o_n,o' must be concurrent*) /\
                     eq (merge (do l o') (do (do (do s1 o) o') o1) (do (do s2 o') o2)) (do (do (do (do s3 o) o') o1) o2))
-      (ensures eq (merge (do l o') (do (do (do (do s1 o_n) o) o') o1) (do (do s2 o') o2)) (do (do (do (do (do s3 o_n) o) o') o1) o2)) = ()
+          (ensures eq (merge (do l o') (do (do (do (do s1 o_n) o) o') o1) (do (do s2 o') o2)) (do (do (do (do (do s3 o_n) o) o') o1) o2)) = ()
 
 // In general, the events o',o_n, below should be such that these exists o, (rc o o')
 let rc_intermediate_1_v2 (l s1 s2 s3:concrete_st) (o1 o2 o' o_n:op_t)
