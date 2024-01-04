@@ -177,6 +177,9 @@ let rc_intermediate_base_right' (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t)
   else if get_ele o2 <> get_ele o' && get_rid o2 = get_rid o' then () //done
   else () //done*)
 
+//If we remove the last pre-condition and try to prove, we get assertion failure. (NOTE:eq_e is the equivalence relation of the ew flag)
+//So we have to do case splits in the proof (given in comments). But while proving one case we need to admit the other cases. 
+//It will be good if we can prove the lemma automatically (without case splits) and without the last pre-condition.
 let rc_intermediate_base_left_right' (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
   : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\  
                     distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
