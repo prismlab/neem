@@ -54,6 +54,12 @@ type app_op_t:eqtype =
   |Add : nat -> app_op_t
   |Rem : nat -> app_op_t
 
+type op_t = pos (*timestamp*) & (nat (*replica ID*) & app_op_t)
+
+let get_rid (_,(rid,_)) = rid
+
+let distinct_ops (op1 op2:op_t) = fst op1 =!= fst op2
+
 let get_ele (o:op_t) : nat =
   match snd (snd o) with
   |Add e -> e
@@ -65,6 +71,20 @@ let do (s:concrete_st) (o:op_t) : concrete_st =
   |(_, (rid, Add e)) -> M.upd s e (M.upd (sel_e s e) rid (fst (sel_id (sel_e s e) rid) + 1, true))
   |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = e then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
 
+let commutes_with (o1 o2:op_t) =
+  forall s. eq (do (do s o1) o2) (do (do s o2) o1)
+
+// applying a log of operations to a concrete state
+let rec apply_log (x:concrete_st) (l:log) : Tot concrete_st (decreases length l) =
+  match length l with
+  |0 -> x
+  |_ -> apply_log (do x (head l)) (tail l)  
+  
+type rc_res =
+  |Fst_then_snd //o1 -> o2
+  |Snd_then_fst //o2 -> o1
+  |Either
+  
 //conflict resolution
 let rc (o1:op_t) (o2:op_t(*{distinct_ops o1 o2}*)) =
   match snd (snd o1), snd (snd o2) with

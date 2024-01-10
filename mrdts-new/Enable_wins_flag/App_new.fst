@@ -80,16 +80,24 @@ let relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
-let non_comm (o1 o2:op_t) //!!!!CHECK -- this will pass, assert->admit & assume->(), safe to admit()
+let non_comm_help1 (o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2)
+          (ensures ((Enable? (snd (snd o1)) /\ Disable? (snd (snd o2))) ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1)))) = ()
+         
+let non_comm_help2 (o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2)
+          (ensures ((Disable? (snd (snd o1)) /\ Enable? (snd (snd o2))) ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1)))) = ()
+          
+let non_comm (o1 o2:op_t)
   : Lemma (requires distinct_ops o1 o2)
           (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) =
-   assert (((Enable? (snd (snd o1)) /\ Disable? (snd (snd o2))) \/ (Disable? (snd (snd o1)) /\ Enable? (snd (snd o2)))) ==> 
-         ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); admit()
+  non_comm_help1 o1 o2;
+  non_comm_help2 o1 o2
 
 let cond_comm (o1:op_t) (o2:op_t{distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2))}) (o3:op_t)=
   if Disable? (snd (snd o3)) then true else false
 
-#push-options "--z3rlimit 50 --max_ifuel 3 --split_queries on_failure"
+#push-options "--z3rlimit 100 --max_ifuel 3 --split_queries on_failure"
 let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2)) /\ cond_comm o1 o2 o3)
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()

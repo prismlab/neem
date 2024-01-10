@@ -1,7 +1,8 @@
-module App_new
+module App_new_new
 
 module S = Set_extended
 module M = Map_extended
+open FStar.Seq
 
 #set-options "--query_stats"
 
@@ -54,6 +55,14 @@ type app_op_t:eqtype =
   |Add : nat -> app_op_t
   |Rem : nat -> app_op_t
 
+type op_t = pos (*timestamp*) & (nat (*replica ID*) & app_op_t)
+
+let get_rid (_,(rid,_)) = rid
+
+let distinct_ops (op1 op2:op_t) = fst op1 =!= fst op2
+
+type log = seq op_t
+
 let get_ele (o:op_t) : nat =
   match snd (snd o) with
   |Add e -> e
@@ -65,6 +74,20 @@ let do (s:concrete_st) (o:op_t) : concrete_st =
   |(_, (rid, Add e)) -> M.upd s e (M.upd (sel_e s e) rid (fst (sel_id (sel_e s e) rid) + 1, true))
   |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = e then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
 
+let commutes_with (o1 o2:op_t) =
+  forall s. eq (do (do s o1) o2) (do (do s o2) o1)
+
+// applying a log of operations to a concrete state
+let rec apply_log (x:concrete_st) (l:log) : Tot concrete_st (decreases length l) =
+  match length l with
+  |0 -> x
+  |_ -> apply_log (do x (head l)) (tail l)  
+  
+type rc_res =
+  |Fst_then_snd //o1 -> o2
+  |Snd_then_fst //o2 -> o1
+  |Either
+  
 //conflict resolution
 let rc (o1:op_t) (o2:op_t(*{distinct_ops o1 o2}*)) =
   match snd (snd o1), snd (snd o2) with
@@ -162,19 +185,6 @@ let rc_base_base' (o1 o2:op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2))
           (ensures eq (merge init_st (do init_st o1) (do init_st o2)) (do (do init_st o1) o2)) = ()
 
-let aux (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t)
-  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
-                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
-                    distinct_ops o1' o' /\ Fst_then_snd? (rc o1' o') /\
-                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
-                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2))
-          (ensures forall e. eq_e (sel_e (merge (do l o') (do (do (do s1 o1') o') o1) (do (do (do s2 o) o') o2)) e)
-                                    (sel_e (do (do (do (do (do s3 o1') o) o') o1) o2) e)) =
-  if get_ele o2 = get_ele o' && get_rid o2 = get_rid o' then admit() //done
-  else if get_ele o2 = get_ele o' && get_rid o2 <> get_rid o' then admit() //done
-  else if get_ele o2 <> get_ele o' && get_rid o2 = get_rid o' then admit() //done
-  else admit()
-  
 let rc_intermediate_base_right' (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t) 
   : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ 
                     distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\

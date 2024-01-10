@@ -1,6 +1,5 @@
 module App_new
 
-module M = Map_extended
 module S = Set_extended
 
 #set-options "--query_stats"
