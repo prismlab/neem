@@ -1,8 +1,7 @@
 module App_new
 
-module S = FStar.Set
+module S = Set_extended
 module M = Map_extended
-module S' = Set_extended
 
 #set-options "--query_stats"
 
