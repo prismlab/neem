@@ -18,9 +18,9 @@
  *)
  
 module Map_extended
-open FStar.Set
+open Set_extended
 open FStar.FunctionalExtensionality
-module S = FStar.Set
+module S = Set_extended
 module F = FStar.FunctionalExtensionality
 
 
@@ -33,7 +33,7 @@ module F = FStar.FunctionalExtensionality
 noeq
 type t (key:eqtype) (value:Type) = {
   mappings: key ^-> value;
-  domain:   set key
+  domain:   S.t key
 }
 
 let sel #key #value m k = m.mappings k
@@ -53,6 +53,11 @@ let const #key #value v = {
 }
 
 let domain #key #value m = m.domain
+
+let del #key #value m k = {
+  mappings = F.on key (fun x -> m.mappings x);
+  domain = S.remove (domain m) k 
+}
 
 let contains #key #value m k = mem k m.domain
 
@@ -74,11 +79,13 @@ let iter_upd #key #_ #_ f m = {
 
 let restrict #key #value s m = {
   mappings = m.mappings;
-  domain =   intersect s m.domain
+  domain =   intersection s m.domain
 }
 
 let lemma_SelUpd1 #key #value m k v        = ()
 let lemma_SelUpd2 #key #value m k1 k2 v    = ()
+let lemma_Del1 #key #value m k = ()
+let lemma_Del2 #key #value m k1 k2 = ()
 let lemma_SelConst #key #value v k         = ()
 let lemma_SelRestrict #key #value m ks k   = ()
 let lemma_SelConcat1 #key #value m1 m2 k   = ()
@@ -87,6 +94,7 @@ let lemma_SelMapVal #val1 #val2 f #key m k = ()
 let lemma_IterUpd #key #val1 #val2 f m k = ()
 let lemma_InDomUpd1 #key #value m k1 k2 v  = ()
 let lemma_InDomUpd2 #key #value m k1 k2 v  = ()
+let lemma_InDomDel #key #value m k1 k2 = ()
 let lemma_InDomConstMap #key #value v k    = ()
 let lemma_InDomConcat #key #value m1 m2 k  = ()
 let lemma_InMapVal #val1 #val2 f #key m k  = ()
