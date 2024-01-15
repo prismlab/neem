@@ -145,6 +145,14 @@ let rc_intermediate_base_right (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t)
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
                     eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
           (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
+
+let rc_intermediate_base_left (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t) 
+  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ 
+                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
+                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
+          (ensures eq (merge (do l o') (do (do (do s1 o) o') o1) (do (do s2 o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
           
 let rc_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
   : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\  

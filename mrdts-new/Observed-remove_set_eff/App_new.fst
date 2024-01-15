@@ -189,6 +189,16 @@ let rc_intermediate_base_right' (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t)
   else if get_ele o2 <> get_ele o' && get_rid o2 = get_rid o' then () //done
   else () //done*)
 
+let rc_intermediate_base_left' (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t) 
+  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ 
+                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
+                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o') /\ //***EXTRA***
+                    (forall e. eq_e (sel_e (merge (do l o') (do (do (do s1 o) o') o1) (do (do s2 o') o2)) e)
+                               (sel_e (do (do (do (do s3 o) o') o1) o2) e)))
+          (ensures eq (merge (do l o') (do (do (do s1 o) o') o1) (do (do s2 o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
+          
 //If we remove the last pre-condition and try to prove, we get assertion failure. (NOTE:eq_e is the equivalence relation of the ew flag)
 //So we have to do case splits in the proof (given in comments). But while proving one case we need to admit the other cases. 
 //It will be good if we can prove the lemma automatically (without case splits) and without the last pre-condition.
@@ -531,3 +541,39 @@ let comm_intermediate_1_v1' (l s1 s2 s3:concrete_st) (o1 o2 o:op_t)
   assume (forall ele rid. (ele <> get_ele o /\ rid = get_rid o) ==> (fst (sel_id (sel_e lhs ele) rid) = fst (sel_id (sel_e rhs ele) rid)));
   assert (forall ele rid. (ele = get_ele o /\ rid <> get_rid o) ==> (fst (sel_id (sel_e lhs ele) rid) = fst (sel_id (sel_e rhs ele) rid)));
   admit()*)
+
+////////////////////////////////////////////////////////////////
+//// Sequential implementation //////
+
+// the concrete state 
+let concrete_st_s' = S.t nat
+
+// init state 
+let init_st_s' = S.empty
+
+// apply an operation to a state 
+let do_s' (st_s:concrete_st_s') (o:op_t) : concrete_st_s' =
+  match o with
+  |(ts, (rid, Add e)) -> S.add e st_s
+  |(_, (rid, Rem e)) -> S.filter st_s (fun ele -> ele <> e)
+
+let mem_ele (ele:nat) (s:concrete_st) : prop =
+  exists rid. M.contains (sel_e s ele) rid /\ snd (sel_id (sel_e s ele) rid) = true
+  
+// equivalence relation between the concrete states of sequential type and MRDT
+let eq_sm' (st_s:concrete_st_s') (st:concrete_st) =
+  (forall e. S.mem e st_s <==> mem_ele e st)
+
+// initial states are equivalent
+let initial_eq' (_:unit)
+  : Lemma (ensures eq_sm' init_st_s' init_st) = ()
+
+// equivalence between states of sequential type and MRDT at every operation
+let do_eq' (st_s:concrete_st_s') (st:concrete_st) (op:op_t)   
+  : Lemma (requires eq_sm' st_s st)
+          (ensures eq_sm' (do_s' st_s op) (do st op)) =
+  if Add? (snd (snd op)) then 
+    (if S.mem (get_ele op) st_s then () else ())
+  else ()
+
+////////////////////////////////////////////////////////////////

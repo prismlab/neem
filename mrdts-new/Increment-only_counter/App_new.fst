@@ -99,6 +99,14 @@ let rc_intermediate_base_right (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t)
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
                     eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
           (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
+
+let rc_intermediate_base_left (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t) 
+  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ 
+                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
+                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
+          (ensures eq (merge (do l o') (do (do (do s1 o) o') o1) (do (do s2 o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
           
 let rc_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
   : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\  
@@ -315,25 +323,17 @@ let init_st_s = 0
 // apply an operation to a state 
 let do_s (st_s:concrete_st_s) (_:op_t) = st_s + 1
 
-//query type
-type query_t = unit
-
-//ret type
-let ret_t = int
-
-//query return value - MRDT
-let query_m (s:concrete_st) (q:query_t) = s
-
-//query return value - Seq impl
-let query_s (s:concrete_st_s) (q:query_t) = s
+// equivalence relation between the concrete states of sequential type and MRDT
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
+  st_s = st
 
 // initial states are equivalent
-let initial_eq (q:query_t)
-  : Lemma (ensures query_s init_st_s q == query_m init_st q) = ()
+let initial_eq (_:unit)
+  : Lemma (ensures eq_sm init_st_s init_st) = ()
 
 //equivalence between states of sequential type and MRDT at every operation
-let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t) (q:query_t)
-  : Lemma (requires query_s st_s q == query_m st q)
-          (ensures query_s (do_s st_s op) q == query_m (do st op) q) = ()
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
+  : Lemma (requires eq_sm st_s st)
+          (ensures eq_sm (do_s st_s op) (do st op)) = ()
          
 ////////////////////////////////////////////////////////////////

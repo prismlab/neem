@@ -102,6 +102,14 @@ let rc_intermediate_base_right (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t)
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
                     eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
           (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
+
+let rc_intermediate_base_left (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t) 
+  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ 
+                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
+                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
+          (ensures eq (merge (do l o') (do (do (do s1 o) o') o1) (do (do s2 o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
           
 let rc_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
   : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\  
@@ -305,3 +313,33 @@ let comm_intermediate_1_v1 (l s1 s2 s3:concrete_st) (o1 o2 o:op_t)
                     (exists o'. Fst_then_snd? (rc o' o)) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2))
           (ensures eq (merge (do l o) (do (do s1 o) o1) (do (do s2 o) o2)) (do (do (do s3 o) o1) o2)) = ()
+
+////////////////////////////////////////////////////////////////
+////Equivalence of  MRDT & Sequential implementation  //////
+
+// the concrete state 
+let concrete_st_s = int
+
+// init state 
+let init_st_s = 0
+
+// apply an operation to a state 
+let do_s (st_s:concrete_st_s) (o:op_t) = 
+  match snd (snd o) with
+  |Inc -> st_s + 1
+  |Dec -> st_s - 1
+
+// equivalence relation between the concrete states of sequential type and MRDT
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
+  st_s = st
+
+// initial states are equivalent
+let initial_eq (_:unit)
+  : Lemma (ensures eq_sm init_st_s init_st) = ()
+
+//equivalence between states of sequential type and MRDT at every operation
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
+  : Lemma (requires eq_sm st_s st)
+          (ensures eq_sm (do_s st_s op) (do st op)) = ()
+         
+////////////////////////////////////////////////////////////////

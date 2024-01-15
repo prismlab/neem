@@ -132,6 +132,14 @@ let rc_intermediate_base_right (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t)
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
                     eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
           (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do s3 o) o') o1) o2)) = ()
+
+let rc_intermediate_base_left (l s1 s2 s3:concrete_st) (o o' o1 o2:op_t) 
+  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ 
+                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
+                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
+                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
+          (ensures eq (merge (do l o') (do (do (do s1 o) o') o1) (do (do s2 o') o2)) (do (do (do (do s3 o) o') o1) o2)) = admit()
           
 let rc_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
   : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\  
@@ -335,3 +343,39 @@ let comm_intermediate_1_v1 (l s1 s2 s3:concrete_st) (o1 o2 o:op_t)
                     (exists o'. Fst_then_snd? (rc o' o)) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2))
           (ensures eq (merge (do l o) (do (do s1 o) o1) (do (do s2 o) o2)) (do (do (do s3 o) o1) o2)) = ()
+
+////////////////////////////////////////////////////////////////
+//// Sequential implementation //////
+
+// the concrete state 
+let concrete_st_s = S.t nat
+
+// init state 
+let init_st_s = S.empty
+
+// apply an operation to a state 
+let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s =
+  match o with
+  |(_, (rid, Add e)) -> S.add e st_s
+  |(_, (rid, Rem e)) -> S.filter st_s (fun ele -> ele <> e)
+
+let mem_ele (ele:nat) (s:concrete_st) : prop =
+  exists e. S.mem e s /\ snd e = ele
+  
+// equivalence relation between the concrete states of sequential type and MRDT
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
+  (forall e. S.mem e st_s <==> mem_ele e st)
+
+// initial states are equivalent
+let initial_eq (_:unit)
+  : Lemma (ensures eq_sm init_st_s init_st) = ()
+
+// equivalence between states of sequential type and MRDT at every operation
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)   
+  : Lemma (requires eq_sm st_s st)
+          (ensures eq_sm (do_s st_s op) (do st op)) =
+  if Add? (snd (snd op)) then 
+    (if S.mem (get_ele op) st_s then () else ()) 
+  else ()
+
+////////////////////////////////////////////////////////////////
