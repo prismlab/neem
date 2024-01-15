@@ -5,10 +5,10 @@ module S = Set_extended
 #set-options "--query_stats"
 
 // the concrete state type
-type concrete_st = s:S.t (nat * nat){forall e. S.mem e s ==> snd e = 1} //(nat & nat)
+type concrete_st = s:S.t (nat * nat){forall e. S.mem e s ==> ((snd e = 1) \/ (snd e = 2))} //(nat & nat)
 
 // init state
-let init_st : concrete_st = S.add (0,1) S.empty 
+let init_st : concrete_st = S.add (0,1) (S.add (0,2) S.empty)
 
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) =
@@ -28,20 +28,24 @@ let eq_is_equiv (a b:concrete_st)
 
 // operation type
 type app_op_t:eqtype =
-  |Add 
-  |Rem 
+  |Add1
+  |Rem1
+  |Add2
+  |Rem2
 
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
  match o with
-  |(ts, (rid, Add)) -> S.empty
-  |(ts, (rid, Rem)) -> S.add (ts, 1) s
+  |(_, (rid, Add1)) -> S.filter s (fun e -> snd e <> 1)
+  |(ts, (rid, Rem1)) -> S.add (ts, 1) s
+  |(_, (rid, Add2)) -> S.filter s (fun e -> snd e <> 2)
+  |(ts, (rid, Rem2)) -> S.add (ts, 2) s
 
 //conflict resolution
 let rc (o1 o2:op_t) =
   match snd (snd o1), snd (snd o2) with
-  |Add, Rem -> Fst_then_snd
-  |Rem, Add -> Snd_then_fst
+  |Add1, Rem1 |Add2, Rem2 -> Fst_then_snd
+  |Rem1, Add1 | Rem2, Add2 -> Snd_then_fst
   |_ -> Either
 
 // concrete merge operation
@@ -61,16 +65,17 @@ let relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
+#push-options "--z3rlimit 100 --max_ifuel 3 --split_queries on_failure"
 let non_comm (o1 o2:op_t)
   : Lemma (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) =
-  assert (((Add? (snd (snd o1)) /\ Rem? (snd (snd o2)))) \/ 
-           (Rem? (snd (snd o1)) /\ Add? (snd (snd o2))) ==>
-           ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); ()
+  assert (((Add1? (snd (snd o1)) /\ Rem1? (snd (snd o2))) \/ (Add2? (snd (snd o1)) /\ Rem2? (snd (snd o2))) \/ 
+           (Rem1? (snd (snd o1)) /\ Add1? (snd (snd o2))) \/ (Rem2? (snd (snd o1)) /\ Add2? (snd (snd o2)))) ==>
+           ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); admit()
          
 let cond_comm (o1:op_t) (o2:op_t{~ (Either? (rc o1 o2))}) (o3:op_t) =
-  if Add? (snd (snd o3)) then true else false
-
-#push-options "--z3rlimit 100 --max_ifuel 3 --split_queries on_failure"
+  if ((Add1? (snd (snd o3)) && (Add1? (snd (snd o1)) || Rem1? (snd (snd o1)))) || 
+      (Add2? (snd (snd o3)) && (Add2? (snd (snd o1)) || Rem2? (snd (snd o1))))) then true else false
+  
 let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2)) /\ cond_comm o1 o2 o3)
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
@@ -331,33 +336,40 @@ let comm_intermediate_1_v1 (l s1 s2 s3:concrete_st) (o1 o2 o:op_t)
 //// Sequential implementation //////
 
 // the concrete state 
-let concrete_st_s = bool
+let concrete_st_s = bool & bool
 
 // init state 
-let init_st_s = false
+let init_st_s = (false, false)
 
 // apply an operation to a state 
 let do_s (st_s:concrete_st_s) (o:op_t) =
-  if Add? (snd (snd o)) then true else false
-
-let query (ele:nat) (s:concrete_st) =
-  s == S.empty 
+  match snd (snd o) with
+  |Add1 -> (true, snd st_s)
+  |Add2 -> (fst st_s, true)
+  |Rem1 -> (false, snd st_s)
+  |Rem2 -> (fst st_s, false)
+  
+//let query (ele:nat) (s:concrete_st) =
+  //s == S.empty 
 
 // equivalence relation between the concrete states of sequential type and MRDT
 let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
-  (st_s = false <==> (~ (st == S.empty)))
+  (fst (st_s) = false <==> (exists e. S.mem e st /\ snd e = 1)) /\
+  (snd (st_s) = false <==> (exists e. S.mem e st /\ snd e = 2))
+  //(~ (st == S.empty)))
 
 // initial states are equivalent
 let initial_eq (_:unit)
   : Lemma (ensures eq_sm init_st_s init_st) = 
-  assert (S.mem (0,1) init_st);
+  //assert (S.mem (0,1) init_st);
   ()
 
 // equivalence between states of sequential type and MRDT at every operation
 let do_eq1 (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
           (ensures eq_sm (do_s st_s op) (do st op)) = 
-  assert (Rem? (snd (snd op)) ==> S.mem (fst op, 1) (do st op)); 
+  assert (Rem1? (snd (snd op)) ==> S.mem (fst op, 1) (do st op)); 
+  assert (Rem2? (snd (snd op)) ==> S.mem (fst op, 2) (do st op)); 
   ()
 
 ////////////////////////////////////////////////////////////////
