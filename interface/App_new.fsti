@@ -338,7 +338,7 @@ val comm_intermediate_1_v1 (l s1 s2 s3:concrete_st) (o1 o2 o:op_t)
 //// Sequential implementation //////
 
 // the concrete state 
-(*val concrete_st_s : Type0
+val concrete_st_s : Type0
 
 // init state 
 val init_st_s : concrete_st_s
@@ -357,5 +357,40 @@ val initial_eq (_:unit)
 val do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
           (ensures eq_sm (do_s st_s op) (do st op))
-*)
-////////////////////////////////////////////////////////////////*)
+
+////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////
+////Equivalence of  MRDT & Sequential implementation  //////
+
+// the concrete state 
+(*val concrete_st_s : Type0
+
+// init state 
+val init_st_s : concrete_st_s
+
+// apply an operation to a state 
+val do_s (st_s:concrete_st_s) (_:op_t) : concrete_st_s
+
+//query type
+val query_t : eqtype
+
+//ret type
+val ret_t : Type0
+
+//query return value - MRDT
+val query_m (s:concrete_st) (q:query_t) : ret_t
+
+//query return value - Seq impl
+val query_s (s:concrete_st_s) (q:query_t) : ret_t
+
+// initial states are equivalent
+val initial_eq (q:query_t)
+  : Lemma (ensures query_s init_st_s q == query_m init_st q)
+
+//equivalence between states of sequential type and MRDT at every operation
+val do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t) (q:query_t)
+  : Lemma (requires query_s st_s q == query_m st q)
+          (ensures query_s (do_s st_s op) q == query_m (do st op) q)*)
+         
+////////////////////////////////////////////////////////////////

@@ -1,18 +1,23 @@
 module App_new
 
+module M = Map_extended
 module S = Set_extended
 
 #set-options "--query_stats"
 
+let cf = (int * bool)
+
 // the concrete state type
-type concrete_st = S.t nat
+type concrete_st = M.t nat cf // (replica_id, ctr, flag) //replica ids are unique
+
+let sel (s:concrete_st) k = if M.contains s k then M.sel s k else (0, false)
 
 // init state
-let init_st = S.empty
+let init_st : concrete_st = M.upd (M.const (0, true)) 0 (0, true)
 
 // equivalence between 2 concrete states
-let eq (a b:concrete_st) = 
-  S.equal a b
+let eq (a b:concrete_st) =
+  (forall id. (M.contains a id = M.contains b id) /\ (sel a id == sel b id))
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -27,18 +32,43 @@ let eq_is_equiv (a b:concrete_st)
           (ensures eq a b) = ()
 
 // operation type
-type app_op_t:eqtype = nat //// (the only operation is Add, so nat is fine)
+type app_op_t:eqtype =
+  |Enable 
+  |Disable
 
 // apply an operation to a state
-let do (s:concrete_st) (o:op_t) : concrete_st =  
-  S.add (snd (snd o)) s
+let do (s:concrete_st) (o:op_t) : concrete_st =
+  match o with
+  |(_, (rid, Disable)) -> M.upd s rid (fst (sel s rid) + 1, true)
+  |(_, (rid, Enable)) -> M.map_val (fun (c,f) -> (c, false)) s
 
 //conflict resolution
-let rc (o1 o2:op_t) = Either
+let rc (o1 o2:op_t) =
+  match snd (snd o1), snd (snd o2) with
+  |Enable, Disable -> Fst_then_snd
+  |Disable, Enable -> Snd_then_fst 
+  |_ -> Either
+
+let merge_flag (l a b:cf) : bool =
+  let lc = fst l in
+  let ac = fst a in
+  let bc = fst b in
+  let af = snd a in
+  let bf = snd b in
+    if af && bf then true
+      else if not af && not bf then false
+        else if af then ac > lc
+          else bc > lc
 
 // concrete merge operation
+let merge_cf (l a b:cf) : cf =
+  (fst a + fst b - fst l, merge_flag l a b)
+  
+// concrete merge operation
 let merge (l a b:concrete_st) : concrete_st =
-  S.union l (S.union a b)
+  let keys = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
+  let u = M.const_on keys (0, false) in
+  M.iter_upd (fun k v -> merge_cf (sel l k) (sel a k) (sel b k)) u
    
 /////////////////////////////////////////////////////////////////////////////
       
@@ -50,12 +80,24 @@ let relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
+let non_comm_help1 (o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2)
+          (ensures ((Enable? (snd (snd o1)) /\ Disable? (snd (snd o2))) ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1)))) = ()
+         
+let non_comm_help2 (o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2)
+          (ensures ((Disable? (snd (snd o1)) /\ Enable? (snd (snd o2))) ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1)))) = ()
+          
 let non_comm (o1 o2:op_t)
   : Lemma (requires distinct_ops o1 o2)
-          (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) = ()
+          (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) =
+  non_comm_help1 o1 o2;
+  non_comm_help2 o1 o2
 
-let cond_comm (o1:op_t) (o2:op_t{distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2))}) (o3:op_t) = true
+let cond_comm (o1:op_t) (o2:op_t{distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2))}) (o3:op_t)=
+  if Enable? (snd (snd o3)) then true else false
 
+#push-options "--z3rlimit 100 --max_ifuel 3 --split_queries on_failure"
 let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ ~ (Either? (rc o1 o2)) /\ cond_comm o1 o2 o3)
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
@@ -308,36 +350,31 @@ let comm_intermediate_1_v1 (l s1 s2 s3:concrete_st) (o1 o2 o:op_t)
           (ensures eq (merge (do l o) (do (do s1 o) o1) (do (do s2 o) o2)) (do (do (do s3 o) o1) o2)) = ()
 
 ////////////////////////////////////////////////////////////////
-////Equivalence of  MRDT & Sequential implementation  //////
+//// Sequential implementation //////
 
 // the concrete state 
-let concrete_st_s = S.t nat
+let concrete_st_s = bool
 
 // init state 
-let init_st_s = S.empty
+let init_st_s = false
 
 // apply an operation to a state 
-let do_s (st_s:concrete_st_s) (o:op_t) = S.add (snd (snd o)) st_s 
+let do_s (st_s:concrete_st_s) (o:op_t) =
+  if Enable? (snd (snd o)) then true else false
 
-//query type
-type query_t = nat //is the element present?
-
-//ret type
-let ret_t = bool
-
-//query return value - MRDT
-let query_m (s:concrete_st) (q:query_t) = S.mem q s
-
-//query return value - Seq impl
-let query_s (s:concrete_st_s) (q:query_t) = S.mem q s
-
+// equivalence relation between the concrete states of sequential type and MRDT
+let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
+  (st_s = true) <==> (forall rid. snd (sel st rid) = false)
+  
 // initial states are equivalent
-let initial_eq (q:query_t)
-  : Lemma (ensures query_s init_st_s q == query_m init_st q) = ()
+let initial_eq (_:unit)
+  : Lemma (ensures eq_sm init_st_s init_st) = 
+  assert (M.contains init_st 0);
+  ()
 
-//equivalence between states of sequential type and MRDT at every operation
-let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t) (q:query_t)
-  : Lemma (requires query_s st_s q == query_m st q)
-          (ensures query_s (do_s st_s op) q == query_m (do st op) q) = ()
-         
+// equivalence between states of sequential type and MRDT at every operation
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
+  : Lemma (requires eq_sm st_s st)
+          (ensures eq_sm (do_s st_s op) (do st op)) = ()
+
 ////////////////////////////////////////////////////////////////

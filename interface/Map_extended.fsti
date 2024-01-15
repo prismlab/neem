@@ -187,6 +187,12 @@ val lemma_equal_intro: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key 
                              (ensures (equal m1 m2))
                              [SMTPat (equal m1 m2)]
 
+val lemma_equal_intro': #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
+                       Lemma (requires (equal m1 m2))
+                             (ensures (forall k. sel m1 k == sel m2 k /\
+                                            contains m1 k = contains m2 k))
+                             [SMTPat (equal m1 m2)]
+
 (* lemma_equal_elim:
      Eliminating `equal m1 m2` to provable equality of maps
      Internally, this involves a use of functional extensionality

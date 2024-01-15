@@ -302,3 +302,38 @@ let comm_intermediate_1_v1 (l s1 s2 s3:concrete_st) (o1 o2 o:op_t)
                     (exists o'. Fst_then_snd? (rc o' o)) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2))
           (ensures eq (merge (do l o) (do (do s1 o) o1) (do (do s2 o) o2)) (do (do (do s3 o) o1) o2)) = ()
+
+////////////////////////////////////////////////////////////////
+////Equivalence of  MRDT & Sequential implementation  //////
+
+// the concrete state 
+let concrete_st_s = int
+
+// init state 
+let init_st_s = 0
+
+// apply an operation to a state 
+let do_s (st_s:concrete_st_s) (_:op_t) = st_s + 1
+
+//query type
+type query_t = unit
+
+//ret type
+let ret_t = int
+
+//query return value - MRDT
+let query_m (s:concrete_st) (q:query_t) = s
+
+//query return value - Seq impl
+let query_s (s:concrete_st_s) (q:query_t) = s
+
+// initial states are equivalent
+let initial_eq (q:query_t)
+  : Lemma (ensures query_s init_st_s q == query_m init_st q) = ()
+
+//equivalence between states of sequential type and MRDT at every operation
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t) (q:query_t)
+  : Lemma (requires query_s st_s q == query_m st q)
+          (ensures query_s (do_s st_s op) q == query_m (do st op) q) = ()
+         
+////////////////////////////////////////////////////////////////
