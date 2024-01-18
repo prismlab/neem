@@ -65,12 +65,19 @@ let relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
+let non_comm1 (o1 o2:op_t)
+  : Lemma (ensures ((Add1? (snd (snd o1)) /\ Rem1? (snd (snd o2))) \/ (Rem1? (snd (snd o1)) /\ Add1? (snd (snd o2))))
+                           ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))) = ()
+
+let non_comm2 (o1 o2:op_t)
+  : Lemma (ensures ((Add2? (snd (snd o1)) /\ Rem2? (snd (snd o2))) \/ (Rem2? (snd (snd o1)) /\ Add2? (snd (snd o2))))
+                           ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))) = ()
+                           
 #push-options "--z3rlimit 100 --max_ifuel 3 --split_queries on_failure"
 let non_comm (o1 o2:op_t)
   : Lemma (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) =
-  assert (((Add1? (snd (snd o1)) /\ Rem1? (snd (snd o2))) \/ (Add2? (snd (snd o1)) /\ Rem2? (snd (snd o2))) \/ 
-           (Rem1? (snd (snd o1)) /\ Add1? (snd (snd o2))) \/ (Rem2? (snd (snd o1)) /\ Add2? (snd (snd o2)))) ==>
-           ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))); admit()
+  non_comm1 o1 o2;
+  non_comm2 o1 o2
          
 let cond_comm (o1:op_t) (o2:op_t{~ (Either? (rc o1 o2))}) (o3:op_t) =
   if ((Add1? (snd (snd o3)) && (Add1? (snd (snd o1)) || Rem1? (snd (snd o1)))) || 
@@ -374,7 +381,7 @@ let initial_eq (_:unit)
   : Lemma (ensures eq_sm init_st_s init_st) = ()
 
 // equivalence between states of sequential type and MRDT at every operation
-let do_eq1 (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
+let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   : Lemma (requires eq_sm st_s st)
           (ensures eq_sm (do_s st_s op) (do st op)) = 
   assert (Rem1? (snd (snd op)) ==> S.mem (fst op, 1) (do st op)); 
