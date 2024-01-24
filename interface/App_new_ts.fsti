@@ -60,7 +60,6 @@ type rc_res =
   |Snd_then_fst //o2 -> o1
   |Either
   |Ts_order
-  //|Ts_order2
 
 //conflict resolution
 val rc (o1 o2:op_t) : rc_res
@@ -75,7 +74,8 @@ val no_rc_chain (o1 o2 o3:op_t)
           (ensures ~ (Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc o2 o3)))
 
 val relaxed_comm (s:concrete_st) (o1 o2 o3:op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)) /\ ~ (Ts_order? (rc o2 o3)))
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o1 o2) /\ 
+                    ~ (Either? (rc o2 o3)) /\ ~ (Ts_order? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3))
 
 val non_comm (o1 o2:op_t)
@@ -127,50 +127,42 @@ val rc_base (o1 o2:op_t)
 //e_i^l vis e is not possible
 // so either e rcp e_i^l or e rct e_i^l is possible
 val rc_inter_base_right (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
-                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\                 
                     eq (merge l (do s1 ol) (do s2 ob)) (do (do s3 ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
 
 val rc_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
-                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\
                     eq (merge l (do s1 ob) (do s2 ol)) (do (do s3 ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
           
-(*val rc_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
-  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\  
-                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
-                    distinct_ops o1' o' /\ Fst_then_snd? (rc o1' o') /\
-                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
-                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2)) 
-        (ensures eq (merge (do l o') (do (do (do s1 o1') o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do (do s3 o1') o) o') o1) o2))*)
-
 val rc_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\  
-                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\
+                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
   (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do (do s2 o) ob) ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2)) 
 
 val rc_inter_left (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\  
-                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\
+                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
       (ensures eq (merge (do l ol) (do (do (do (do s1 o) ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2))
 
 // In general, the events ol,oi, below should be such that these exists o, (rc o ol), (rc o oi)
 val rc_inter_lca (l s1 s2 s3:concrete_st) (o1 o2 ol oi:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\ 
-                    (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\ 
-                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) (*/\ fst o < fst oi*))) /\ 
+                    (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\ 
+                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) /\ fst o < fst oi)) /\ 
                     eq (merge (do l oi) (do (do s1 oi) o1) (do (do s2 oi) o2)) (do (do (do s3 oi) o1) o2) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2))
     (ensures eq (merge (do (do l oi) ol) (do (do (do s1 oi) ol) o1) (do (do (do s2 oi) ol) o2)) (do (do (do (do s3 oi) ol) o1) o2))
@@ -198,110 +190,97 @@ val ts_base (o1 o2:op_t)
           (ensures eq (merge init_st (do init_st o1) (do init_st o2)) (do (do init_st o1) o2))
 
 val ts_inter_base_right (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     distinct_ops o1 o2 /\ Ts_order? (rc o1 o2) /\ fst o1 < fst o2 /\
-                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\
                     eq (merge l (do s1 ol) (do s2 ob)) (do (do s3 ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
 
 val ts_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     distinct_ops o1 o2 /\ Ts_order? (rc o1 o2) /\ fst o1 < fst o2 /\
-                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
+                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\
                     eq (merge l (do s1 ob) (do s2 ol)) (do (do s3 ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
-          
-(*val rc_intermediate_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
-  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\  
-                    distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\
-                    distinct_ops o1' o' /\ Fst_then_snd? (rc o1' o') /\
-                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
-                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2)) 
-        (ensures eq (merge (do l o') (do (do (do s1 o1') o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do (do s3 o1') o) o') o1) o2))*)
 
 val ts_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Ts_order? (rc o1 o2) /\ fst o1 < fst o2 /\
-                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\
+                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
       (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do (do s2 o) ob) ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2)) 
 
 val ts_inter_left (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Ts_order? (rc o1 o2) /\ fst o1 < fst o2 /\ 
-                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\
+                    distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
       (ensures eq (merge (do l ol) (do (do (do (do s1 o) ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2))
 
 // In general, the events ol,oi, below should be such that these exists o, (rc o ol), (rc o oi)
 val ts_inter_lca (l s1 s2 s3:concrete_st) (o1 o2 ol oi:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Ts_order? (rc o1 o2) /\ fst o1 < fst o2 /\
-                    (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\ 
-                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) (*/\ fst o < fst oi*))) /\ 
+                    (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\ 
+                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) /\ fst o < fst oi)) /\ 
                     eq (merge (do l oi) (do (do s1 oi) o1) (do (do s2 oi) o2)) (do (do (do s3 oi) o1) o2) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2))
     (ensures eq (merge (do (do l oi) ol) (do (do (do s1 oi) ol) o1) (do (do (do s2 oi) ol) o2)) (do (do (do (do s3 oi) ol) o1) o2))
     
 (*One op*)
 ///////////////
-val one_op_ind_right (l a b c:concrete_st) (o1 o1':op_t)
-   : Lemma (requires eq (merge l a (do b o1)) (do (merge l a b) o1))
-           (ensures eq (merge l a (do (do b o1') o1)) (do (merge l a (do b o1')) o1))
+val one_op_ind_right (l a b c:concrete_st) (o2 o2':op_t)
+   : Lemma (requires eq (merge l a (do b o2)) (do (merge l a b) o2))
+           (ensures eq (merge l a (do (do b o2') o2)) (do (merge l a (do b o2')) o2))
+           
+val one_op_ind_left (l a b c:concrete_st) (o1 o1':op_t)
+   : Lemma (requires eq (merge l (do a o1) b) (do (merge l a b) o1))
+           (ensures eq (merge l (do (do a o1') o1) b) (do (merge l (do a o1') b) o1))
            
 val one_op_ind_lca (l:concrete_st) (ol o1:op_t)
-  : Lemma (requires eq (merge l l (do l o1)) (do l o1) /\ fst ol < fst o1)
-          (ensures eq (merge (do l ol) (do l ol) (do (do l ol) o1)) (do (do l ol) o1)) 
+  : Lemma (requires eq (merge l (do l o1) l) (do l o1) /\ fst ol < fst o1)
+          (ensures eq (merge (do l ol) (do (do l ol) o1) (do l ol)) (do (do l ol) o1)) 
 
 val one_op_base (o1:op_t)
-  : Lemma (ensures eq (merge init_st init_st (do init_st o1)) (do init_st o1))
+  : Lemma (ensures eq (merge init_st (do init_st o1) init_st) (do init_st o1))
 
 val one_op_inter_base_right (l s1 s2 s3:concrete_st) (ob ol o1:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    eq (merge (do l ol) (do s1 ol) (do (do s2 ol) o1)) (do (do s3 ol) o1) /\
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     eq (merge l s1 (do s2 o1)) (do s3 o1) /\
+                    eq (merge (do l ol) (do s1 ol) (do (do s2 ol) o1)) (do (do s3 ol) o1) /\
                     eq (merge l (do s1 ol) (do s2 ob)) (do (do s3 ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do s1 ol) (do (do (do s2 ob) ol) o1)) (do (do (do s3 ob) ol) o1))
 
-(*val intermediate_base_right_one_op_left (l s1 s2 s3:concrete_st) (o o' o1:op_t) 
-  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ distinct_ops o' o1 /\
-                    eq (merge (do l o') (do (do s1 o') o1) (do s2 o')) (do (do s3 o') o1) /\
-                    (Fst_then_snd? (rc o o1) ==> eq (merge l (do s1 o1) (do s2 o)) (do (merge l s1 (do s2 o)) o1)) /\ //***EXTRA***       
-                    eq (merge l (do s1 o1) s2) (do s3 o1) /\
-                    eq (merge l (do s1 o') (do s2 o)) (do (do s3 o) o')) //***EXTRA***
-          (ensures eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o) o')) (do (do (do s3 o) o') o1))*)
-
 val one_op_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    eq (merge (do l ol) (do s1 ol) (do (do s2 ol) o1)) (do (do s3 ol) o1) /\
-                    (Fst_then_snd? (rc ob o1) ==> eq (merge l (do s1 o1) (do s2 ob)) (do (merge l s1 (do s2 ob)) o1)) /\ //***EXTRA***
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     eq (merge l s1 (do s2 o1)) (do s3 o1) /\
+                    eq (merge (do l ol) (do s1 ol) (do (do s2 ol) o1)) (do (do s3 ol) o1) /\
                     eq (merge l (do s1 ol) (do s2 ob)) (do (do s3 ob) ol) /\ //***EXTRA***
-                    eq (merge l (do (do s1 ob) ol) (do s2 ol)) (do (do s3 ob) ol)) //***EXTRA***
+                    eq (merge l (do (do s1 ob) ol) (do s2 ol)) (do (do s3 ob) ol) /\ //***EXTRA***
+                    (Fst_then_snd? (rc ob o1) ==> eq (merge l (do s1 o1) (do s2 ob)) (do (merge l s1 (do s2 ob)) o1))) //***EXTRA*** 
           (ensures eq (merge (do l ol) (do (do s1 ob) ol) (do (do s2 ol) o1)) (do (do (do s3 ob) ol) o1))
 
-(*val intermediate_base_left_right_one_op (l s1 s2 s3:concrete_st) (o o' o1' o1:op_t) 
-  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\
-                    distinct_ops o1' o' /\ Fst_then_snd? (rc o1' o') /\
-                    eq (merge (do l o') (do s1 o') (do (do s2 o') o1)) (do (do s3 o') o1) /\
-                    eq (merge (do l o') (do (do s1 o1') o') (do (do s2 o') o1)) (do (do (do s3 o1') o') o1) /\ //EXTRA
-                    eq (merge l s1 (do s2 o1)) (do s3 o1))
-          (ensures eq (merge (do l o') (do (do s1 o1') o') (do (do (do s2 o) o') o1)) (do (do (do (do s3 o1') o) o') o1))*)
-
-val one_op_inter_left (l s1 s2 s3:concrete_st) (o1 ob ol:op_t) (o:op_t(*{~ (commutes_with o ob)}*))
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\
+val one_op_inter_right (l s1 s2 s3:concrete_st) (o1 ob ol o:op_t)
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
+                    eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ob) ol) ) (do (do (do s3 ob) ol) o1))
+          (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 o) ob) ol) ) (do (do (do (do s3 o) ob) ol) o1))
+          
+val one_op_inter_left (l s1 s2 s3:concrete_st) (o1 ob ol o:op_t)
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ob) ol) (do (do s2 ol) o1)) (do (do (do s3 ob) ol) o1))
           (ensures eq (merge (do l ol) (do (do (do s1 o) ob) ol) (do (do s2 ol) o1)) (do (do (do (do s3 o) ob) ol) o1))
 
 // In general, the events ol,oi, below should be such that these exists o, (rc o ol), (rc o oi)
 val one_op_inter_lca (l s1 s2 s3:concrete_st) (o1 ol oi:op_t)
-  : Lemma (requires (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\ 
-                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) (*/\ fst o < fst oi*))) /\ 
+  : Lemma (requires (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\ 
+                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) /\ fst o < fst oi)) /\ 
                     eq (merge (do l oi) (do s1 oi) (do (do s2 oi) o1)) (do (do s3 oi) o1) /\
                     eq (merge (do l ol) (do s1 ol) (do (do s2 ol) o1)) (do (do s3 ol) o1))
           (ensures eq (merge (do (do l oi) ol) (do (do s1 oi) ol) (do (do (do s2 oi) ol) o1)) (do (do (do s3 oi) ol) o1))
@@ -312,42 +291,42 @@ val one_op_inter_lca (l s1 s2 s3:concrete_st) (o1 ol oi:op_t)
 //e_i^l vis eb is not possible
 // so either eb rcp e_i^l or eb rct e_i^l is possible
 val zero_op_inter_base_right (l s1 s2 s3:concrete_st) (ob ol:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    eq (merge (do l ol) (do s1 ol) (do s2 ol)) (do s3 ol) /\
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     eq (merge l s1 s2) s3 /\
+                    eq (merge (do l ol) (do s1 ol) (do s2 ol)) (do s3 ol) /\
                     eq (merge l (do s1 ol) (do s2 ob)) (do (do s3 ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do s1 ol) (do (do s2 ob) ol)) (do (do s3 ob) ol)) 
 
-val zero_op_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1':op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    distinct_ops o1' ol /\ (Fst_then_snd? (rc o1' ol) \/ (Ts_order? (rc o1' ol) (*/\ fst o1' < fst ol*))) /\ 
+val zero_op_inter_base_left (l s1 s2 s3:concrete_st) (ob ol:op_t) 
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    eq (merge l s1 s2) s3 /\
                     eq (merge (do l ol) (do s1 ol) (do s2 ol)) (do s3 ol) /\
-                    eq (merge l s1 s2) s3) 
-          (ensures eq (merge (do l ol) (do (do s1 o1') ol) (do (do s2 ob) ol)) (do (do (do s3 o1') ob) ol))
+                    eq (merge l (do s1 ob) (do s2 ol)) (do (do s3 ob) ol)) //***EXTRA***
+          (ensures eq (merge (do l ol) (do (do s1 ob) ol) (do s2 ol)) (do (do s3 ob) ol)) 
 
-val zero_op_inter_right (l s1 s2 s3:concrete_st) (ob ol:op_t) (o:op_t(*{~ (commutes_with o ob)}*))
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\
+val zero_op_inter_right (l s1 s2 s3:concrete_st) (ob ol o:op_t)
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do s1 ol) (do (do s2 ob) ol)) (do (do s3 ob) ol))
           (ensures eq (merge (do l ol) (do s1 ol) (do (do (do s2 o) ob) ol)) (do (do (do s3 o) ob) ol)) 
 
-val zero_op_inter_left (l s1 s2 s3:concrete_st) (ob ol:op_t) (o:op_t(*{~ (commutes_with o ob)}*))
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
-                    get_rid o <> get_rid ol (*o_n,ol must be concurrent*) /\
-                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\
+val zero_op_inter_left (l s1 s2 s3:concrete_st) (ob ol o:op_t)
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
+                    //get_rid o <> get_rid ol (*o_n,ol must be concurrent*) /\
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ob) ol) (do s2 ol)) (do (do s3 ob) ol))
           (ensures eq (merge (do l ol) (do (do (do s1 o) ob) ol) (do s2 ol)) (do (do (do s3 o) ob) ol)) 
 
 // In general, the event "ol" below should be such that these exists o', (rc o' ol)
 val zero_op_inter_lca_v1 (l s1 s2 s3:concrete_st) (ol:op_t)
-  : Lemma (requires (exists o'. Fst_then_snd? (rc o' ol) \/ (Ts_order? (rc o' ol) (*/\ fst o' < fst ol*))) /\ eq (merge l s1 s2) s3)
+  : Lemma (requires (exists o'. Fst_then_snd? (rc o' ol) \/ (Ts_order? (rc o' ol) /\ fst o' < fst ol)) /\ eq (merge l s1 s2) s3)
           (ensures eq (merge (do l ol) (do s1 ol) (do s2 ol)) (do s3 ol))
 
 // In general, the events ol,o_n, below should be such that these exists o, (rc o ol)
 val zero_op_inter_lca_v2 (l s1 s2 s3:concrete_st) (ol oi:op_t)
-  : Lemma (requires (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) (*/\ fst o < fst ol*))) /\ 
-                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) (*/\ fst o < fst oi*))) /\
+  : Lemma (requires (exists o. Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\ 
+                    (exists o. Fst_then_snd? (rc o oi) \/ (Ts_order? (rc o oi) /\ fst o < fst oi)) /\
                     eq (merge (do l oi) (do s1 oi) (do s2 oi)) (do s3 oi)  /\
                     eq (merge (do l ol) (do s1 ol) (do s2 ol)) (do s3 ol))
           (ensures eq (merge (do (do l oi) ol) (do (do s1 oi) ol) (do (do s2 oi) ol)) (do (do s3 oi) ol))
@@ -383,57 +362,48 @@ val comm_ind_lca (l:concrete_st) (ol o1 o2:op_t)
 val comm_base (o1 o2:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2))
           (ensures eq (merge init_st (do init_st o1) (do init_st o2)) (do (do init_st o1) o2))
-
+          
 val comm_inter_base_right (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
                     distinct_ops ol o1 /\ distinct_ops ol o2 /\
-                    eq (merge l (do s1 o1) (do (do s2 ob) o2)) (do (do (merge l s1 (do s2 ob)) o1) o2) /\ //comes from comm_ind_right
+                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\ 
-                    eq (merge (do l ol) (do s1 ol) (do (do s2 ob) ol)) (do (do s3 ob) ol) /\ //comes from intermediate_base_zero_op
-                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2)) 
+                    eq (merge l (do s1 o1) (do (do s2 ob) o2)) (do (do (merge l s1 (do s2 ob)) o1) o2) /\ //comes from comm_ind_right
+                    eq (merge (do l ol) (do s1 ol) (do (do s2 ob) ol)) (do (do s3 ob) ol)) //comes from intermediate_base_zero_op
           (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
 
-(*val comm_inter_base_left_right (l s1 s2 s3:concrete_st) (o o' o1' o1 o2:op_t) 
-  : Lemma (requires distinct_ops o o' /\ Fst_then_snd? (rc o o') /\ 
-                    distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
-                    distinct_ops o1' o' /\ Fst_then_snd? (rc o1' o') /\
-                    distinct_ops o' o1 /\ distinct_ops o' o2 /\
-                    eq (merge (do l o') (do (do s1 o') o1) (do (do s2 o') o2)) (do (do (do s3 o') o1) o2) /\
-                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
-                    eq (merge l (do (do s1 o1') o1) (do (do s2 o) o2)) (do (do (merge l (do s1 o1') (do s2 o)) o1) o2) /\ //comes from comm_ind_right
-                    eq (merge (do l o') (do s1 o') (do (do s2 o) o')) (do (do s3 o) o')) //comes from intermediate_base_zero_op
-        (ensures eq (merge (do l o') (do (do (do s1 o1') o') o1) (do (do (do s2 o) o') o2)) (do (do (do (do (do s3 o1') o) o') o1) o2))*) 
-
 val comm_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t) 
-  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) (*/\ fst ob < fst ol*))) /\ 
+  : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
                     distinct_ops o1 o2 /\ Either? (rc o1 o2) /\
                     distinct_ops ol o1 /\ distinct_ops ol o2 /\
-                    eq (merge l (do (do s1 ob) o1) (do s2 o2)) (do (do (merge l (do s1 ob) s2) o1) o2) /\ //comes from comm_ind_left
+                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2) /\ 
-                    eq (merge (do l ol) (do (do s1 ob) ol) (do s2 ol)) (do (do s3 ob) ol) /\ //comes from intermediate_base_zero_op
-                    eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2)) 
+                    eq (merge l (do (do s1 ob) o1) (do s2 o2)) (do (do (merge l (do s1 ob) s2) o1) o2) /\ //comes from comm_ind_left
+                    eq (merge (do l ol) (do (do s1 ob) ol) (do s2 ol)) (do (do s3 ob) ol)) //comes from intermediate_base_zero_op
           (ensures eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
 
-val comm_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol:op_t) (o:op_t{~ (commutes_with o ob)})
+val comm_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\  
                     distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    distinct_ops o ol /\ Either? (rc o ol) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    distinct_ops o ol /\ //Either? (rc o ol) /\ 
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
           (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do (do s2 o) ob) ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2))
 
-val comm_inter_left (l s1 s2 s3:concrete_st) (o1 o2 ob ol:op_t) (o:op_t{~ (commutes_with o ob)})
+val comm_inter_left (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t) 
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\  
                     distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
-                    distinct_ops o ol /\ Either? (rc o ol) /\ 
+                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    distinct_ops o ol /\ //Either? (rc o ol) /\ 
+                    ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
           (ensures eq (merge (do l ol) (do (do (do (do s1 o) ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2))
 
 val comm_inter_lca (l s1 s2 s3:concrete_st) (o1 o2 ol:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\ distinct_ops ol o1 /\ distinct_ops ol o2 /\
-                    (exists o'. Fst_then_snd? (rc o' ol) \/ (Ts_order? (rc o' ol) (*/\ fst o' < fst ol*))) /\
+                    (exists o'. Fst_then_snd? (rc o' ol) \/ (Ts_order? (rc o' ol) /\ fst o' < fst ol)) /\
                     eq (merge l (do s1 o1) (do s2 o2)) (do (do s3 o1) o2))
           (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ol) o2)) (do (do (do s3 ol) o1) o2))
 
