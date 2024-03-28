@@ -145,7 +145,7 @@ val rc_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t)
 val rc_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\  
                     distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
                     ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
   (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do (do s2 o) ob) ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2)) 
@@ -153,7 +153,7 @@ val rc_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
 val rc_inter_left (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Fst_then_snd? (rc o1 o2) /\  
                     distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
                     ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
       (ensures eq (merge (do l ol) (do (do (do (do s1 o) ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do (do s3 o) ob) ol) o1) o2))
@@ -265,14 +265,14 @@ val one_op_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1:op_t)
 
 val one_op_inter_right (l s1 s2 s3:concrete_st) (o1 ob ol o:op_t)
   : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
                     ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do s2 ob) ol) ) (do (do (do s3 ob) ol) o1))
           (ensures eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 o) ob) ol) ) (do (do (do (do s3 o) ob) ol) o1))
           
 val one_op_inter_left (l s1 s2 s3:concrete_st) (o1 ob ol o:op_t)
   : Lemma (requires distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
                     ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ob) ol) (do (do s2 ol) o1)) (do (do (do s3 ob) ol) o1))
           (ensures eq (merge (do l ol) (do (do (do s1 o) ob) ol) (do (do s2 ol) o1)) (do (do (do (do s3 o) ob) ol) o1))
@@ -386,7 +386,7 @@ val comm_inter_base_left (l s1 s2 s3:concrete_st) (ob ol o1 o2:op_t)
 val comm_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\  
                     distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
                     distinct_ops o ol /\ //Either? (rc o ol) /\ 
                     ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do s1 ol) o1) (do (do (do s2 ob) ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
@@ -395,7 +395,7 @@ val comm_inter_right (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t)
 val comm_inter_left (l s1 s2 s3:concrete_st) (o1 o2 ob ol o:op_t) 
   : Lemma (requires distinct_ops o1 o2 /\ Either? (rc o1 o2) /\  
                     distinct_ops ob ol /\ (Fst_then_snd? (rc ob ol) \/ (Ts_order? (rc ob ol) /\ fst ob < fst ol)) /\ 
-                    //get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
+                    get_rid o <> get_rid ol (*o,ol must be concurrent*) /\
                     distinct_ops o ol /\ //Either? (rc o ol) /\ 
                     ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol) \/ (Ts_order? (rc o ol) /\ fst o < fst ol)) /\
                     eq (merge (do l ol) (do (do (do s1 ob) ol) o1) (do (do s2 ol) o2)) (do (do (do (do s3 ob) ol) o1) o2))
