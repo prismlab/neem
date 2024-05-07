@@ -176,7 +176,7 @@ val lemma_UpdDomain : #key:eqtype -> #value:Type -> m:t key value -> k:key -> v:
       Maps `m1` and `m2` have the same domain and
       and are pointwise equal on that domain.
  *)
-val equal (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) : prop
+val equal (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) : Type0
 
 (* lemma_equal_intro:
      Introducing `equal m1 m2` by showing maps to be pointwise equal on the same domain
@@ -199,4 +199,4 @@ val lemma_equal_intro': #key:eqtype -> #value:Type -> m1:t key value -> m2:t key
 *)
 val lemma_equal_elim: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
                       Lemma (ensures (equal m1 m2 <==> m1 == m2))
-                            [SMTPat (equal m1 m2)]
+                            [SMTPat (m1 == m2)]

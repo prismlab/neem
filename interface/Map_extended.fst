@@ -110,4 +110,3 @@ let equal (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) : Type0 
 let lemma_equal_intro #key #value m1 m2 = ()
 let lemma_equal_intro' #key #value m1 m2 = ()
 let lemma_equal_elim #key #value m1 m2  = ()
-let lemma_equal_refl #key #value m1 m2  = ()
