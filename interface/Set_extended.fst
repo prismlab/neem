@@ -18,6 +18,7 @@ let remove #a s1 x = F.on_dom a (fun y -> s1 y && x <> y)
 
 let mem_empty #a x = ()
 let equal_intro #a s1 s2 = ()
+let equal_intro' #a s1 s2 = ()
 let equal_elim #a s1 s2 = () 
 let insert_mem # a x s = ()
 

@@ -28,13 +28,12 @@
     2. a set of keys that record the domain of the map
 
 *)
-
 module Map_extended
 
 module S = Set_extended
 
 (* Map.t key value: The main type provided by this module *)
-val t (key:eqtype) (value:Type u#a)
+val t (key:eqtype) ([@@@strictly_positive] value:Type u#a)
   : Type u#a
 
 (* sel m k : Look up key `k` in map `m` *)
@@ -42,7 +41,6 @@ val sel: #key:eqtype -> #value:Type -> t key value -> key -> Tot value
 
 (* upd m k v : A map identical to `m` except mapping `k` to `v` *)
 val upd: #key:eqtype -> #value:Type -> t key value -> key -> value -> Tot (t key value)
-
 
 (* const v : A constant map mapping all keys to `v` *)
 val const: #key:eqtype -> #value:Type -> value -> Tot (t key value)
@@ -88,6 +86,16 @@ let const_on (#key:eqtype) (#value:Type) (dom:S.t key) (v:value)
   : t key value
   = restrict dom (const v)
 
+(* disjoint_dom m1 m2:
+      Disjoint domains. TODO: its pattern is biased towards `m1`. Why?
+ *)
+let disjoint_dom (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value)
+  = forall x.{:pattern (contains m1 x)(* ; (contains m2 x) *)} contains m1 x ==> not (contains m2 x)
+
+(* has_dom m dom: A relational version of the `domain m` function *)
+let has_dom (#key:eqtype) (#value:Type) (m:t key value) (dom:S.t key)
+  = forall x. contains m x <==> S.mem x dom
+
 (* Properties about map functions *)
 val lemma_SelUpd1: #key:eqtype -> #value:Type -> m:t key value -> k:key -> v:value ->
                    Lemma (requires True) (ensures (sel (upd m k v) k == v))
@@ -97,14 +105,6 @@ val lemma_SelUpd2: #key:eqtype -> #value:Type -> m:t key value -> k1:key -> k2:k
                    Lemma (requires True) (ensures (k2=!=k1 ==> sel (upd m k2 v) k1 == sel m k1))
                    [SMTPat (sel (upd m k2 v) k1)]
 
-val lemma_Del1: #key:eqtype -> #value:Type -> m:t key value -> k:key ->
-                   Lemma (requires True) (ensures ~ (contains (del m k) k))
-                   [SMTPat (contains (del m k) k)]
-                   
-val lemma_Del2: #key:eqtype -> #value:Type -> m:t key value -> k1:key -> k2:key ->
-                   Lemma (requires True) (ensures (k2=!=k1 ==> (sel (del m k2) k1 == sel m k1)))
-                   [SMTPat (sel (del m k2) k1)]
-                   
 val lemma_SelConst: #key:eqtype -> #value:Type -> v:value -> k:key ->
                     Lemma (requires True) (ensures (sel (const v) k == v))
                     [SMTPat (sel (const v) k)]
@@ -128,7 +128,7 @@ val lemma_SelMapVal: #val1:Type -> #val2:Type -> f:(val1 -> val2) -> #key:eqtype
 val lemma_IterUpd: #key:eqtype -> #val1:Type -> #val2:Type -> f:(key -> val1 -> val2) -> m:t key val1 -> k:key ->
                    Lemma (ensures (sel (iter_upd f m) k == f k (sel m k)))
                    [SMTPat (sel (iter_upd f m) k)]
-
+                   
 val lemma_InDomUpd1: #key:eqtype -> #value:Type -> m:t key value -> k1:key -> k2:key -> v:value ->
                      Lemma (requires True) (ensures (contains (upd m k1 v) k2 == (k1=k2 || contains m k2)))
                      [SMTPat (contains (upd m k1 v) k2)]
@@ -137,10 +137,6 @@ val lemma_InDomUpd2: #key:eqtype -> #value:Type -> m:t key value -> k1:key -> k2
                      Lemma (requires True) (ensures (k2=!=k1 ==> contains (upd m k2 v) k1 == contains m k1))
                      [SMTPat (contains (upd m k2 v) k1)]
 
-val lemma_InDomDel: #key:eqtype -> #value:Type -> m:t key value -> k1:key -> k2:key ->
-                     Lemma (requires True) (ensures (k2=!=k1 ==> contains (del m k2) k1 == contains m k1))
-                     [SMTPat (contains (del m k2) k1)]
-                     
 val lemma_InDomConstMap: #key:eqtype -> #value:Type -> v:value -> k:key ->
                          Lemma (requires True) (ensures (contains (const v) k))
                          [SMTPat (contains (const v) k)]
@@ -156,7 +152,7 @@ val lemma_InMapVal: #val1:Type -> #val2:Type -> f:(val1 -> val2) -> #key:eqtype 
 val lemma_InIterUpd: #key:eqtype -> #val1:Type -> #val2:Type -> f:(key -> val1 -> val2) -> m:t key val1 -> k:key ->
                    Lemma (ensures (contains (iter_upd f m) k == contains m k))
                    [SMTPat (contains (iter_upd f m) k)]
-
+                   
 val lemma_InDomRestrict: #key:eqtype -> #value:Type -> m:t key value -> ks:S.t key -> k:key ->
                          Lemma (requires True) (ensures (contains (restrict ks m) k == (S.mem k ks && contains m k)))
                          [SMTPat (contains (restrict ks m) k)]
@@ -176,7 +172,7 @@ val lemma_UpdDomain : #key:eqtype -> #value:Type -> m:t key value -> k:key -> v:
       Maps `m1` and `m2` have the same domain and
       and are pointwise equal on that domain.
  *)
-val equal (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) : Type0
+val equal (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value)  : Type0
 
 (* lemma_equal_intro:
      Introducing `equal m1 m2` by showing maps to be pointwise equal on the same domain
@@ -187,12 +183,6 @@ val lemma_equal_intro: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key 
                              (ensures (equal m1 m2))
                              [SMTPat (equal m1 m2)]
 
-val lemma_equal_intro': #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
-                       Lemma (requires (equal m1 m2))
-                             (ensures (forall k. sel m1 k == sel m2 k /\
-                                            contains m1 k = contains m2 k))
-                             [SMTPat (equal m1 m2)]
-
 (* lemma_equal_elim:
      Eliminating `equal m1 m2` to provable equality of maps
      Internally, this involves a use of functional extensionality
@@ -200,3 +190,19 @@ val lemma_equal_intro': #key:eqtype -> #value:Type -> m1:t key value -> m2:t key
 val lemma_equal_elim: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
                       Lemma (ensures (equal m1 m2 <==> m1 == m2))
                             [SMTPat (m1 == m2)]
+
+val lemma_equal_intro': #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
+                       Lemma (requires (equal m1 m2))
+                             (ensures (forall k. sel m1 k == sel m2 k /\
+                                            contains m1 k = contains m2 k))
+                             [SMTPat (equal m1 m2)]
+
+let equal_refl (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) :
+    Lemma (requires m1 == m2)
+          (ensures (forall k. sel m1 k == sel m2 k /\ contains m1 k = contains m2 k))
+          [SMTPat (m1 == m2)] = ()
+          
+(*[@@(deprecated "Use lemma_equal_elim instead")]
+val lemma_equal_refl: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
+                      Lemma  (requires (m1 == m2))
+                             (ensures  (equal m1 m2))*)

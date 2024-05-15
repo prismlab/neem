@@ -2,7 +2,6 @@ module App
 
 module M = Map_extended
 module S = Set_extended
-//module S' = FStar.Set
 
 #set-options "--query_stats"
 
@@ -14,10 +13,11 @@ let init_st = M.const S.empty
 
 let sel (s:concrete_st) k = if M.contains s k then M.sel s k else S.empty
 
+let eq_s (a b:S.t nat) : Type0 = a == b
+
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) =
-  (forall id. M.contains a id = M.contains b id /\
-         S.equal (sel a id) (sel b id))
+ (forall k. (M.contains a k = M.contains b k) /\ eq_s (sel a k) (sel b k)) //M.equal a b //a == b
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -40,7 +40,7 @@ let value (op:op_t) = snd (snd op)
 
 let do (s:concrete_st) (op:op_t) : concrete_st =
   let (ts, (_, (k,v))) = op in
-  M.upd s k (S.union (S.singleton v) (sel s k))
+  M.upd s k (S.add v (sel s k))
 
 //conflict resolution
 let rc (o1 o2:op_t) = Either
@@ -62,11 +62,14 @@ let no_rc_chain (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3)
           (ensures ~ (Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc o2 o3))) = ()
 
-let cond_comm_base (s:concrete_st) (o1 o2:op_t) (o3:op_t{distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3})
-    : (b:bool{(Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3))) ==> eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)}) = true
+let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t) 
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ distinct_ops o1 o3 /\
+                    Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
+          (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
 let cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:seq op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\ cond_comm_base s o1 o2 o3 /\
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\ 
+                    Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)) /\
                     eq (do (apply_log (do (do s o1) o2) l) o3) (do (apply_log (do (do s o2) o1) l) o3))
           (ensures eq (do (do (apply_log (do (do s o1) o2) l) o) o3) (do (do (apply_log (do (do s o2) o1) l) o) o3)) = ()
 
@@ -155,7 +158,7 @@ let one_op_ind_right (l a b c:concrete_st) (o2 o2':op_t)
 
 let one_op_ind_left (l a b c:concrete_st) (o1 o1':op_t)
    : Lemma (requires eq (merge l (do a o1) b) (do (merge l a b) o1))
-           (ensures eq (merge l (do (do a o1') o1) b) (do (merge l (do a o1') b) o1)) = ()
+           (ensures eq (merge l (do (do a o1') o1) b) (do (merge l (do a o1') b) o1)) = () 
            
 let one_op_ind_lca (l:concrete_st) (o2 o:op_t)
   : Lemma (requires eq (merge l l (do l o2)) (do l o2))
@@ -178,8 +181,8 @@ let one_op_inter_base_left (l a b c:concrete_st) (o2 ob ol:op_t)
                     eq (merge (do l ol) (do a ol) (do (do b ol) o2)) (do (do c ol) o2) /\
                     (Fst_then_snd? (rc ob o2) ==> eq (merge l (do a o2) (do b ob)) (do (merge l a (do b ob)) o2)) /\ //***EXTRA***
                     eq (merge l a (do b o2)) (do c o2) /\
-                    eq (merge l (do a ol) (do b ob)) (do (do c ob) ol) /\ //***EXTRA***
-                    eq (merge l (do (do a ob) ol) (do b ol)) (do (do c ob) ol)) //***EXTRA***
+                    eq (merge l (do a ob) (do b o2)) (do (do c ob) o2) /\ //EXTRA!! 
+                    eq (merge l (do a ob) (do b ol)) (do (do c ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do a ob) ol) (do (do b ol) o2)) (do (do (do c ob) ol) o2)) = ()
 
 let one_op_inter_right (l a b c:concrete_st) (o2 ob ol o:op_t) 

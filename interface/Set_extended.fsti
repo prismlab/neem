@@ -22,6 +22,10 @@ val equal_intro (#a:eqtype) (s1 s2:t a)
           (ensures equal s1 s2)
           [SMTPat (equal s1 s2)]
 
+val equal_intro' (#a:eqtype) (s1 s2:t a)
+  : Lemma (ensures equal s1 s2 <==> s1 == s2)
+          [SMTPat (s1 == s2)]
+          
 val equal_elim (#a:eqtype) (s1 s2:t a)
   : Lemma (requires equal s1 s2)
           (ensures s1 == s2)
@@ -30,8 +34,8 @@ val equal_elim (#a:eqtype) (s1 s2:t a)
 let equal_refl (#a:eqtype) (s1 s2:t a)
   : Lemma (requires s1 == s2)
           (ensures (forall (x:a). mem x s1 == mem x s2) /\ equal s1 s2)
-          [SMTPat (equal s1 s2)] = ()
-
+          [SMTPat (s1 == s2)] = ()
+          
 // no need to define it, it is already derivable
 let equal_refl1 (#a:eqtype) (s:t a)
   : Lemma (equal s s) = ()

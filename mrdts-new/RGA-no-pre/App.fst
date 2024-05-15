@@ -72,11 +72,14 @@ let no_rc_chain (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3)
           (ensures ~ (Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc o2 o3))) = ()
 
-let cond_comm_base (s:concrete_st) (o1 o2:op_t) (o3:op_t{distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3})
-    : (b:bool{(Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3))) ==> eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)}) = true
+let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t) 
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ distinct_ops o1 o3 /\
+                    Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
+          (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
 let cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:seq op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\ cond_comm_base s o1 o2 o3 /\
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\ 
+                    Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)) /\
                     eq (do (apply_log (do (do s o1) o2) l) o3) (do (apply_log (do (do s o2) o1) l) o3))
           (ensures eq (do (do (apply_log (do (do s o1) o2) l) o) o3) (do (do (apply_log (do (do s o2) o1) l) o) o3)) = ()
  
@@ -188,8 +191,8 @@ let one_op_inter_base_left (l a b c:concrete_st) (o2 ob ol:op_t)
                     eq (merge (do l ol) (do a ol) (do (do b ol) o2)) (do (do c ol) o2) /\
                     (Fst_then_snd? (rc ob o2) ==> eq (merge l (do a o2) (do b ob)) (do (merge l a (do b ob)) o2)) /\ //***EXTRA***
                     eq (merge l a (do b o2)) (do c o2) /\
-                    eq (merge l (do a ol) (do b ob)) (do (do c ob) ol) /\ //***EXTRA***
-                    eq (merge l (do (do a ob) ol) (do b ol)) (do (do c ob) ol)) //***EXTRA***
+                    eq (merge l (do a ob) (do b o2)) (do (do c ob) o2) /\ //EXTRA!! 
+                    eq (merge l (do a ob) (do b ol)) (do (do c ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do a ob) ol) (do (do b ol) o2)) (do (do (do c ob) ol) o2)) = ()
 
 let one_op_inter_right (l a b c:concrete_st) (o2 ob ol o:op_t) 
