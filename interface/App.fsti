@@ -400,3 +400,56 @@ val do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t) (q:query_t)
           (ensures query_s (do_s st_s op) q == query_m (do st op) q)*)
          
 ////////////////////////////////////////////////////////////////
+
+
+val zero_op_inter_base_right' (l a b c:concrete_st) (ob ol:op_t) 
+  : Lemma (requires Fst_then_snd? (rc ob ol) /\
+                    eq (merge (do l ol) (do a ol) (do b ol)) (do c ol))
+          (ensures eq (merge (do l ol) (do a ol) (do (do b ob) ol)) (do (do c ob) ol)) 
+
+val one_op_inter_base_right' (l a b c:concrete_st) (o2 ob ol:op_t) 
+  : Lemma (requires Fst_then_snd? (rc ob ol) /\ 
+                    eq (merge (do l ol) (do a ol) (do (do b ol) o2)) (do (do c ol) o2))
+          (ensures eq (merge (do l ol) (do a ol) (do (do (do b ob) ol) o2)) (do (do (do c ob) ol) o2))
+
+val rc_inter_base_right' (l a b c:concrete_st) (o1 o2 ob ol:op_t) 
+  : Lemma (requires Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc ob ol) /\
+                    eq (merge (do l ol) (do (do a ol) o1) (do (do b ol) o2)) (do (do (do c ol) o1) o2))
+          (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do (do b ob) ol) o2)) (do (do (do (do c ob) ol) o1) o2))
+
+val comm_inter_base_right' (l a b c:concrete_st) (o1 o2 ob ol:op_t) 
+  : Lemma (requires Either? (rc o1 o2) /\ Fst_then_snd? (rc ob ol) /\
+                    eq (merge (do l ol) (do (do a ol) o1) (do (do b ol) o2)) (do (do (do c ol) o1) o2))
+          (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do (do b ob) ol) o2)) (do (do (do (do c ob) ol) o1) o2))
+
+//////////////////////////////////////////////////////////////
+
+val zero_op_inter_right' (l a b c:concrete_st) (ob ol o:op_t)
+  : Lemma (requires Fst_then_snd? (rc ob ol) /\ 
+                    eq (merge (do l ol) (do a ol) (do (do b ob) ol)) (do (do c ob) ol))
+          (ensures eq (merge (do l ol) (do a ol) (do (do (do b o) ob) ol)) (do (do (do c o) ob) ol)) 
+
+val one_op_inter_right' (l a b c:concrete_st) (o2 ob ol o:op_t) 
+  : Lemma (requires Fst_then_snd? (rc ob ol) /\
+                    eq (merge (do l ol) (do a ol) (do (do (do b ob) ol) o2)) (do (do (do c ob) ol) o2))
+          (ensures eq (merge (do l ol) (do a ol) (do (do (do (do b o) ob) ol) o2)) (do (do (do (do c o) ob) ol) o2))
+
+val rc_inter_right' (l a b c:concrete_st) (o1 o2 ob ol o:op_t)
+  : Lemma (requires Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc ob ol) /\ 
+                    eq (merge (do l ol) (do (do a ol) o1) (do (do (do b ob) ol) o2)) (do (do (do (do c ob) ol) o1) o2))
+      (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do (do (do b o) ob) ol) o2)) (do (do (do (do (do c o) ob) ol) o1) o2))
+
+val comm_inter_right' (l a b c:concrete_st) (o1 o2 ob ol o:op_t)
+  : Lemma (requires Either? (rc o1 o2) /\ Fst_then_snd? (rc ob ol) /\ 
+                    eq (merge (do l ol) (do (do a ol) o1) (do (do (do b ob) ol) o2)) (do (do (do (do c ob) ol) o1) o2))
+          (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do (do (do b o) ob) ol) o2)) (do (do (do (do (do c o) ob) ol) o1) o2))
+
+//////////////////////////////////////////////////////////////
+
+let do_opt (s:concrete_st) (o:option op_t) : concrete_st =
+  if Some? o then do s o else s
+  
+val inter_base_right' (l a b c:concrete_st) (ob ol:op_t) (o1 o2:option op_t)
+  : Lemma (requires ((Some? o1 /\ Some? o2) ==> (Fst_then_snd? (rc o1 o2) \/ Either? (rc o1 o2))) /\ Fst_then_snd? (rc ob ol) /\
+                    eq (merge (do_opt l ol) (do_opt (do_opt a ol) o1) (do_opt (do_opt b ol) o2)) (do_opt (do_opt (do_opt c ol) o1) o2))
+          (ensures eq (merge (do_opt l ol) (do_opt (do_opt a ol) o1) (do_opt (do_opt (do_opt b ob) ol) o2)) (do_opt (do_opt (do_opt (do_opt c ob) ol) o1) o2))
