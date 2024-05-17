@@ -22,9 +22,21 @@ let merge_v (l a b:concrete_st_v) : concrete_st_v =
 /////////////////////////////////////////////////////////////////////////////
 
 #set-options "--z3rlimit 100 --ifuel 3"
+let rc_non_comm_help1 (o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2)
+          (ensures (Set? (snd (snd o1)) /\ Unset? (snd (snd o2))) ==> 
+                           ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))) = ()
+
+let rc_non_comm_help2 (o1 o2:op_t)
+  : Lemma (requires distinct_ops o1 o2)
+          (ensures (Set? (snd (snd o2)) /\ Unset? (snd (snd o1))) ==> 
+                           ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))) = ()
+                           
 let rc_non_comm (o1 o2:op_t)
   : Lemma (requires distinct_ops o1 o2)
-          (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) = admit()
+          (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) = 
+  rc_non_comm_help1 o1 o2;
+  rc_non_comm_help2 o1 o2
 
 let no_rc_chain (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3)
@@ -497,10 +509,10 @@ let comm_ind_right_v (l a b:concrete_st_v) (o1 o2' o2:op_v)
 
 let comm_ind_right_ew (l a b:concrete_st_ew) (o1 o2' o2:op_t)
   : Lemma (requires Either? (rc o1 o2) /\
-                    //(Fst_then_snd? (rc o2' o1) ==> (eq_ew (merge_ew l (do_ew a o1) (do_ew b o2')) (do_ew (merge_ew l a (do_ew b o2')) o1))) /\
+                    (Fst_then_snd? (rc o2' o1) ==> (eq_ew (merge_ew l (do_ew a o1) (do_ew b o2')) (do_ew (merge_ew l a (do_ew b o2')) o1))) /\
                     ~ (Fst_then_snd? (rc o1 o2')) /\
                     eq_ew (merge_ew l (do_ew a o1) (do_ew b o2)) (do_ew (do_ew (merge_ew l a b) o2) o1))
-          (ensures eq_ew (merge_ew l (do_ew a o1) (do_ew (do_ew b o2') o2)) (do_ew (do_ew (merge_ew l a (do_ew b o2')) o2) o1)) = admit()
+          (ensures eq_ew (merge_ew l (do_ew a o1) (do_ew (do_ew b o2') o2)) (do_ew (do_ew (merge_ew l a (do_ew b o2')) o2) o1)) = ()
           
 let comm_ind_right_ne (l a b:concrete_st) (o1 o2' o2:op_t)
   : Lemma (requires Either? (rc o1 o2) /\ 
@@ -524,10 +536,10 @@ let comm_ind_left_v (l a b:concrete_st_v) (o1 o2 o1':op_v)
 
 let comm_ind_left_ew (l a b:concrete_st_ew) (o1 o2 o1':op_t)
   : Lemma (requires Either? (rc o1 o2) /\
-                    //(Fst_then_snd? (rc_ew o1' o2) ==> (eq_ew (merge_ew l (do_ew a o1') (do_ew b o2)) (do_ew (merge_ew l (do_ew a o1') b) o2))) /\
+                    (Fst_then_snd? (rc o1' o2) ==> (eq_ew (merge_ew l (do_ew a o1') (do_ew b o2)) (do_ew (merge_ew l (do_ew a o1') b) o2))) /\
                     ~ (Fst_then_snd? (rc o2 o1')) /\
                     eq_ew (merge_ew l (do_ew a o1) (do_ew b o2)) (do_ew (do_ew (merge_ew l a b) o2) o1))
-          (ensures eq_ew (merge_ew l (do_ew (do_ew a o1') o1) (do_ew b o2)) (do_ew (do_ew (merge_ew l (do_ew a o1') b) o2) o1)) = admit()
+          (ensures eq_ew (merge_ew l (do_ew (do_ew a o1') o1) (do_ew b o2)) (do_ew (do_ew (merge_ew l (do_ew a o1') b) o2) o1)) = ()
           
 let comm_ind_left_ne (l a b:concrete_st) (o1 o2 o1':op_t)
   : Lemma (requires Either? (rc o1 o2) /\ 
@@ -583,7 +595,8 @@ let comm_inter_base_right_ew (l a b c:concrete_st_ew) (o1 o2 ob ol:op_t)
                     eq_ew (merge_ew l (do_ew a o1) (do_ew (do_ew b ob) o2)) (do_ew (do_ew (merge_ew l a (do_ew b ob)) o1) o2) /\ //comes from comm_ind_right
                     eq_ew (merge_ew (do_ew l ol) (do_ew a ol) (do_ew (do_ew b ob) ol)) (do_ew (do_ew c ob) ol)) //comes from intermediate_base_zero_op
           (ensures eq_ew (merge_ew (do_ew l ol) (do_ew (do_ew a ol) o1) (do_ew (do_ew (do_ew b ob) ol) o2)) (do_ew (do_ew (do_ew (do_ew c ob) ol) o1) o2)) = ()
-          
+
+#set-options "--z3rlimit 300 --ifuel 3"
 let comm_inter_base_right_ne (l a b c:concrete_st) (o1 o2 ob ol:op_t) 
   : Lemma (requires Either? (rc o1 o2) /\ Fst_then_snd? (rc ob ol) /\ 
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o2 ob /\ distinct_ops o2 ol /\ distinct_ops ob ol /\
