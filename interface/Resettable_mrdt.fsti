@@ -1,7 +1,10 @@
 module Resettable_mrdt
 
-module S = Set_extended
-module M = Map_extended
+//module S = Set_extended
+//module M = Map_extended
+//module S = FStar.FiniteSet.Base
+module S = Finite_set
+module M = Ord_map
 
 open FStar.Seq
 
@@ -11,15 +14,18 @@ let concrete_st = M.t pos concrete_st_s
 
 val init_st_s : concrete_st_s
 
-let init_st = M.const_on S.empty init_st_s
+let init_st = M.emptymap //M.const_on S.empty init_st_s
 
 let sel (s:concrete_st) (k:pos) =
-  if M.contains s k then M.sel s k else init_st_s
+  if M.contains s k then M.sel k s else init_st_s
 
 let eq_s (s1 s2:concrete_st_s) : Type0 = s1 == s2
 
 let eq (s1 s2:concrete_st) =
- (forall k. (M.contains s1 k = M.contains s2 k) /\ eq_s (sel s1 k) (sel s2 k))
+  M.equal s1 s2 
+ //(forall key. S.mem key (M.domain s1) = S.mem key (M.domain s2)) /\ 
+ //(forall key. S.mem key (M.domain s1) ==> (M.elements s1) key == (M.elements s2) key)
+ //(forall k. (M.contains s1 k = M.contains s2 k) /\ eq_s (sel s1 k) (sel s2 k))
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -96,7 +102,15 @@ let merge (l a b:concrete_st) : concrete_st =
   let eles = S.union i_lab (S.union da db) in //(l /\ a /\ b) U (a - l) U (b - l)
   let u = M.const_on eles init_st_s in
   M.iter_upd (fun k v -> merge_s (sel l k) (sel a k) (sel b k)) u 
-  
+
+let query (s:concrete_st) =
+  if M.cardinality s = 0 then None
+  else Some (M.cardinality s)
+
+let lem_insert (s:concrete_st) (o:op_t)
+  : Lemma (requires Set? (snd (snd o)) /\ ~ (M.contains s (fst o)))
+          (ensures M.cardinality (do s o) = M.cardinality s + 1) = ()
+
 /////////////////////////////////////////////////////////////////////////////
 
 val rc_non_comm (o1 o2:op_t)
@@ -124,7 +138,8 @@ let cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:seq op_t)
 val merge_comm_s (l a b: concrete_st_s) 
   : Lemma (ensures eq_s (merge_s l a b) (merge_s l b a))
           [SMTPat (merge_s l a b)]
- 
+
+#set-options "--ifuel 3"
 let merge_comm (l a b:concrete_st)
   : Lemma (ensures (eq (merge l a b) (merge l b a))) = ()
 
@@ -151,7 +166,6 @@ let rc_ind_left (l a b:concrete_st) (o1 o2 o1':op_t)
                     eq (merge l (do a o1) (do b o2)) (do (merge l (do a o1) b) o2))
           (ensures eq (merge l (do (do a o1') o1) (do b o2)) (do (merge l (do (do a o1') o1) b) o2)) = ()
 
-#set-options "--ifuel 3"
 let rc_ind_lca (l:concrete_st) (o1 o2 o:op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2) /\ 
                     distinct_ops o1 o2 /\ distinct_ops o o1 /\ distinct_ops o o2 /\
@@ -212,6 +226,7 @@ let one_op_ind_right (l a b:concrete_st) (o2 o2':op_t)
                     eq (merge l a (do b o2)) (do (merge l a b) o2))
            (ensures eq (merge l a (do (do b o2') o2)) (do (merge l a (do b o2')) o2)) = ()
 
+#set-options "--z3rlimit 100"
 let one_op_ind_left (l a b:concrete_st) (o1 o1':op_t)
    : Lemma (requires distinct_ops o1 o1' /\ eq (merge l (do a o1) b) (do (merge l a b) o1))
            (ensures eq (merge l (do (do a o1') o1) b) (do (merge l (do a o1') b) o1)) = ()
