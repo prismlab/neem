@@ -1,10 +1,158 @@
 module Polymorphic_gmap
 
+(*module M = Dependent_map
+open FStar.Seq
+module S =  Set_extended
+
+//key type
+type key_t =
+  |Alpha_t
+  |Beta_t
+
+val concrete_st_a : eqtype
+
+val concrete_st_b : eqtype
+
+type kt = string & key_t
+
+//value type
+let vt (c:key_t) : eqtype = 
+  match c with
+  | Alpha_t -> concrete_st_a
+  | Beta_t -> concrete_st_b
+
+type concrete_st = M.t kt (fun (_,t) -> vt t)
+
+val init_st_a : concrete_st_a
+
+val init_st_b : concrete_st_b
+
+let init_st_v (c:key_t) : vt c =
+  match c with
+  |Alpha_t -> init_st_a
+  |Beta_t -> init_st_b
+
+let sel (s:concrete_st) (k:kt) : vt (snd k)  =
+    if M.contains s k then M.sel s k else (init_st_v (snd k))
+    
+let eq (a b:concrete_st) =
+  M.equal a b //(forall k t. M.contains a (k,t) = M.contains b (k,t)) /\
+  //(forall k t. M.contains a (k,t) ==> M.sel a (k,t) == M.sel b (k,t))
+
+let symmetric (a b:concrete_st) 
+  : Lemma (requires eq a b)
+          (ensures eq b a) = ()
+
+let transitive (a b c:concrete_st)
+  : Lemma (requires eq a b /\ eq b c)
+          (ensures eq a c) = ()
+
+let eq_is_equiv (a b:concrete_st)
+  : Lemma (requires a == b)
+          (ensures eq a b) = ()
+
+val app_op_a : eqtype
+
+val app_op_b : eqtype
+  
+type app_op_v : eqtype =
+  |Alpha_op : app_op_a -> app_op_v
+  |Beta_op : app_op_b -> app_op_v
+
+//operation type
+type app_op_t:eqtype =
+  |Set : string (* key *) -> app_op_v (* value op *) -> app_op_t
+  
+type op_t = pos (*timestamp*) & (nat (*replica ID*) & app_op_t)
+
+type op_v = pos (*timestamp*) & (nat (*replica ID*) & app_op_v)
+
+type op_a = pos (*timestamp*) & (nat (*replica ID*) & app_op_a)
+
+type op_b = pos (*timestamp*) & (nat (*replica ID*) & app_op_b)
+
+let is_alpha_op (o:op_t) =
+  match snd (snd o) with
+  |Set _ (Alpha_op _) -> true
+  |_ -> false
+
+let is_beta_op (o:op_t) = not (is_alpha_op o)
+  
+let get_op_a (o:op_t{is_alpha_op o}) : op_a =
+  match o with
+  |ts, (rid, Set _ (Alpha_op op)) -> (ts,(rid,op))
+
+let get_op_b (o:op_t{~ (is_alpha_op o)}) : op_b =
+  match o with
+  |ts, (rid, Set _ (Beta_op op)) -> (ts,(rid,op))
+
+val do_a (s:concrete_st_a) (o:op_a) : concrete_st_a
+
+val do_b (s:concrete_st_b) (o:op_b) : concrete_st_b
+
+(*let do_v (s:concrete_st_v) (o:op_t{(Alpha? s <==> is_alpha_op o) /\ (Beta? s <==> is_beta_op o)}) : concrete_st_v =
+  if is_alpha_op o then
+    let Alpha c = s in Alpha (do_a c (get_op_a o))
+  else let Beta c = s in Beta (do_b c (get_op_b o))*)
+
+let get_rid (_,(rid,_)) = rid
+
+let distinct_ops (ts1,_) (ts2,_) = ts1 =!= ts2
+
+let get_op_v (o:op_t) : op_v =
+  match o with
+  |(ts,(rid,(Set k op))) -> (ts,(rid,op))
+
+let do (s:concrete_st) (o:op_t(*{do_pre s o}*)) : concrete_st =
+  match o with
+    |_,(_,Set k (Alpha_op _)) -> M.upd s (k,Alpha_t) (do_a (sel s (k,Alpha_t)) (get_op_a o))
+    |_,(_,Set k (Beta_op _)) -> M.upd s (k,Beta_t) (do_b (sel s (k,Beta_t)) (get_op_b o))
+
+let get_key (_,(_,Set k _)) = k
+
+type rc_res =
+  |Fst_then_snd //o1 -> o2
+  |Snd_then_fst //o2 -> o1
+  |Either
+
+val rc_a (o1 o2:op_a) : rc_res
+
+val rc_b (o1 o2:op_b) : rc_res
+
+//conflict resolution
+let rc (o1 o2:op_t) : rc_res = 
+  match snd (snd o1), snd (snd o2) with
+  |Set k1 (Alpha_op _), Set k2 (Alpha_op _) -> if k1 = k2 then rc_a (get_op_a o1) (get_op_a o2) else Either
+  |Set k1 (Beta_op _), Set k2 (Beta_op _) -> if k1 = k2 then rc_b (get_op_b o1) (get_op_b o2) else Either
+  |_ -> Either
+
+val merge_a (l a b:concrete_st_a) : concrete_st_a 
+
+val merge_b (l a b:concrete_st_b) : concrete_st_b
+
+#set-options "--query_stats"
+// concrete merge operation
+let merge (l a b:concrete_st) : concrete_st =
+  let (keys:S.t kt) = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
+  let u = M.const_on keys (fun kt -> init_st_v (snd kt)) in
+  M.iter_upd (fun kt _ -> (if snd kt = Alpha_t then (merge_a (sel l kt) (sel a kt) (sel b kt))
+                           else (merge_b (sel l kt) (sel a kt) (sel b kt)))) u 
+
+let commutes_with (o1 o2:op_t) =
+  forall s. eq (do (do s o1) o2) (do (do s o2) o1)
+
+type log = seq op_t
+
+// applying a log of operations to a concrete state
+let rec apply_log (x:concrete_st) (l:log) : Tot concrete_st (decreases length l) =
+  match length l with
+  |0 -> x
+  |_ -> apply_log (do x (head l)) (tail l)  *)
+
 module S = Set_extended
 module M = Map_extended
 open FStar.Seq
 
-#set-options "--query_stats"
 //key type
 type key_t =
   |Alpha_t
@@ -30,7 +178,7 @@ val init_st_a : concrete_st_a
 
 val init_st_b : concrete_st_b
 
-let init_st_v (t:key_t) =
+let init_st_v (t:key_t) : concrete_st_v =
   match t with
   |Alpha_t -> Alpha init_st_a
   |Beta_t -> Beta init_st_b
@@ -117,7 +265,7 @@ type app_op_v : eqtype =
 
 //operation type
 type app_op_t:eqtype =
-  |Set : string (* key *) -> app_op_v (* value *) -> app_op_t
+  |Set : string (* key *) -> app_op_v (* value op *) -> app_op_t
   
 type op_t = pos (*timestamp*) & (nat (*replica ID*) & app_op_t)
 
@@ -146,16 +294,10 @@ val do_a (s:concrete_st_a) (o:op_a) : concrete_st_a
 
 val do_b (s:concrete_st_b) (o:op_b) : concrete_st_b
 
-let do_v (s:concrete_st_v) (o:op_t) : concrete_st_v =
-  match snd (snd o) with
-  |Set _ (Alpha_op _) -> begin match s with
-                        |Alpha c -> Alpha (do_a c (get_op_a o))
-                        |_ -> Alpha (do_a init_st_a (get_op_a o))
-                        end
-  |Set _ (Beta_op _) -> begin match s with
-                       |Beta c -> Beta (do_b c (get_op_b o))
-                       |_ -> Beta (do_b init_st_b (get_op_b o))
-                       end
+let do_v (s:concrete_st_v) (o:op_t{(Alpha? s <==> is_alpha_op o) /\ (Beta? s <==> is_beta_op o)}) : concrete_st_v =
+  if is_alpha_op o then
+    let Alpha c = s in Alpha (do_a c (get_op_a o))
+  else let Beta c = s in Beta (do_b c (get_op_b o))
 
 let get_rid (_,(rid,_)) = rid
 
@@ -182,7 +324,7 @@ val rc_a (o1 o2:op_a) : rc_res
 val rc_b (o1 o2:op_b) : rc_res
 
 //conflict resolution
-let rc (o1:op_t) (o2:op_t(*{distinct_ops o1 o2}*)) : rc_res = 
+let rc (o1 o2:op_t) : rc_res = 
   match snd (snd o1), snd (snd o2) with
   |Set k1 (Alpha_op _), Set k2 (Alpha_op _) -> if k1 = k2 then rc_a (get_op_a o1) (get_op_a o2) else Either
   |Set k1 (Beta_op _), Set k2 (Beta_op _) -> if k1 = k2 then rc_b (get_op_b o1) (get_op_b o2) else Either
@@ -195,7 +337,7 @@ val merge_b (l a b:concrete_st_b) : concrete_st_b
 // concrete merge operation
 let merge (l a b:concrete_st) : concrete_st =
   let keys = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
-  let u = M.const_on keys (0, false) in
+  let u = M.const_on keys init_st_a in
   M.iter_upd (fun (k,t) v -> if Alpha_t? t then Alpha (merge_a (sel_a l k) (sel_a a k) (sel_a b k))
                           else Beta (merge_b (sel_b l k) (sel_b a k) (sel_b b k))) u
 
@@ -1452,7 +1594,6 @@ let comm_inter_lca (l a b c:concrete_st) (o1 o2 ol:op_t)
   else if get_key o1 = k && get_key o2 = k && is_beta_op o1 && is_beta_op o2 && is_beta_op ol then
     comm_inter_lca_b (sel_b l k) (sel_b a k) (sel_b b k) (sel_b c k) (get_op_b o1) (get_op_b o2) (get_op_b ol) 
   else comm_inter_lca_ne l a b c o1 o2 ol
-
 
 
 
