@@ -177,14 +177,15 @@ let zero_op_inter_lca_v2_ne l a b c ol oi = ()
 let comm_ind_right_a l a b o1 o2 o2' = ()
 let comm_ind_right_b l a b o1 o2 o2' = 
   ()//assert (S.equal (S.union l (S.union (do_b a o1) (do_b (do_b b o2') o2))) (do_b (do_b (merge_b l a (do_b b o2')) o2) o1)); ()
-  
-let comm_ind_right_ne l a b o1 o2 o2' = admit()
+
+#set-options "--z3rlimit 100 --ifuel 3"
+let comm_ind_right_ne l a b o1 o2 o2' = ()
 
 let comm_ind_left_a l a b o1 o2 o1' = ()
 let comm_ind_left_b l a b o1 o2 o1' = 
   () //assert (S.equal (S.union l (S.union (do_b (do_b a o1') o1) (do_b b o2))) (do_b (do_b (merge_b l (do_b a o1') b) o2) o1)); ()
   
-let comm_ind_left_ne l a b o1 o2 o1' = admit()
+let comm_ind_left_ne l a b o1 o2 o1' = ()
 
 let comm_ind_lca_a l ol o1 o2 = ()
 let comm_ind_lca_b l ol o1 o2 = 

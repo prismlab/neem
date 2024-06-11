@@ -1099,8 +1099,8 @@ val comm_ind_right_ne (l a b:concrete_st) (o1 o2 o2':op_t)
   : Lemma (requires Either? (rc o1 o2) /\ 
                     distinct_ops o1 o2 /\ distinct_ops o1 o2' /\ distinct_ops o2 o2' /\
                     ~ (get_key o2 = get_key o2' && get_key o1 = get_key o2' /\
-                       (is_alpha_op o1 /\ is_alpha_op o2 /\ is_alpha_op o2') /\
-                       (is_beta_op o1 /\ is_beta_op o2 /\ is_beta_op o2')) /\
+                       (is_alpha_op o1 /\ is_alpha_op o2 /\ is_alpha_op o2' /\ Either? (rc_a (get_op_a o1) (get_op_a o2))) /\
+                       (is_beta_op o1 /\ is_beta_op o2 /\ is_beta_op o2' /\ Either? (rc_b (get_op_b o1) (get_op_b o2)))) /\
                     eq (merge l (do a o1) (do b o2)) (do (do (merge l a b) o2) o1) /\
                     (Fst_then_snd? (rc o2' o1) ==> (eq (merge l (do a o1) (do b o2')) (do (merge l a (do b o2')) o1))) /\
                     ~ (exists o3 a'. eq (do a o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
@@ -1145,8 +1145,8 @@ val comm_ind_left_ne (l a b:concrete_st) (o1 o2 o1':op_t)
   : Lemma (requires Either? (rc o1 o2) /\ 
                     distinct_ops o1 o2 /\ distinct_ops o1 o1' /\ distinct_ops o2 o1' /\
                     ~ (get_key o2 = get_key o1' && get_key o1 = get_key o1' /\
-                       (is_alpha_op o1 /\ is_alpha_op o2 /\ is_alpha_op o1') /\
-                       (is_beta_op o1 /\ is_beta_op o2 /\ is_beta_op o1')) /\
+                       (is_alpha_op o1 /\ is_alpha_op o2 /\ is_alpha_op o1' /\ Either? (rc_a (get_op_a o1) (get_op_a o2))) /\
+                       (is_beta_op o1 /\ is_beta_op o2 /\ is_beta_op o1' /\ Either? (rc_b (get_op_b o1) (get_op_b o2)))) /\
                     eq (merge l (do a o1) (do b o2)) (do (do (merge l a b) o2) o1) /\
                     (Fst_then_snd? (rc o1' o2) ==> (eq (merge l (do a o1') (do b o2)) (do (merge l (do a o1') b) o2))) /\
                     ~ (exists o3 a'. eq (do a o1) (do a' o3) /\ distinct_ops o2 o3 /\ Fst_then_snd? (rc o2 o3)) /\
