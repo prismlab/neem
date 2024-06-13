@@ -1,6 +1,6 @@
 module Set_extended
 
-val t (a:eqtype) : Type0
+val t (a:eqtype) : eqtype
 
 val empty (#a:eqtype) : t a
 val singleton (#a:eqtype) (x:a) : t a

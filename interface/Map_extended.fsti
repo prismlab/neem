@@ -197,10 +197,10 @@ val lemma_equal_intro': #key:eqtype -> #value:Type -> m1:t key value -> m2:t key
                                             contains m1 k = contains m2 k))
                              [SMTPat (equal m1 m2)]
 
-let equal_refl (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) :
+(*let equal_refl (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) :
     Lemma (requires m1 == m2)
           (ensures (forall k. sel m1 k == sel m2 k /\ contains m1 k = contains m2 k))
-          [SMTPat (m1 == m2)] = ()
+          [SMTPat (m1 == m2)] = ()*)
           
 (*[@@(deprecated "Use lemma_equal_elim instead")]
 val lemma_equal_refl: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->

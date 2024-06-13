@@ -47,7 +47,7 @@ let eq_b (a b:concrete_st_b) = a == b
 
 let eq (a b:concrete_st) =
   //M.equal a b
-  (forall k. M.contains a k = M.contains b k /\ sel a k == sel b k)
+  (forall k. M.contains a k == M.contains b k /\ sel a k == sel b k)
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -146,7 +146,7 @@ let compose_values (k:kt) (l a b:concrete_st) : vt k =
 let merge (l a b:concrete_st) : concrete_st =
   let keys = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
   let u = M.const_on keys (fun k -> init_st k) in
-  M.iter_upd (fun k _ -> compose_values k l a b) u
+  M.map (fun k _ -> compose_values k l a b) u
 
 let commutes_with_a (o1 o2:op_a) =
   forall s. eq_a (do_a (do_a s o1) o2) (do_a (do_a s o2) o1)
@@ -187,6 +187,7 @@ val cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:seq op_t)
           (ensures eq (do (do (apply_log (do (do s o1) o2) l) o) o3) (do (do (apply_log (do (do s o2) o1) l) o) o3))
                   
 ////////////////////////////////////////////////////////////////////////////
+
 
 //merge is commutative
 val merge_comm_a (l a b: concrete_st_a) 
@@ -1433,4 +1434,3 @@ let comm_inter_lca (l a b c:concrete_st) (o1 o2 ol:op_t)
   else if get_key o1 = k && get_key o2 = k && is_beta_op o1 && is_beta_op o2 && is_beta_op ol then
     comm_inter_lca_b (sel l kb) (sel a kb) (sel b kb) (sel c kb) (get_op_b o1) (get_op_b o2) (get_op_b ol) 
   else comm_inter_lca_ne l a b c o1 o2 ol
-
