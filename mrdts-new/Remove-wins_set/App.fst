@@ -12,7 +12,8 @@ let init_st : concrete_st = S.add (0,1) (S.add (0,2) S.empty)
 
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) =
-  S.equal a b
+  (forall e. S.mem e a = S.mem e b)
+  //S.equal a b
 
 let symmetric (a b:concrete_st) 
   : Lemma (requires eq a b)
@@ -58,16 +59,17 @@ let merge (l a b:concrete_st) : concrete_st =
 
 /////////////////////////////////////////////////////////////////////////////
 
+#set-options "--z3rlimit 300 --ifuel 3"
 let rc_non_comm_help1 (o1 o2:op_t)
   : Lemma (requires distinct_ops o1 o2)
           (ensures ((Add1? (snd (snd o1)) /\ Rem1? (snd (snd o2))) \/ (Rem1? (snd (snd o1)) /\ Add1? (snd (snd o2))))
                            ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))) = ()
-         
+
 let rc_non_comm_help2 (o1 o2:op_t)
   : Lemma (requires distinct_ops o1 o2)
           (ensures ((Add2? (snd (snd o1)) /\ Rem2? (snd (snd o2))) \/ (Rem2? (snd (snd o1)) /\ Add2? (snd (snd o2))))
                            ==> ~ (eq (do (do init_st o1) o2) (do (do init_st o2) o1))) = ()
-          
+
 let rc_non_comm (o1 o2:op_t)
   : Lemma (requires distinct_ops o1 o2)
           (ensures Either? (rc o1 o2) <==> commutes_with o1 o2) = 
@@ -78,16 +80,17 @@ let no_rc_chain (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3)
           (ensures ~ (Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc o2 o3))) = ()
 
-let cond_comm_base (s:concrete_st) (o1 o2:op_t) (o3:op_t{distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3})
-    : (b:bool{(Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3))) ==> eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)}) = 
-    if ((Add1? (snd (snd o3)) && (Add1? (snd (snd o1)) || Rem1? (snd (snd o1)))) || 
-      (Add2? (snd (snd o3)) && (Add2? (snd (snd o1)) || Rem2? (snd (snd o1))))) then true else false
+let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t) 
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ distinct_ops o1 o3 /\
+                    Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
+          (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
 let cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:seq op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\ cond_comm_base s o1 o2 o3 /\
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\ 
+                    Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)) /\
                     eq (do (apply_log (do (do s o1) o2) l) o3) (do (apply_log (do (do s o2) o1) l) o3))
           (ensures eq (do (do (apply_log (do (do s o1) o2) l) o) o3) (do (do (apply_log (do (do s o2) o1) l) o) o3)) = ()
-                   
+
 /////////////////////////////////////////////////////////////////////////////
 // Merge commutativity
 let merge_comm (l a b:concrete_st)
@@ -97,7 +100,6 @@ let merge_comm (l a b:concrete_st)
 let merge_idem (s:concrete_st)
    : Lemma (ensures eq (merge s s s) s) = ()
 
-#push-options "--z3rlimit 100 --max_ifuel 3"
 (*Two OP RC*)
 //////////////// 
 let rc_ind_right (l a b:concrete_st) (o1 o2 o2':op_t)
@@ -138,7 +140,7 @@ let rc_inter_base_left (l a b c:concrete_st) (o1 o2 ob ol:op_t)
                     eq (merge l (do a o1) (do b o2)) (do (do c o1) o2) /\
                     eq (merge l (do a ob) (do b ol)) (do (do c ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do (do a ob) ol) o1) (do (do b ol) o2)) (do (do (do (do c ob) ol) o1) o2)) = ()
-          
+
 let rc_inter_right (l a b c:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc ob ol) /\ 
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o1 o /\ distinct_ops o2 ob /\ 
@@ -175,7 +177,7 @@ let one_op_ind_right (l a b c:concrete_st) (o2 o2':op_t)
 let one_op_ind_left (l a b c:concrete_st) (o1 o1':op_t)
    : Lemma (requires eq (merge l (do a o1) b) (do (merge l a b) o1))
            (ensures eq (merge l (do (do a o1') o1) b) (do (merge l (do a o1') b) o1)) = ()
-           
+
 let one_op_ind_lca (l:concrete_st) (o2 o:op_t)
   : Lemma (requires eq (merge l l (do l o2)) (do l o2))
           (ensures eq (merge (do l o) (do l o) (do (do l o) o2)) (do (do l o) o2)) = () 
@@ -197,8 +199,8 @@ let one_op_inter_base_left (l a b c:concrete_st) (o2 ob ol:op_t)
                     eq (merge (do l ol) (do a ol) (do (do b ol) o2)) (do (do c ol) o2) /\
                     (Fst_then_snd? (rc ob o2) ==> eq (merge l (do a o2) (do b ob)) (do (merge l a (do b ob)) o2)) /\ //***EXTRA***
                     eq (merge l a (do b o2)) (do c o2) /\
-                    eq (merge l (do a ol) (do b ob)) (do (do c ob) ol) /\ //***EXTRA***
-                    eq (merge l (do (do a ob) ol) (do b ol)) (do (do c ob) ol)) //***EXTRA***
+                    eq (merge l (do a ob) (do b o2)) (do (do c ob) o2) /\ //EXTRA!! 
+                    eq (merge l (do a ob) (do b ol)) (do (do c ob) ol)) //***EXTRA***
           (ensures eq (merge (do l ol) (do (do a ob) ol) (do (do b ol) o2)) (do (do (do c ob) ol) o2)) = ()
 
 let one_op_inter_right (l a b c:concrete_st) (o2 ob ol o:op_t) 
@@ -208,7 +210,7 @@ let one_op_inter_right (l a b c:concrete_st) (o2 ob ol o:op_t)
                     ((~ (commutes_with o ob)) \/ Fst_then_snd? (rc o ol)) /\
                     eq (merge (do l ol) (do a ol) (do (do (do b ob) ol) o2)) (do (do (do c ob) ol) o2))
           (ensures eq (merge (do l ol) (do a ol) (do (do (do (do b o) ob) ol) o2)) (do (do (do (do c o) ob) ol) o2)) = ()
-          
+
 let one_op_inter_left (l a b c:concrete_st) (o2 ob ol o:op_t) 
   : Lemma (requires Fst_then_snd? (rc ob ol) /\
                     distinct_ops o ob /\ distinct_ops o ol /\ distinct_ops o ol /\ distinct_ops ob ol /\ distinct_ops ob o2 /\ distinct_ops o2 ol /\
@@ -384,5 +386,3 @@ let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)
   assert (Rem1? (snd (snd op)) ==> S.mem (fst op, 1) (do st op)); 
   assert (Rem2? (snd (snd op)) ==> S.mem (fst op, 2) (do st op)); 
   ()
-
-////////////////////////////////////////////////////////////////
