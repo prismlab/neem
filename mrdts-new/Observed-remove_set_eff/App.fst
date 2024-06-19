@@ -21,11 +21,11 @@ let sel (s:concrete_st) e = if M.contains s e then M.sel s e else (M.const (0, f
 
 // equivalence relation of ew flag
 let eq_e (a b:M.t nat cf) =
-  (forall id. (M.contains a id = M.contains b id) /\ (sel_id a id == sel_id b id))
+  (forall id. M.contains a id = M.contains b id /\ sel_id a id == sel_id b id)
   
 // equivalence between 2 concrete states
 let eq (a b:concrete_st) =
- (forall e. (M.contains a e = M.contains b e) /\ eq_e (sel a e) (sel b e))
+ (forall e. M.contains a e = M.contains b e /\ eq_e (sel a e) (sel b e))
  //(forall k. (M.contains a k = M.contains b k) /\ eq_e (sel a k) (sel b k)) 
 
 let symmetric (a b:concrete_st) 
@@ -107,11 +107,11 @@ let cond_comm_base (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3)) = ()
 
-//todo
+#push-options "--z3rlimit 100 --max_ifuel 3"
 let cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:seq op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)) /\
                     eq (do (apply_log (do (do s o1) o2) l) o3) (do (apply_log (do (do s o2) o1) l) o3))
-          (ensures eq (do (do (apply_log (do (do s o1) o2) l) o) o3) (do (do (apply_log (do (do s o2) o1) l) o) o3)) = admit()
+          (ensures eq (do (do (apply_log (do (do s o1) o2) l) o) o3) (do (do (apply_log (do (do s o2) o1) l) o) o3)) = ()
 
 /////////////////////////////////////////////////////////////////////////////
 // Merge commutativity
@@ -124,7 +124,6 @@ let merge_idem (s:concrete_st)
 
 (*Two OP RC*)
 //////////////// 
-#push-options "--z3rlimit 100 --max_ifuel 3"
 let rc_ind_right (l a b:concrete_st) (o1 o2 o2':op_t)
   : Lemma (requires Fst_then_snd? (rc o1 o2) /\
                     eq (merge l (do a o1) (do b o2)) (do (merge l (do a o1) b) o2))
@@ -570,9 +569,45 @@ let comm_inter_left' (l a b c:concrete_st) (o1 o2 ob ol o:op_t)
   else if get_ele o1 = get_ele ol then admit() //done
   else admit() //done
 
+
+let merge_pre l a b =
+  (forall ele. M.contains l ele <==> (M.contains a ele /\ M.contains b ele)) /\
+  (forall ele id. M.contains l ele ==> (M.contains (sel l ele) id <==> (M.contains (sel a ele) id /\ M.contains (sel b ele) id))) /\
+  (forall ele id. M.contains l ele /\ M.contains (sel l ele) id ==>
+             fst (sel_id (sel l ele) id) <= fst (sel_id (sel a ele) id) /\
+             fst (sel_id (sel l ele) id) <= fst (sel_id (sel b ele) id))
+
 //todo
-let comm_inter_lca (l a b c:concrete_st) (o1 o2 ol:op_t)
-  : Lemma (requires Either? (rc o1 o2) /\
+let comm_inter_lca' (l a b c:concrete_st) (o1 o2 ol:op_t)
+  : Lemma (requires Either? (rc o1 o2) /\ get_rid o1 <> get_rid o2 /\
+                    //Rem? (snd (snd o1)) /\ Rem? (snd (snd o2)) /\ get_ele o1 = get_ele o2 /\ //done
+                    //Rem? (snd (snd o1)) /\ Rem? (snd (snd o2)) /\ get_ele o1 <> get_ele o2 /\ get_ele o1 = get_ele ol /\ //not done
+                    //Add? (snd (snd o1)) /\ Add? (snd (snd o2)) /\ get_ele o1 <> get_ele o2 /\
+                    Add? (snd (snd ol)) /\ 
+                    //(exists o'. Fst_then_snd? (rc o' ol)) /\
+                    //l == init_st /\ a == init_st /\
+                    ~ (Fst_then_snd? (rc o1 ol)) /\  ~ (Fst_then_snd? (rc o2 ol)) /\
+                    //merge_pre l (do a o1) (do b o2) /\
+                    //merge_pre (do l ol) (do (do a ol) o1) (do (do b ol) o2) /\
+                    //eq (merge (do l ol) (do (do l ol) o1) (do (do l ol) o2)) (do (do (do l ol) o1) o2) /\
                     eq (merge l (do a o1) (do b o2)) (do (do c o1) o2))
-          (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do b ol) o2)) (do (do (do c ol) o1) o2)) = admit()
+          (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do b ol) o2)) (do (do (do c ol) o1) o2)) = 
+  let lhs = merge (do l ol) (do (do a ol) o1) (do (do b ol) o2) in
+  let rhs = do (do (do c ol) o1) o2 in
+  assume (forall k. M.contains lhs k = M.contains rhs k);
+  assume (forall ele rid. M.contains lhs ele ==> (M.contains (sel lhs ele) rid = M.contains (sel rhs ele) rid));
+  assume (forall rid. fst (sel_id (sel lhs (get_ele o1)) rid) = fst (sel_id (sel rhs (get_ele o1)) rid));
+  assume (forall rid. fst (sel_id (sel lhs (get_ele o2)) rid) = fst (sel_id (sel rhs (get_ele o2)) rid)); 
+  assume (forall rid. fst (sel_id (sel lhs (get_ele ol)) rid) = fst (sel_id (sel rhs (get_ele ol)) rid));
+  assume (forall ele rid. (ele <> get_ele o1 /\ ele <> get_ele o2 /\ ele <> get_ele ol) ==>
+                     fst (sel_id (sel lhs ele) rid) = fst (sel_id (sel rhs ele) rid)); 
+  assume (forall ele rid. fst (sel_id (sel lhs ele) rid) = fst (sel_id (sel rhs ele) rid)); 
+  assume (forall rid. snd (sel_id (sel lhs (get_ele o1)) rid) == snd (sel_id (sel rhs (get_ele o1)) rid));  //works  with fts pre
+  assume (forall rid. snd (sel_id (sel lhs (get_ele o2)) rid) == snd (sel_id (sel rhs (get_ele o2)) rid)); 
+  assume (forall rid. snd (sel_id (sel lhs (get_ele ol)) rid) == snd (sel_id (sel rhs (get_ele ol)) rid)); 
+  assume (forall ele rid. (ele <> get_ele o1 /\ ele <> get_ele o2 /\  ele <> get_ele ol) ==>
+                     snd (sel_id (sel lhs ele) rid) == snd (sel_id (sel rhs ele) rid));
+  assert (forall ele rid. snd (sel_id (sel lhs ele) rid) == snd (sel_id (sel rhs ele) rid));
+  ()
 ////////////////////////////////////////////////////////////////
+
