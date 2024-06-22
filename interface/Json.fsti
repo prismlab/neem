@@ -2,7 +2,7 @@ module Json
 
 module M = Dependent_map
 open FStar.Seq
-module S = FStar.Set //Set_extended
+module S = Set_extended
 
 type kt : eqtype =
   |Alpha_t : string -> kt
@@ -322,6 +322,7 @@ val inter_right_base_2op' (l a b :concrete_st) (o1 o2 ob ol:op_t)
                     eq (merge (do l ol) (do (do a ol) o1) (do (do b ol) o2)) (do (merge (do l ol) (do a ol) (do (do b ol) o2)) o1))
           (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do (do b ob) ol) o2)) (do (merge (do l ol) (do a ol) (do (do (do b ob) ol) o2)) o1))
 
+#set-options "--z3rlimit 100 --ifuel 3"
 let inter_right_base_2op (l a b :concrete_st) (o1 o2 ob ol:op_t)
   : Lemma (requires (Fst_then_snd? (rc o2 o1) \/ Either? (rc o2 o1)) /\ get_rid o1 <> get_rid o2 /\ Fst_then_snd? (rc ob ol) /\ get_rid ob <> get_rid ol /\
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o2 ob /\ distinct_ops o2 ol /\ distinct_ops ob ol /\
@@ -391,6 +392,7 @@ val inter_right_2op_b (l a b :concrete_st_b) (o1 o2 ob ol o:op_b)
           
 val inter_right_2op' (l a b :concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires Either? (rc o2 o1) /\ get_rid o1 <> get_rid o2 /\ Fst_then_snd? (rc ob ol) /\ get_rid ob <> get_rid ol /\
+                    (~ (Either? (rc o ob)) \/ Fst_then_snd? (rc o ol)) /\
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o1 o /\ distinct_ops o2 ob /\ distinct_ops o2 ol /\ distinct_ops o2 o /\ distinct_ops ob ol /\ distinct_ops ob o /\ distinct_ops ol o /\
                     get_rid o <> get_rid ol /\
                     ~ (get_key o1 = get_key o && get_key o2 = get_key o /\ get_key ob = get_key o /\ get_key ol = get_key o /\
@@ -547,12 +549,14 @@ let ind_lca_1op (l:concrete_st) (o1 ol:op_t)
 val inter_right_base_1op_a (l a b :concrete_st_a) (o1 ob ol:op_a)
   : Lemma (requires Fst_then_snd? (rc_a ob ol) /\ get_rid ob <> get_rid ol /\
                     distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops ob ol /\
+                    (Fst_then_snd? (rc_a ob o1) ==> eq_a (merge_a l (do_a a o1) (do_a b ob)) (do_a (merge_a l a (do_a b ob)) o1)) /\ //from app.fsti
                     eq_a (merge_a (do_a l ol) (do_a (do_a a ol) o1) (do_a b ol)) (do_a (merge_a (do_a l ol) (do_a a ol) (do_a b ol)) o1))
           (ensures eq_a (merge_a (do_a l ol) (do_a (do_a a ol) o1) (do_a (do_a b ob) ol)) (do_a (merge_a (do_a l ol) (do_a a ol) (do_a (do_a b ob) ol)) o1))
 
 val inter_right_base_1op_b (l a b :concrete_st_b) (o1 ob ol:op_b)
   : Lemma (requires Fst_then_snd? (rc_b ob ol) /\ get_rid ob <> get_rid ol /\
                     distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops ob ol /\
+                    (Fst_then_snd? (rc_b ob o1) ==> eq_b (merge_b l (do_b a o1) (do_b b ob)) (do_b (merge_b l a (do_b b ob)) o1)) /\ //from app.fsti
                     eq_b (merge_b (do_b l ol) (do_b (do_b a ol) o1) (do_b b ol)) (do_b (merge_b (do_b l ol) (do_b a ol) (do_b b ol)) o1))
           (ensures eq_b (merge_b (do_b l ol) (do_b (do_b a ol) o1) (do_b (do_b b ob) ol)) (do_b (merge_b (do_b l ol) (do_b a ol) (do_b (do_b b ob) ol)) o1))
           
