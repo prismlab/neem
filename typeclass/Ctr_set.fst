@@ -14,6 +14,8 @@ let no_rc_chain o1 o2 o3 = ()
 let cond_comm_base s o1 o2 o3 = ()
 let cond_comm_ind s o1 o2 o3 o l = ()
 
+let base_2op' o1 o2 t = ()
+
 #set-options "--z3rlimit 100 --ifuel 3"
 instance ictr_set : json C.st S.st C.app_op S.app_op = {
   Json1.init_st_a = C.init_st;
@@ -41,5 +43,8 @@ instance ictr_set_proof : vc C.st S.st C.app_op S.app_op ictr_set = {
   Json1.merge_comm_a = C.merge_comm;
   Json1.merge_comm_b = S.merge_comm;
   Json1.merge_idem_a = C.merge_idem;
-  Json1.merge_idem_b = S.merge_idem
+  Json1.merge_idem_b = S.merge_idem;
+  Json1.base_2op_a = C.base_2op;
+  Json1.base_2op_b = S.base_2op;
+  Json1.base_2op';
 }

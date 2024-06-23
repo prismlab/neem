@@ -9,8 +9,6 @@ type kt : eqtype =
   |Alpha_t : string -> kt
   |Beta_t : string -> kt
 
-let get_rid (_,(rid,_)) = rid
-
 type log = seq (pos & (nat & eqtype))
 
 class json (st_a st_b:Type0) (app_op_a app_op_b:eqtype) = {   
@@ -81,7 +79,10 @@ type op (#o_a #o_b:eqtype) = pos (*timestamp*) & (nat (*replica ID*) & app_op #o
 type op_a (#o_a:eqtype) = pos (*timestamp*) & (nat (*replica ID*) & o_a)
 type op_b (#o_b:eqtype) = pos (*timestamp*) & (nat (*replica ID*) & o_b)
 
-let distinct_ops (op1 op2:op) = fst op1 =!= fst op2
+let distinct_ops (#o:eqtype) (op1 op2:(pos & (nat & o))) = fst op1 =!= fst op2
+
+//val get_rid : #o:eqtype -> pos -> nat -> o -> nat
+//let get_rid (_,(rid,_)) = rid
 
 let is_alpha_op (o:op) =
   match snd (snd o) with
@@ -197,8 +198,38 @@ class vc (st_a st_b:Type0) (o_a o_b:eqtype) (m:json st_a st_b o_a o_b) = {
         //[SMTPat (m.merge_a l a b)];
 
  merge_idem_b : s:st_b ->
-  Lemma (ensures m.eq_b (m.merge_b s s s) s)
+  Lemma (ensures m.eq_b (m.merge_b s s s) s);
         //[SMTPat (m.merge_b l a b)]
+
+ base_2op_a : o1:op_a -> o2:op_a ->
+  Lemma (requires (Fst_then_snd? (rc_a #st_a #st_b #o_a #o_b #m o2 o1) \/ Either? (rc_a #st_a #st_b #o_a #o_b #m o2 o1)) /\ get_rid o1 <> get_rid o2 /\ distinct_ops o1 o2)
+        (ensures m.eq_a (m.merge_a m.init_st_a (m.do_a m.init_st_a o1) (m.do_a m.init_st_a o2)) 
+                      (m.do_a (m.merge_a m.init_st_a m.init_st_a (m.do_a m.init_st_a o2)) o1));
+
+ base_2op_b : o1:op_b -> o2:op_b ->
+  Lemma (requires (Fst_then_snd? (rc_b #st_a #st_b #o_a #o_b #m o2 o1) \/ Either? (rc_b #st_a #st_b #o_a #o_b #m o2 o1)) /\ get_rid o1 <> get_rid o2 /\ distinct_ops o1 o2)
+        (ensures m.eq_b (m.merge_b m.init_st_b (m.do_b m.init_st_b o1) (m.do_b m.init_st_b o2)) 
+                      (m.do_b (m.merge_b m.init_st_b m.init_st_b (m.do_b m.init_st_b o2)) o1));
+
+ base_2op' : o1:op -> o2:op -> t:kt ->
+   Lemma (requires Either? (rc #st_a #st_b #o_a #o_b #m o2 o1) /\ get_rid o1 <> get_rid o2 /\ distinct_ops o1 o2 /\
+                    ~ (get_key o1 = get_key o2 /\ 
+                       is_alpha_op o1 /\ is_alpha_op o2 /\ (Fst_then_snd? (m.rc_a (get_op_a o2) (get_op_a o1)) || Either? (m.rc_a (get_op_a o2) (get_op_a o1))) /\
+                       is_beta_op o1 /\ is_beta_op o2 /\ (Fst_then_snd? (m.rc_b (get_op_b o2) (get_op_b o1)) || Either? (m.rc_b (get_op_b o2) (get_op_b o1)))))                
+          (ensures eq (merge (init_st t) (do (init_st t) o1) (do (init_st t) o2)) 
+                      (do #st_a #st_b #o_a #o_b #m (merge (init_st t) (init_st t) (do (init_st t) o2)) o1));
+
+ ind_right_2op_a : l:st_a -> a:st_a -> b:st_a -> o1:op_a -> o2:op_a -> o2':op_a ->
+  Lemma (requires Fst_then_snd? (m.rc_a o2 o1) /\ get_rid o1 <> get_rid o2 /\
+                    distinct_ops o1 o2 /\ distinct_ops o1 o2' /\ distinct_ops o2 o2' /\
+                    m.eq_a (m.merge_a l (m.do_a a o1) (m.do_a b o2)) (m.do_a (m.merge_a l a (m.do_a b o2)) o1))
+         (ensures m.eq_a (m.merge_a l (m.do_a a o1) (m.do_a (m.do_a b o2') o2)) (m.do_a (m.merge_a l a (m.do_a (m.do_a b o2') o2)) o1));
+
+ ind_right_2op_b : l:st_b -> a:st_b -> b:st_b -> o1:op_b -> o2:op_b -> o2':op_b ->
+   Lemma (requires Fst_then_snd? (m.rc_b o2 o1) /\ get_rid o1 <> get_rid o2 /\
+                    distinct_ops o1 o2 /\ distinct_ops o1 o2' /\ distinct_ops o2 o2' /\
+                    m.eq_b (m.merge_b l (m.do_b a o1) (m.do_b b o2)) (m.do_b (m.merge_b l a (m.do_b b o2)) o1))
+         (ensures m.eq_b (m.merge_b l (m.do_b a o1) (m.do_b (m.do_b b o2') o2)) (m.do_b (m.merge_b l a (m.do_b (m.do_b b o2') o2)) o1))
 }
 
 #set-options "--z3rlimit 100 --ifuel 3"
@@ -235,6 +266,34 @@ val merge_idem : #st_a:Type0 -> #st_b:Type0 -> #o_a:eqtype -> #o_b:eqtype -> #m:
   Lemma (ensures (eq (merge s s s) s))
 let merge_idem #st_a #st_b #o_a #o_b #m #v s
   :  Lemma (ensures (eq (merge s s s) s)) = ()
+
+val base_2op : #st_a:Type0 -> #st_b:Type0 -> #o_a:eqtype -> #o_b:eqtype -> #m:(json st_a st_b o_a o_b) -> #v:(vc st_a st_b o_a o_b m) -> o1:op -> o2:op -> t:kt -> 
+  Lemma (requires (Fst_then_snd? (rc #st_a #st_b #o_a #o_b #m o2 o1) \/ Either? (rc #st_a #st_b #o_a #o_b #m o2 o1)) /\ get_rid o1 <> get_rid o2 /\
+                    distinct_ops o1 o2)
+          (ensures eq (merge (init_st t) (do (init_st t) o1) (do (init_st t) o2)) 
+                      (do #st_a #st_b #o_a #o_b #m (merge (init_st t) (init_st t) (do (init_st t) o2)) o1))                     
+let base_2op #st_a #st_b #o_a #o_b #m #v o1 o2 t =
+  if get_key o1 = get_key o2 && is_alpha_op o1 && is_alpha_op o2 then
+    v.base_2op_a (get_op_a o1) (get_op_a o2) 
+  else if get_key o1 = get_key o2 && is_beta_op o1 && is_beta_op o2 then
+    v.base_2op_b (get_op_b o1) (get_op_b o2) 
+  else if Either? (rc #st_a #st_b #o_a #o_b #m o2 o1) then v.base_2op' o1 o2 t
+  else ()
+
+val ind_right_2op : #st_a:Type0 -> #st_b:Type0 -> #o_a:eqtype -> #o_b:eqtype -> #m:(json st_a st_b o_a o_b) -> #v:(vc st_a st_b o_a o_b m) -> l:st #st_a #st_b #o_a #o_b #m -> a:st #st_a #st_b #o_a #o_b #m -> b:st #st_a #st_b #o_a #o_b #m -> o1:op -> o2:op -> o2':op -> 
+  Lemma (requires Fst_then_snd? (rc #st_a #st_b #o_a #o_b #m o2 o1) /\ get_rid o1 <> get_rid o2 /\
+                    distinct_ops o1 o2 /\ distinct_ops o1 o2' /\ distinct_ops o2 o2' /\
+                    eq (merge l (do a o1) (do b o2)) (do (merge l a (do b o2)) o1))
+          (ensures eq (merge l (do a o1) (do (do b o2') o2)) (do (merge l a (do (do b o2') o2)) o1))
+          
+let ind_right_2op #st_a #st_b #o_a #o_b #m #v l a b o1 o2 o2' =
+  let k = get_key o2' in
+  let ka = Alpha_t k in let kb = Beta_t k in
+  if get_key o1 = k && get_key o2 = k && is_alpha_op o1 && is_alpha_op o2 && is_alpha_op o2' && Fst_then_snd? (m.rc_a (get_op_a o2) (get_op_a o1)) then
+      v.ind_right_2op_a (sel l ka) (sel a ka) (sel b ka) (get_op_a o1) (get_op_a o2) (get_op_a o2')
+  else if get_key o1 = k && get_key o2 = k && is_beta_op o1 && is_beta_op o2 && is_beta_op o2' && Fst_then_snd? (m.rc_b (get_op_b o2) (get_op_b o1)) then
+      v.ind_right_2op_b (sel l kb) (sel a kb) (sel b kb) (get_op_b o1) (get_op_b o2) (get_op_b o2')
+  else ()
   
 (*class vc (st:Type0) (app_op:eqtype) (m:mrdt st app_op) = {
   merge_comm : l:st -> a:st -> b:st ->
