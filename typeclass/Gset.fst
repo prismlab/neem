@@ -10,7 +10,7 @@ type app_op =
   
 let init_st = S.empty
 
-let eq (a b:st) : Type0 = a == b
+let eq (a b:st) : Type0 = S.equal a b
 
 let rc o1 o2 = Either
   

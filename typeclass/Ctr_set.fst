@@ -22,10 +22,10 @@ let inter_right_2op' l a b o1 o2 ob ol o = ()
 let inter_left_2op' l a b o1 o2 ob ol o = ()
 let ind_right_2op' l a b o1 o2 o2' = ()
 let ind_left_2op' l a b o1 o2 o1' = ()
-let ind_right_1op' l a b o2 o2' ol = ()
+let ind_right_1op' l a b o2 o2' ol = ()        
 let ind_left_1op' l a b o1 o1' ol = ()
 
-#set-options "--z3rlimit 100 --ifuel 3"
+#set-options "--z3rlimit 200 --ifuel 3"
 instance ictr_set : json C.st S.st C.app_op S.app_op = {
   Json1.init_st_a = C.init_st;
   Json1.init_st_b = S.init_st;
@@ -99,10 +99,3 @@ instance ictr_set_proof : vc C.st S.st C.app_op S.app_op ictr_set = {
   Json1.ind_left_1op'
 }
  
-instance json #st_a #st_b #o_a #o_b #m: L.mrdt st app_op = {
-  Library.init_st = admit();
-  Library.eq;
-  Library.rc = rc #st_a #st_b #o_a #o_b #m;
-  Library.do;
-  Library.merge = merge #st_a #st_b #o_a #o_b #m
-}

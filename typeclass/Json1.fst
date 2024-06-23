@@ -729,7 +729,7 @@ let inter_left_1op #st_a #st_b #o_a #o_b #m #v l a b o1 ob ol o =
   else if get_key o1 = k && get_key ob = k && get_key ol = k && is_beta_op o1 && is_beta_op ob && is_beta_op ol && is_beta_op o && Fst_then_snd? (m.rc_b (get_op_b ob) (get_op_b ol)) && (Fst_then_snd? (m.rc_b (get_op_b o) (get_op_b ob)) || Snd_then_fst? (m.rc_b (get_op_b o) (get_op_b ob)) || Fst_then_snd? (m.rc_b (get_op_b o) (get_op_b ol))) then
     v.inter_left_1op_b (sel l kb) (sel a kb) (sel b kb) (get_op_b o1) (get_op_b ob) (get_op_b ol) (get_op_b o)
   else ()
-  
+
 val ind_right_1op : #st_a:Type0 -> #st_b:Type0 -> #o_a:eqtype -> #o_b:eqtype -> #m:(json st_a st_b o_a o_b) -> #v:(vc st_a st_b o_a o_b m) -> l:st #st_a #st_b #o_a #o_b #m -> a:st -> b:st -> o2:op -> o2':op -> ol:op ->
   Lemma (requires distinct_ops o2 o2' /\ distinct_ops o2 ol /\ distinct_ops o2' ol /\
                   eq (merge (do l ol) (do a ol) (do b o2)) (do (merge (do l ol) (do a ol) b) o2))
