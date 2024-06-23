@@ -22,6 +22,8 @@ let inter_right_2op' l a b o1 o2 ob ol o = ()
 let inter_left_2op' l a b o1 o2 ob ol o = ()
 let ind_right_2op' l a b o1 o2 o2' = ()
 let ind_left_2op' l a b o1 o2 o1' = ()
+let ind_right_1op' l a b o2 o2' ol = ()
+let ind_left_1op' l a b o1 o1' ol = ()
 
 #set-options "--z3rlimit 100 --ifuel 3"
 instance ictr_set : json C.st S.st C.app_op S.app_op = {
@@ -68,6 +70,24 @@ instance ictr_set_proof : vc C.st S.st C.app_op S.app_op ictr_set = {
   Json1.ind_right_2op_b = S.ind_right_2op;
   Json1.ind_left_2op_a = C.ind_left_2op;
   Json1.ind_left_2op_b = S.ind_left_2op;
+  Json1.base_1op_a = C.base_1op;
+  Json1.base_1op_b = S.base_1op;
+  Json1.ind_lca_1op_a = C.ind_lca_1op;
+  Json1.ind_lca_1op_b = S.ind_lca_1op;
+  Json1.inter_right_base_1op_a = C.inter_right_base_1op;
+  Json1.inter_right_base_1op_b = S.inter_right_base_1op;
+  Json1.inter_left_base_1op_a = C.inter_left_base_1op;
+  Json1.inter_left_base_1op_b = S.inter_left_base_1op;
+  Json1.inter_right_1op_a = C.inter_right_1op;
+  Json1.inter_right_1op_b = S.inter_right_1op;
+  Json1.inter_left_1op_a = C.inter_left_1op;
+  Json1.inter_left_1op_b = S.inter_left_1op;
+  Json1.ind_right_1op_a = C.ind_right_1op;
+  Json1.ind_right_1op_b = S.ind_right_1op;
+  Json1.ind_left_1op_a = C.ind_left_1op;
+  Json1.ind_left_1op_b = S.ind_left_1op;
+  Json1.lem_0op_a = C.lem_0op;
+  Json1.lem_0op_b = S.lem_0op;
   
   Json1.base_2op';
   Json1.ind_lca_2op';
@@ -75,6 +95,8 @@ instance ictr_set_proof : vc C.st S.st C.app_op S.app_op ictr_set = {
   Json1.inter_left_base_2op';
   Json1.inter_right_2op'; 
   Json1.inter_left_2op';
+  Json1.ind_right_1op';
+  Json1.ind_left_1op'
 }
  
 instance json #st_a #st_b #o_a #o_b #m: L.mrdt st app_op = {
