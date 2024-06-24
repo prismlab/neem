@@ -66,7 +66,7 @@ let ind_left_1op l a b o1 o1' ol = ()
 let ind_right_1op l a b o2 o2' ol = ()
 let lem_0op l a b ol = ()
 
-instance ictr : mrdt st app_op = {
+instance orset : mrdt st app_op = {
   Library.init_st;
   Library.eq;
   Library.rc;
@@ -74,14 +74,14 @@ instance ictr : mrdt st app_op = {
   Library.merge
 }
 
-instance ictr_cond : cond st app_op ictr = {
+instance orset_cond : cond st app_op orset = {
   Library.rc_non_comm;
   Library.no_rc_chain;
   Library.cond_comm_base;
   Library.cond_comm_ind
 }
 
-instance ictr_proof : vc st app_op ictr = {
+instance orset_proof : vc st app_op orset = {
   Library.merge_comm;
   Library.merge_idem;
   Library.base_2op;
