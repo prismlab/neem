@@ -127,8 +127,8 @@ val inter_left_2op (l a b:concrete_st) (o1 o2 ob ol o:op_t)
                     (~ (Either? (rc o ob)) \/ Fst_then_snd? (rc o ol)) /\
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o1 o /\ distinct_ops o2 ob /\ distinct_ops o2 ol /\ distinct_ops o2 o /\ distinct_ops ob ol /\ distinct_ops ob o /\ distinct_ops ol o /\
                     get_rid o <> get_rid ol /\ //from app.fsti
-                    eq (merge (do l ol) (do (do a ol) o1) (do (do (do b ob) ol) o2)) (do (merge (do l ol) (do a ol) (do (do (do b ob) ol) o2)) o1))
-          (ensures eq (merge (do l ol) (do (do (do a o) ol) o1) (do (do (do b ob) ol) o2)) (do (merge (do l ol) (do (do a o) ol) (do (do (do b ob) ol) o2)) o1))
+                    eq (merge (do l ol) (do (do (do a ob) ol) o1) (do (do b ol) o2)) (do (merge (do l ol) (do (do a ob) ol) (do (do b ol) o2)) o1))
+          (ensures eq (merge (do l ol) (do (do (do (do a o) ob) ol) o1) (do (do b ol) o2)) (do (merge (do l ol) (do (do (do a o) ob) ol) (do (do b ol) o2)) o1))
 
 val ind_right_2op (l a b:concrete_st) (o1 o2 o2':op_t)
   : Lemma (requires Fst_then_snd? (rc o2 o1) /\ get_rid o1 <> get_rid o2 /\

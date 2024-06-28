@@ -15,18 +15,18 @@
 *)
 
 module Dependent_map
-open FStar.Set //Set_extended
-module S = FStar.Set //Set_extended
+open Set_extended
+module S = Set_extended
 open FStar.FunctionalExtensionality
 
 module F = FStar.FunctionalExtensionality
 noeq
 type t (key: eqtype) (value: (key -> Type)) = 
   { mappings:F.restricted_t key value;
-    domain:S.set key
+    domain:S.t key
   }
 
-let domain (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) : Tot (S.set key) =
+let domain (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) : Tot (S.t key) =
   m.domain
   
 let contains (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k: key) : Tot bool =
@@ -43,7 +43,7 @@ let upd (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k: key) (v:
 
 let del(#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k: key) : t key value =
   { mappings = F.on_domain key (fun x -> m.mappings x);
-    domain = S.remove k (domain m)
+    domain = S.remove (domain m) k
   }
 
 let iter_upd (#key:eqtype) (#value1 #value2: (key -> Tot Type)) (f : (k:key) -> value1 k -> value2 k) (m : t key value1) : t key value2 = 
@@ -56,15 +56,15 @@ let create (#key: eqtype) (#value: (key -> Tot Type)) (f: (k: key -> Tot (value 
     domain = complement empty
   }
 
-let restrict (#key: eqtype) (#value: (key -> Tot Type)) (s:S.set key) (m: t key value) =
+let restrict (#key: eqtype) (#value: (key -> Tot Type)) (s:S.t key) (m: t key value) =
   { mappings = m.mappings;
-    domain =   S.intersect s m.domain
+    domain =   S.intersection s m.domain
   }
 
 let sel_restrict
       (#key: eqtype)
       (#value: (key -> Tot Type))
-      (s:S.set key)
+      (s:S.t key)
       (m: t key value)
       (k: key) = ()
      
@@ -99,12 +99,12 @@ let lemma_UpdDomain (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) 
 
 let dom_restrict (#key: eqtype)
       (#value: (key -> Tot Type))
-      (s:S.set key)
+      (s:S.t key)
       (m: t key value)
       (k: key)
       : Lemma (ensures (contains (restrict s m) k == (S.mem k s && contains m k))) = ()
 
-let dom_const_on (#key: eqtype) (#value: (key -> Tot Type)) (k:key) (dom:S.set key) (f: (k:key) -> value k) = ()
+let dom_const_on (#key: eqtype) (#value: (key -> Tot Type)) (k:key) (dom:S.t key) (f: (k:key) -> value k) = ()
 
 let equal (#key: eqtype) (#value: (key -> Tot Type)) (m1 m2: t key value) =
   F.feq m1.mappings m2.mappings /\

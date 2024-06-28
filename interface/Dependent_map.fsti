@@ -15,7 +15,7 @@
 *)
 
 module Dependent_map
-module S = FStar.Set //Set_extended
+module S = Set_extended
 
 /// This module provides an abstract type of maps whose co-domain
 /// depends on the value of each key. i.e., it is an encapsulation
@@ -42,7 +42,7 @@ module S = FStar.Set //Set_extended
 val t (key: eqtype) ([@@@strictly_positive] value: (key -> Type u#v)) : Type u#v
 
 (* domain m : The set of keys on which this partial map is defined *)
-val domain(#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) : Tot (S.set key)
+val domain(#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) : Tot (S.t key)
 
 (* contains m k: Decides if key `k` is in the map `m` *)
 val contains (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k:key) : Tot bool
@@ -64,18 +64,18 @@ val create (#key: eqtype) (#value: (key -> Tot Type)) (f: (k: key -> Tot (value 
     : Tot (t key value)
 
 (** Restricts the domain of the map to those keys satisfying [p] *)
-val restrict (#key: eqtype) (#value: (key -> Tot Type)) (s:S.set key) (m: t key value) : Tot (t key value)
+val restrict (#key: eqtype) (#value: (key -> Tot Type)) (s:S.t key) (m: t key value) : Tot (t key value)
 
 (** The action of [sel] on [restrict] : the contents of the map isn't changed *)
 val sel_restrict
       (#key: eqtype)
       (#value: (key -> Tot Type))
-      (s:S.set key)
+      (s:S.t key)
       (m: t key value)
       (k: key)
     : Lemma (ensures (sel (restrict s m) k == sel m k))
 
-let const_on (#key:eqtype) (#value: (key -> Tot Type)) (dom:S.set key) (f: (k:key) -> value k) : t key value
+let const_on (#key:eqtype) (#value: (key -> Tot Type)) (dom:S.t key) (f: (k:key) -> value k) : t key value
   = restrict dom (create f)
   
 (** Relating [create] to [sel] *)
@@ -143,13 +143,13 @@ val lemma_UpdDomain (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) 
 
 val dom_restrict (#key: eqtype)
       (#value: (key -> Tot Type))
-      (s:S.set key)
+      (s:S.t key)
       (m: t key value)
       (k: key)
       : Lemma (ensures (contains (restrict s m) k == (S.mem k s && contains m k)))
               [SMTPat (contains (restrict s m) k)]
 
-val dom_const_on (#key: eqtype) (#value: (key -> Tot Type)) (k:key) (dom:S.set key) (f: (k:key) -> value k)
+val dom_const_on (#key: eqtype) (#value: (key -> Tot Type)) (k:key) (dom:S.t key) (f: (k:key) -> value k)
   : Lemma (requires True) 
           (ensures (contains (const_on dom f) k = S.mem k dom))
           [SMTPat (contains (const_on dom f) k)]
