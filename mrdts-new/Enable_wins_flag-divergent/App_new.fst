@@ -101,12 +101,14 @@ let base_2op o1 o2 = ()
 let ind_lca_2op l o1 o2 ol = ()
 
 let inter_right_base_2op l a b o1 o2 ob ol = ()
-          
+     
 let inter_left_base_2op l a b o1 o2 ob ol = ()
 
 let inter_right_2op l a b o1 o2 ob ol o = ()
 
 let inter_left_2op l a b o1 o2 ob ol o = ()
+
+let inter_lca_2op l a b o1 o2 ol = ()
 
 let ind_right_2op l a b o1 o2 o2' = ()
 
@@ -117,7 +119,7 @@ let base_1op o1 = ()
 let ind_lca_1op l o1 ol = ()
 
 let inter_right_base_1op l a b o1 ob ol = ()
-        
+     
 let inter_left_base_1op l a b o1 ob ol = ()
 
 //o = Enable, o1 = Disable
@@ -125,9 +127,10 @@ let inter_right_1op l a b o1 ob ol o = admit()
 
 let inter_left_1op l a b o1 ob ol o = ()
 
+let inter_lca_1op l a b o1 ol oi = ()
+
 let ind_left_1op l a b o1 o1' ol = ()
 
 let ind_right_1op l a b o2 o2' ol = ()
 
 let lem_0op l a b ol = ()
-

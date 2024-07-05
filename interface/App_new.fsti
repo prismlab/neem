@@ -130,6 +130,13 @@ val inter_left_2op (l a b:concrete_st) (o1 o2 ob ol o:op_t)
                     eq (merge (do l ol) (do (do (do a ob) ol) o1) (do (do b ol) o2)) (do (merge (do l ol) (do (do a ob) ol) (do (do b ol) o2)) o1))
           (ensures eq (merge (do l ol) (do (do (do (do a o) ob) ol) o1) (do (do b ol) o2)) (do (merge (do l ol) (do (do (do a o) ob) ol) (do (do b ol) o2)) o1))
 
+val inter_lca_2op (l a b:concrete_st) (o1 o2 ol:op_t)
+  : Lemma (requires (Fst_then_snd? (rc o2 o1) \/ Either? (rc o2 o1)) /\ get_rid o1 <> get_rid o2 /\
+                    distinct_ops o1 o2 /\ distinct_ops o1 ol /\ distinct_ops o2 ol /\
+                    (exists o. Fst_then_snd? (rc o ol)) /\ 
+                    eq (merge l (do a o1) (do b o2)) (do (merge l a (do b o2)) o1))
+          (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do b ol) o2)) (do (merge (do l ol) (do a ol) (do (do b ol) o2)) o1))
+
 val ind_right_2op (l a b:concrete_st) (o1 o2 o2':op_t)
   : Lemma (requires Fst_then_snd? (rc o2 o1) /\ get_rid o1 <> get_rid o2 /\
                     distinct_ops o1 o2 /\ distinct_ops o1 o2' /\ distinct_ops o2 o2' /\
@@ -181,6 +188,14 @@ val inter_left_1op (l a b:concrete_st) (o1 ob ol o:op_t)
                     eq (merge (do l ol) (do (do (do a ob) ol) o1) (do b ol)) (do (merge (do l ol) (do (do a ob) ol) (do b ol)) o1))
           (ensures eq (merge (do l ol) (do (do (do (do a o) ob) ol) o1) (do b ol)) (do (merge (do l ol) (do (do (do a o) ob) ol) (do b ol)) o1))
 
+val inter_lca_1op (l a b:concrete_st) (o1 ol oi:op_t)
+  : Lemma (requires distinct_ops o1 ol /\ distinct_ops o1 oi /\ distinct_ops ol oi /\
+                    (exists o. Fst_then_snd? (rc o ol)) /\ 
+                    (exists o. Fst_then_snd? (rc o oi)) /\ 
+                    eq (merge (do l oi) (do (do a oi) o1) (do b oi)) (do (do (merge l a b) oi) o1) /\
+                    eq (merge (do l ol) (do (do a ol) o1) (do b ol)) (do (do (merge l a b) ol) o1))
+          (ensures eq (merge (do (do l oi) ol) (do (do (do a oi) ol) o1) (do (do b oi) ol)) (do (do (do (merge l a b) oi) ol) o1))
+          
 val ind_left_1op (l a b:concrete_st) (o1 o1' ol:op_t)
   : Lemma (requires distinct_ops o1 o1' /\ distinct_ops o1 ol /\ distinct_ops o1' ol /\
                     eq (merge (do l ol) (do a o1) (do b ol)) (do (merge (do l ol) a (do b ol)) o1))

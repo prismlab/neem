@@ -165,6 +165,8 @@ let inter_right_2op l a b o1 o2 ob ol o =
 
 let inter_left_2op l a b o1 o2 ob ol o = ()
 
+let inter_lca_2op l a b o1 o2 ol = () 
+
 let ind_right_2op l a b o1 o2 o2' = ()
 
 let ind_left_2op l a b o1 o2 o1' = ()
@@ -185,7 +187,9 @@ let inter_left_1op (l a b:concrete_st) (o1 ob ol o:op_t)
                     get_rid o <> get_rid ol /\ //from app.fsti
                     eq (merge (do l ol) (do (do (do a ob) ol) o1) (do b ol)) (do (merge (do l ol) (do (do a ob) ol) (do b ol)) o1))
           (ensures eq (merge (do l ol) (do (do (do (do a o) ob) ol) o1) (do b ol)) (do (merge (do l ol) (do (do (do a o) ob) ol) (do b ol)) o1)) = ()
- 
+
+let inter_lca_1op l a b o1 ol oi = () 
+
 let ind_left_1op l a b o1 o1' ol = ()
 
 let ind_right_1op l a b o2 o2' ol = ()
