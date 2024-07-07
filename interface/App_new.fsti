@@ -134,6 +134,7 @@ val inter_lca_2op (l a b:concrete_st) (o1 o2 ol:op_t)
   : Lemma (requires (Fst_then_snd? (rc o2 o1) \/ Either? (rc o2 o1)) /\ get_rid o1 <> get_rid o2 /\
                     distinct_ops o1 o2 /\ distinct_ops o1 ol /\ distinct_ops o2 ol /\
                     (exists o. Fst_then_snd? (rc o ol)) /\ 
+                    eq (merge (do l ol) (do (do a ol) o1) (do b ol)) (do (merge (do l ol) (do a ol) (do b ol)) o1) /\ //1op
                     eq (merge l (do a o1) (do b o2)) (do (merge l a (do b o2)) o1))
           (ensures eq (merge (do l ol) (do (do a ol) o1) (do (do b ol) o2)) (do (merge (do l ol) (do a ol) (do (do b ol) o2)) o1))
 

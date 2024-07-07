@@ -140,35 +140,3 @@ let ind_right_1op l a b o2 o2' ol = ()
 
 let lem_0op l a b ol = ()
 
-////////////////////////////////////////////////////////////////
-//// Sequential implementation //////
-
-// the concrete state 
-let concrete_st_s = S.t nat
-
-// init state 
-let init_st_s = S.empty
-
-// apply an operation to a state 
-let do_s (st_s:concrete_st_s) (o:op_t) : concrete_st_s =
-  match o with
-  |(_, (rid, Add e)) -> S.add e st_s
-  |(_, (rid, Rem e)) -> S.filter st_s (fun ele -> ele <> e)
-
-let mem_ele (ele:nat) (s:concrete_st) : prop =
-  exists e. S.mem e s /\ snd e = ele
-  
-// equivalence relation between the concrete states of sequential type and MRDT
-let eq_sm (st_s:concrete_st_s) (st:concrete_st) =
-  (forall e. S.mem e st_s <==> mem_ele e st)
-
-// initial states are equivalent
-let initial_eq (_:unit)
-  : Lemma (ensures eq_sm init_st_s init_st) = ()
-
-// equivalence between states of sequential type and MRDT at every operation
-let do_eq (st_s:concrete_st_s) (st:concrete_st) (op:op_t)   
-  : Lemma (requires eq_sm st_s st)
-          (ensures eq_sm (do_s st_s op) (do st op)) = ()
-
-////////////////////////////////////////////////////////////////

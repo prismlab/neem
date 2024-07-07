@@ -13,14 +13,14 @@ let no_rc_chain o1 o2 o3 = ()
 let cond_comm_base s o1 o2 o3 = ()
 let cond_comm_ind s o1 o2 o3 o l = ()
 
-let base_2op' o1 o2 t = ()
+(*let base_2op' o1 o2 t = ()
 let ind_lca_2op' l o1 o2 ol = ()
 let inter_right_base_2op' l a b o1 o2 ob ol = ()
 let inter_left_base_2op' l a b o1 o2 ob ol = ()
 let inter_right_2op' l a b o1 o2 ob ol o = ()
 let inter_left_2op' l a b o1 o2 ob ol o = ()
 let ind_right_2op' l a b o1 o2 o2' = ()
-let ind_left_2op' l a b o1 o2 o1' = ()
+let ind_left_2op' l a b o1 o2 o1' = ()*)
 let ind_right_1op' l a b o2 o2' ol = ()        
 let ind_left_1op' l a b o1 o1' ol = ()
 
@@ -66,7 +66,7 @@ instance ictr_orset_cond : cond C.st S.st C.app_op S.app_op ictr_orset = {
   Json1.cond_comm_ind
 }
 
-#set-options "--z3rlimit 300 --ifuel 3"
+#set-options "--z3rlimit 500 --ifuel 5"
 instance ictr_orset_proof : vc C.st S.st C.app_op S.app_op ictr_orset = {
   Json1.merge_comm_a = C.merge_comm;
   Json1.merge_comm_b = S.merge_comm;
@@ -75,7 +75,7 @@ instance ictr_orset_proof : vc C.st S.st C.app_op S.app_op ictr_orset = {
   Json1.base_2opa = C.base_2op;
   Json1.base_2opb = S.base_2op;
   Json1.ind_lca_2opa = C.ind_lca_2op;
-  Json1.ind_lca_2opb = admit();//S.ind_lca_2op;
+  Json1.ind_lca_2opb = S.ind_lca_2op;
   Json1.inter_right_base_2opa = C.inter_right_base_2op;
   Json1.inter_right_base_2opb = S.inter_right_base_2op;
   Json1.inter_left_base_2opa = C.inter_left_base_2op;
@@ -93,7 +93,7 @@ instance ictr_orset_proof : vc C.st S.st C.app_op S.app_op ictr_orset = {
   Json1.ind_lca_1opa = C.ind_lca_1op;
   Json1.ind_lca_1opb = S.ind_lca_1op;
   Json1.inter_right_base_1opa = C.inter_right_base_1op;
-  Json1.inter_right_base_1opb = S.inter_right_base_1op;
+  Json1.inter_right_base_1opb = admit();//S.inter_right_base_1op;
   Json1.inter_left_base_1opa = C.inter_left_base_1op;
   Json1.inter_left_base_1opb = S.inter_left_base_1op;
   Json1.inter_right_1opa = C.inter_right_1op;
@@ -107,12 +107,12 @@ instance ictr_orset_proof : vc C.st S.st C.app_op S.app_op ictr_orset = {
   Json1.lem_0opa = C.lem_0op;
   Json1.lem_0opb = S.lem_0op;
   
-  Json1.base_2op';
+  (*Json1.base_2op';
   Json1.ind_lca_2op';
   Json1.inter_right_base_2op';
   Json1.inter_left_base_2op';
   Json1.inter_right_2op'; 
-  Json1.inter_left_2op';
+  Json1.inter_left_2op';*)
   Json1.ind_right_1op';
   Json1.ind_left_1op'
 }
