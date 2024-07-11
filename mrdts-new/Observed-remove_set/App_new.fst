@@ -133,7 +133,7 @@ let inter_right_1op l a b o1 ob ol o = ()
 let inter_left_1op l a b o1 ob ol o = ()
 
 let inter_lca_1op l a b o1 ol oi = ()
-
+                      
 let ind_left_1op l a b o1 o1' ol = ()
 
 let ind_right_1op l a b o2 o2' ol = ()

@@ -193,10 +193,11 @@ let inter_lca_1op (l a b:concrete_st) (o1 ol oi:op_t)
   : Lemma (requires distinct_ops o1 ol /\ distinct_ops o1 oi /\ distinct_ops ol oi /\
                     (exists o. Fst_then_snd? (rc o ol)) /\ 
                     (exists o. Fst_then_snd? (rc o oi)) /\ 
-                    eq (merge (do l oi) (do (do a oi) o1) (do b oi)) (do (do (merge l a b) oi) o1) /\
-                    eq (merge (do l ol) (do (do a ol) o1) (do b ol)) (do (do (merge l a b) ol) o1))
-          (ensures eq (merge (do (do l oi) ol) (do (do (do a oi) ol) o1) (do (do b oi) ol)) (do (do (do (merge l a b) oi) ol) o1)) = ()
-
+                    eq (merge (do l oi) (do (do a oi) o1) (do b oi)) (do (merge (do l oi) (do a oi) (do b oi)) o1) /\
+                    eq (merge (do l ol) (do (do a ol) o1) (do b ol)) (do (merge (do l ol) (do a ol) (do b ol)) o1))
+          (ensures eq (merge (do (do l oi) ol) (do (do (do a oi) ol) o1) (do (do b oi) ol)) 
+                      (do (merge (do (do l oi) ol) (do (do a oi) ol) (do (do b oi) ol)) o1)) = ()
+                      
 let ind_left_1op l a b o1 o1' ol = ()
 
 let ind_right_1op l a b o2 o2' ol = ()
