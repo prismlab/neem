@@ -1,2 +1,116 @@
-%.fsti-in %.fst-in:
-	@echo --include ../../interface/
+INCLUDE_PATHS = \
+  ../../interface
+
+FSTAR_HOME = /Users/apple/everest/FStar
+FSTAR_ULIB = $(FSTAR_HOME)/ulib
+
+include $(FSTAR_ULIB)/gmake/z3.mk
+include $(FSTAR_ULIB)/gmake/fstar.mk
+
+#for getting macros for OCaml commands to compile extracted code
+include $(FSTAR_ULIB)/ml/Makefile.include
+
+ifdef FSTAR_HOME
+  -include $(FSTAR_HOME)/.common.mk
+  FSTAR=$(FSTAR_HOME)/bin/fstar.exe
+else
+  FSTAR=fstar.exe
+endif
+
+#################################################################################
+# Customize these variables for your project
+#################################################################################
+
+# The root files of your project, from which to begin scanning dependences
+FSTAR_FILES ?= $(wildcard *.fst) $(wildcard *.fsti)
+
+# The paths to related files which to include for scanning
+#   -- No need to add FSTAR_HOME/ulib; it is included by default
+# INCLUDE_PATHS ?=
+
+# The executable file you want to produce
+PROGRAM ?=
+
+# A driver in ML to call into your program
+TOP_LEVEL_FILE ?=
+
+# A place to put all the emitted .ml files
+OUTPUT_DIRECTORY ?= _output
+
+# A place to put all the .checked files
+CACHE_DIR ?= _cache
+
+# Set ADMIT=1 to admit queries
+ADMIT ?=
+MAYBE_ADMIT = $(if $(ADMIT),--admit_smt_queries true)
+
+################################################################################
+# YOU SHOULDN'T NEED TO TOUCH THE REST
+################################################################################
+
+VERBOSE_FSTAR=$(BENCHMARK_PRE) $(FSTAR)                     \
+		  --cache_checked_modules                   \
+		  --odir $(OUTPUT_DIRECTORY)                \
+		  --cache_dir $(CACHE_DIR)                  \
+		  $(addprefix --include , $(INCLUDE_PATHS)) \
+		  $(OTHERFLAGS) $(MAYBE_ADMIT)
+
+# As above, but perhaps with --silent, and perhaps with a prefix (usually for monitoring)
+MY_FSTAR=$(RUNLIM) $(VERBOSE_FSTAR) $(SIL)
+
+#--------------------------------------------------------------------------------
+# Default target: verify all FSTAR_FILES
+#--------------------------------------------------------------------------------
+
+#--------------------------------------------------------------------------------
+# Include the .depend before any other target
+# since we rely on the dependences it computes in other rules
+# #
+# We do an indirection via ._depend so we don't write an empty file if
+# the dependency analysis failed.
+#--------------------------------------------------------------------------------
+.depend: $(FSTAR_FILES)
+	$(Q)$(MY_FSTAR) --dep full $(FSTAR_FILES) --output_deps_to $@
+
+depend: .depend
+
+include .depend
+#--------------------------------------------------------------------------------
+
+# a.fst.checked is the binary, checked version of a.fst
+%.fst.checked:
+	$(call msg, "CHECK", $(basename $(notdir $@)))
+	$(Q)$(MY_FSTAR) $<
+	@touch -c $@
+
+%.time:
+	time $(MY_FSTAR) --force $*
+
+# a.fsti.checked is the binary, checked version of a.fsti
+%.fsti.checked:
+	$(call msg, "CHECK", $(basename $(notdir $@)))
+	$(Q)$(MY_FSTAR) $<
+	@touch -c $@
+
+%.fst.output: %.fst
+	$(call msg, "OUTPUT", $(basename $(notdir $@)))
+	$(Q)$(VERBOSE_FSTAR) -f --print_expected_failures $< >$@ 2>&1
+
+%.fsti.output: %.fsti
+	$(call msg, "OUTPUT", $(basename $(notdir $@)))
+	$(Q)$(VERBOSE_FSTAR) -f --print_expected_failures $< >$@ 2>&1
+
+clean:
+	rm -rf $(CACHE_DIR)
+
+#----------------------------------------------------------------------------------
+
+#extract F* files to OCaml
+$(OUTPUT_DIRECTORY)/%.ml:
+	$(call msg, "EXTRACT", $(basename $(notdir $@)))
+	$(Q)$(MY_FSTAR) $(subst .checked,,$(notdir $<)) --codegen OCaml --extract_module $(subst .fst.checked,,$(notdir $<))
+
+
+verify: $(ALL_CHECKED_FILES)
+
+.PHONY: depend verify
