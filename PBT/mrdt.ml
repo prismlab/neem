@@ -1,4 +1,4 @@
-let debug_mode = ref false
+let debug_mode = ref true
 
 type state = int 
 type op = Incr 
@@ -11,9 +11,9 @@ type repId = int (* replica ID *)
 
 (* Types of edges in the version graph *)
 type edgeType = 
-  | CreateBranch of repId * repId
-  | Apply of repId * op
-  | Merge of repId * repId 
+  | CreateBranch of repId * repId (* fork r2 from r1 *)
+  | Apply of repId * op (* apply op on the head version of r *)
+  | Merge of repId * repId (* merge the head versions of r1 and r2 *)
 
 module Op = struct
   type t = op
@@ -70,14 +70,15 @@ type config = {
 }
 
 (* Add a vertex to the graph *)
-let add_vertex (g:dag) (v:verNo) : dag = {
+(*let add_vertex (g:dag) (v:verNo) : dag = {
   vertices = VerSet.add v g.vertices;
   edges = g.edges
-}
+}*)
 
 (* Add an edge to the graph *)
+(* assume : source vertex is already present in the dag *)
 let add_edge (g:dag) (src:verNo) (label:edgeType) (dst:verNo) : dag = {
-  vertices = VerSet.add src (VerSet.add dst g.vertices);
+  vertices = VerSet.add dst g.vertices;
   edges = {src; label; dst} :: g.edges;
 }
 
@@ -85,7 +86,7 @@ let add_edge (g:dag) (src:verNo) (label:edgeType) (dst:verNo) : dag = {
 let edge_exists (g:dag) (src:verNo) (dst:verNo) : bool =
   List.exists (fun e -> e.src = src && e.dst = dst) g.edges
 
-(* Check if an edge exists between two vertices *)
+(* Check is a vertex is present in the vertex set *)
 let version_exists (vs:VerSet.t) (v:verNo) : bool = 
   VerSet.mem v vs
 
@@ -100,7 +101,7 @@ let initG : dag = {
 let initVis : VisSet.t = VisSet.empty
 
 (* Initial configuration *)
-let init_config = {r = initR; n = initN; h = initH; l = initL; g = initG; vis = initVis }
+let init_config = {r = initR; n = initN; h = initH; l = initL; g = initG; vis = initVis}
 
 let debug_print fmt =
   if !debug_mode then Printf.printf fmt
@@ -140,8 +141,8 @@ let rec find_ancestors (c:config) (v:verNo) : VerSet.t =
 
 (* Find the LCA of two versions *)
 let find_lca (c:config) (v1:verNo) (v2:verNo) : verNo option =
-  let a1 = VerSet.add v1 (find_ancestors c v1) in
-  let a2 = VerSet.add v2 (find_ancestors c v2) in
+  let a1 = find_ancestors c v1 in
+  let a2 = find_ancestors c v2 in
   let ca = VerSet.inter a1 a2 in (* common ancestors *)
   if VerSet.is_empty ca then None else Some (VerSet.max_elt ca) (* LCA *)
 
@@ -186,3 +187,6 @@ let print_dag (c:config) =
 
 (* END of helper functions to print the graph *)
 
+(* Get vertices set from edge list *)
+let vertices_from_edges (edges: edge list) : VerSet.t =
+  List.fold_left (fun acc e -> VerSet.add e.src (VerSet.add e.dst acc)) VerSet.empty edges
