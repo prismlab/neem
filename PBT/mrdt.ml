@@ -1,4 +1,4 @@
-let debug_mode = ref true
+let debug_mode = ref false
 
 type state = int 
 type op = Incr 
@@ -156,13 +156,13 @@ let merge (c:config) (r1:repId) (r2:repId) (newVer:verNo) : config =
   let m = match lca with
     | None -> failwith "lCA is not found"
     | Some vl -> debug_print "LCA is %d\n" vl; let m = merge vl v1 v2 in
-  debug_print "merge of %d %d %d is %d\n" vl v1 v2 m; m in
+  debug_print "merge of %d r%d(v%d): %d r%d(v%d): %d is %d\n" vl r1 (c.h r1) v1 r2 (c.h r2) v2 m; m in
   
   let newN = fun v -> if v = newVer then m else c.n v in
   let newH = fun r -> if r = r1 then newVer else c.h r in
   let newL = fun v -> if v = newVer then c.l v1 else c.l v in
-  let newG = let e = add_edge c.g v1 (Merge (r1, r2)) newVer in
-             if r1 = r2 then e else add_edge e v2 (Merge (r1, r2)) newVer in
+  let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
+             add_edge e (c.h r2) (Merge (r1, r2)) newVer in
   {r = c.r; n = newN; h = newH; l = newL; g = newG; vis = c.vis}
 
 (* BEGIN of helper functions to print the graph *)

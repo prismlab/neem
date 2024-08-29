@@ -14,6 +14,7 @@ open Mrdt
     let c4 = apply c3 1 4 Incr in
     let c5 = merge c4 0 1 5 in
     let c6 = apply c5 0 6 Incr in c6
+    
 let sanity_check (c:config) = 
   assert (VerSet.equal c.g.vertices (vertices_from_edges c.g.edges))
 
