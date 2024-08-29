@@ -1,10 +1,10 @@
-let debug_mode = ref false
+let debug_mode = ref true
 
 type state = int 
 type op = Incr 
 let init_st = 0 
-let do_op s _ = s + 1
-let merge l a b = a + b - l
+let mrdt_do s _ = s + 1
+let mrdt_merge l a b = a + b - l
 
 type verNo = int (* version number *)
 type repId = int (* replica ID *)
@@ -125,7 +125,7 @@ let apply (c:config) (srcRid:repId) (newVer:verNo) (o:op) : config =
   if version_exists c.g.vertices newVer then failwith "Apply: New version already exists in the configuration";
 
   let srcVer = c.h srcRid in
-  let newN = fun v -> if v = newVer then (do_op (c.n srcVer) o) else c.n v in
+  let newN = fun v -> if v = newVer then (mrdt_do (c.n srcVer) o) else c.n v in
   let newH = fun r -> if r = srcRid then newVer else c.h r in
   let newL = fun v -> if v = newVer then OpSet.add o (c.l srcVer) else c.l v in
   let newG = add_edge c.g srcVer (Apply (srcRid, o)) newVer in
@@ -150,13 +150,14 @@ let find_lca (c:config) (v1:verNo) (v2:verNo) : verNo option =
 let merge (c:config) (r1:repId) (r2:repId) (newVer:verNo) : config =
   if version_exists c.g.vertices newVer then failwith "Merge: New version already exists in the configuration";
 
-  let v1 = c.n (c.h r1) in
-  let v2 = c.n (c.h r2) in
+  let v1 = c.h r1 in let v2 = c.h r2 in
+  let s1 = c.n v1 in let s2 = c.n v2 in
   let lca = find_lca c v1 v2 in
-  let m = match lca with
+  match lca with
     | None -> failwith "lCA is not found"
-    | Some vl -> debug_print "LCA is %d\n" vl; let m = merge vl v1 v2 in
-  debug_print "merge of %d r%d(v%d): %d r%d(v%d): %d is %d\n" vl r1 (c.h r1) v1 r2 (c.h r2) v2 m; m in
+    | Some vl -> debug_print "LCA is %d\n" vl; 
+                 let m = mrdt_merge (c.n vl) s1 s2 in
+  debug_print "merge of c.n(v%d) = %d, c.n(v%d) = %d, c.n(v%d) = %d is %d\n" vl (c.n vl) v1 s1 v2 s2 m;
   
   let newN = fun v -> if v = newVer then m else c.n v in
   let newH = fun r -> if r = r1 then newVer else c.h r in
