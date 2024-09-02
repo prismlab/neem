@@ -26,8 +26,9 @@ let tests = "Test suite for MRDT" >::: [
                             print_st (apply_events (List.rev (test_config.l(test_config.h(0)))));
                             Printf.printf "\nState = ";
                             print_st (test_config.n (test_config.h 0)));
-  "test_lin" >:: (fun _ -> assert (eq (apply_events (List.rev (test_config.l(test_config.h(0))))) 
-                                      (test_config.n (test_config.h 0))));
+  "test_lin1" >:: (fun _ -> assert (eq (apply_events (List.rev (test_config.l(test_config.h(0))))) (test_config.n (test_config.h 0))));
+  "test_lin2" >:: (fun _ -> assert (eq (apply_events (List.rev (test_config.l(test_config.h(1))))) (test_config.n (test_config.h 1))));
+  "test_lin3" >:: (fun _ -> assert (eq (apply_events (List.rev (test_config.l(test_config.h(2))))) (test_config.n (test_config.h 2))));
 ]
 
 let _ = run_test_tt_main tests

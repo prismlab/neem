@@ -11,15 +11,15 @@ type rc_res = (* conflict resolution type *)
   | Either
 
 module Ts_ele_pair = struct
-  type t = (int * int)
+  type t = (int * char)
   let compare = compare
 end
 module Orset = Set.Make(Ts_ele_pair)
 
 type state = Orset.t
 type op = 
-  | Add of int
-  | Rem of int
+  | Add of char
+  | Rem of char
 
 (* event type *)
 type event = int * repId * op (* timestamp, replicaID, operation *)
@@ -244,28 +244,28 @@ let rec insert_at_index lst element index =
   | hd::tl, n -> hd::insert_at_index tl element (n - 1)
   (*| _,_ -> failwith "Index out of bounds"  (* If the index is negative, raise an error *)*)
 
-  let rec linearize (l1:event list) (l2:event list) : event list =
-    match (l1, l2) with
-    | [], [] -> []
-    | [], _ -> l2
-    | _, [] -> l1
-    | e1::tl1, e2::tl2 -> if rc e1 e2 = Fst_then_snd then 
-                            (let l2' = linearize l1 tl2 in if not (List.mem e2 l2') then e2::l2' else l2')
-                          else if rc e1 e2 = Snd_then_fst then 
-                            (let l1' = linearize tl1 l2 in if not (List.mem e1 l1') then e1::l1' else l1')
-                          else 
-                            (let (i,b) = can_reorder e1 l2 in
-                             if b = true then 
-                                (let l2' = linearize l1 (insert_at_index tl2 e2 (i-1)) in
-                                 if not (List.mem (List.nth l2 i) l2') then (List.nth l2 i)::l2' else l2')
-                             else 
-                              (let (i,b) = can_reorder e2 l1 in
-                               if b = true then 
-                                  (let l1' = linearize (insert_at_index tl1 e1 (i-1)) l2 in
-                                    if not (List.mem (List.nth l1 i) l1') then (List.nth l1 i)::l1' else l1')
-                               else 
-                                 (let l2' = linearize tl1 l2 in
-                                  if not (List.mem e1 l2') then e1::l2' else l2')))
+let rec linearize (l1:event list) (l2:event list) : event list =
+  match (l1, l2) with
+  | [], [] -> []
+  | [], _ -> l2
+  | _, [] -> l1
+  | e1::tl1, e2::tl2 -> if rc e1 e2 = Fst_then_snd then 
+                          (let l2' = linearize l1 tl2 in if not (List.mem e2 l2') then e2::l2' else l2')
+                        else if rc e1 e2 = Snd_then_fst then 
+                          (let l1' = linearize tl1 l2 in if not (List.mem e1 l1') then e1::l1' else l1')
+                        else 
+                          (let (i,b) = can_reorder e1 l2 in
+                            if b = true then 
+                              (let l2' = linearize l1 (insert_at_index tl2 e2 (i-1)) in
+                                if not (List.mem (List.nth l2 i) l2') then (List.nth l2 i)::l2' else l2')
+                            else 
+                            (let (i,b) = can_reorder e2 l1 in
+                              if b = true then 
+                                (let l1' = linearize (insert_at_index tl1 e1 (i-1)) l2 in
+                                  if not (List.mem (List.nth l1 i) l1') then (List.nth l1 i)::l1' else l1')
+                              else 
+                                (let l2' = linearize tl1 l2 in
+                                if not (List.mem e1 l2') then e1::l2' else l2')))
                        
 (* Merge function *)
 let merge (c:config) (r1:repId) (r2:repId) : config =
@@ -292,17 +292,19 @@ let is_add o =
   | Add _ -> true
   | _ -> false
 
-let get_ele o : int =
+let get_ele o : char =
   match o with
   | Add e -> e
   | Rem e -> e
 
 (* BEGIN of helper functions to print the graph *)
 let print_st (s:state) =
-  Orset.iter (fun (t,e) -> Printf.printf "(%d,%d)" t e) s
+  Printf.printf "{";
+  Orset.iter (fun (t,e) -> Printf.printf "(%d,%c)" t e) s;
+  Printf.printf "}"
   
 let string_of_event ((t, r, o):event) =
-  Printf.sprintf "(%d, %d, (%s %d))" t r (if is_add o then "Add" else "Rem") (get_ele o)
+  Printf.sprintf "(%d, %d, (%s %c))" t r (if is_add o then "Add" else "Rem") (get_ele o)
 
 let str_of_edge = function
   | CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1

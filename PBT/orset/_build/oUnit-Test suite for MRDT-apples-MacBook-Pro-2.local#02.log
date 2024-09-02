@@ -1,6 +1,9 @@
-2024-09-02T17:07:40+00:00 apples-MacBook-Pro-2.local#02 I: Start test Test suite for MRDT:1:print_dag.
-2024-09-02T17:07:40+00:00 apples-MacBook-Pro-2.local#02 I: Test Test suite for MRDT:1:print_dag is successful.
-2024-09-02T17:07:40+00:00 apples-MacBook-Pro-2.local#02 I: End test Test suite for MRDT:1:print_dag.
-2024-09-02T17:07:40+00:00 apples-MacBook-Pro-2.local#02 I: Start test Test suite for MRDT:3:print_res.
-2024-09-02T17:07:40+00:00 apples-MacBook-Pro-2.local#02 I: Test Test suite for MRDT:3:print_res is successful.
-2024-09-02T17:07:40+00:00 apples-MacBook-Pro-2.local#02 I: End test Test suite for MRDT:3:print_res.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: Start test Test suite for MRDT:1:print_dag.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: Test Test suite for MRDT:1:print_dag is successful.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: End test Test suite for MRDT:1:print_dag.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: Start test Test suite for MRDT:3:print_res.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: Test Test suite for MRDT:3:print_res is successful.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: End test Test suite for MRDT:3:print_res.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: Start test Test suite for MRDT:4:test_lin1.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: Test Test suite for MRDT:4:test_lin1 is successful.
+2024-09-02T17:51:53+00:00 apples-MacBook-Pro-2.local#02 I: End test Test suite for MRDT:4:test_lin1.

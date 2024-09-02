@@ -268,7 +268,7 @@ let rec linearize (l1:event list) (l2:event list) : event list =
                               else 
                                 (let l2' = linearize tl1 l2 in
                                 if not (List.mem e1 l2') then e1::l2' else l2')))
-                       
+                                              
 (* Merge function *)
 let merge (c:config) (r1:repId) (r2:repId) : config =
   let newVer = gen_ver r1 in

@@ -3,7 +3,7 @@
 # Shared cache: disabled
 # Workspace root: /Users/apple/Documents/IITM/certified-mrdts/PBT/ictr
 # Auto-detected concurrency: 8
-$ /Users/apple/.opam/default/bin/ocamlc.opt -config > /var/folders/xj/5506_8p10fgbsr2cvcw1z37m0000gn/T/dune_eac674_output
+$ /Users/apple/.opam/default/bin/ocamlc.opt -config > /var/folders/xj/5506_8p10fgbsr2cvcw1z37m0000gn/T/dune_ee0667_output
 # Dune context:
 #  { name = "default"
 #  ; kind = "default"
@@ -100,3 +100,6 @@ $ /Users/apple/.opam/default/bin/ocamlc.opt -config > /var/folders/xj/5506_8p10f
 #      }
 #  ; instrument_with = []
 #  }
+$ (cd _build/default && /Users/apple/.opam/default/bin/ocamldep.opt -modules -impl test.ml) > _build/default/.test.eobjs/dune__exe__Test.impl.d
+$ (cd _build/default && /Users/apple/.opam/default/bin/ocamlopt.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -I .test.eobjs/byte -I .test.eobjs/native -I /Users/apple/.opam/default/lib/ocaml/unix -I /Users/apple/.opam/default/lib/ounit2 -I /Users/apple/.opam/default/lib/ounit2/advanced -I /Users/apple/.opam/default/lib/seq -I /Users/apple/.opam/default/lib/stdlib-shims -intf-suffix .ml -no-alias-deps -opaque -open Dune__exe -o .test.eobjs/native/dune__exe__Test.cmx -c -impl test.ml)
+$ (cd _build/default && /Users/apple/.opam/default/bin/ocamlopt.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -o test.exe /Users/apple/.opam/default/lib/ocaml/unix/unix.cmxa /Users/apple/.opam/default/lib/stdlib-shims/stdlib_shims.cmxa /Users/apple/.opam/default/lib/ounit2/advanced/oUnitAdvanced.cmxa /Users/apple/.opam/default/lib/ounit2/oUnit.cmxa .test.eobjs/native/dune__exe.cmx .test.eobjs/native/dune__exe__Mrdt.cmx .test.eobjs/native/dune__exe__Test.cmx)
