@@ -158,7 +158,7 @@ type config = {
   r : RepSet.t;         (* Set of replicas *)
   n : ver -> state;   (* n maps versions to their states *)
   h : repId -> ver;   (* h maps replicas to their head version *)
-  l : ver -> EventSet.t; (* l maps a version to the set of MRDT operations that led to this version *)
+  l : ver -> event list; (* l maps a version to the list of MRDT events that led to this version *)
   g : dag;              (* g is a version graph whose vertices represent the v1ly active versions 
                            and whose edges represent relationship between different versions. *)
   vis : VisSet.t        (* vis is a partial order over events *)
@@ -188,7 +188,7 @@ let version_exists (vs:VerSet.t) (v:ver) : bool =
 let initR : RepSet.t = RepSet.singleton 0
 let initN _ : state = init_st
 let initH _ : ver = (0, 0)
-let initL _ : EventSet.t = EventSet.empty
+let initL _ : event list = []
 let initG : dag = { 
   vertices = VerSet.singleton (gen_ver 0); 
   edges = []
@@ -224,7 +224,7 @@ let apply (c:config) (srcRid:repId) (o:event) : config =
   let srcVer = c.h srcRid in
   let newN = fun v -> if v = newVer then (mrdt_do (c.n srcVer) o) else c.n v in
   let newH = fun r -> if r = srcRid then newVer else c.h r in
-  let newL = fun v -> if v = newVer then EventSet.add o (c.l srcVer) else c.l v in
+  let newL = fun v -> if v = newVer then o::c.l srcVer else c.l v in
   let newG = add_edge c.g srcVer (Apply o) newVer in
   let newVis = VisSet.fold (fun (o1,o2) acc -> VisSet.add (o1,o) (VisSet.add (o2,o) acc)) c.vis c.vis in
   {r = c.r; n = newN; h = newH; l = newL; g = newG; vis = newVis}
@@ -273,6 +273,37 @@ let find_lca (c:config) (v1:ver) (v2:ver) : ver option =
   assert (VerSet.cardinal pa = 1); (* checks if there is only one LCA *)
   if VerSet.is_empty pa then None else Some (VerSet.choose pa) (* LCA *)
 
+let can_reorder (e:event) (l:event list) : (int * bool) =
+let rec can_reorder_aux (e:event) (l:event list) (acc:(int * bool)) : (int * bool) =
+  match l with
+  | [] -> acc
+  | hd::tl -> if rc e hd = Fst_then_snd then (0, true)
+              else if rc e hd = Snd_then_fst then (0, false)
+              else can_reorder_aux e tl (fst (acc) + 1, snd acc) in
+  can_reorder_aux e l (0, false)
+              
+let rec insert_at_index lst element index =
+  match (lst, index) with
+  | [], _ -> [element] 
+  | _, 0 -> element::lst
+  | hd::tl, n -> hd::insert_at_index tl element (n - 1)
+  (*| _,_ -> failwith "Index out of bounds"  (* If the index is negative, raise an error *)*)
+
+let rec linearize (l1:event list) (l2:event list) : event list =
+  match (l1, l2) with
+  | [], [] -> []
+  | [], _ -> l2
+  | _, [] -> l1
+  | e1::tl1, e2::tl2 -> if rc e1 e2 = Fst_then_snd then e2::(linearize l1 tl2)
+                        else if rc e1 e2 = Snd_then_fst then e1::(linearize tl1 l2)
+                        else 
+                          (let (i,b) = can_reorder e1 l2 in
+                           if b = true then (List.nth l2 i)::linearize l1 (insert_at_index tl2 e2 (i-1))
+                           else 
+                            (let (i,b) = can_reorder e2 l1 in
+                             if b = true then (List.nth l1 i)::linearize (insert_at_index tl1 e1 (i-1)) l2
+                             else e1::linearize tl1 l2))
+                           
 (* Merge function *)
 let merge (c:config) (r1:repId) (r2:repId) : config =
   let newVer = gen_ver r1 in
@@ -294,7 +325,7 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
   
   let newN = fun v -> if v = newVer then m else c.n v in
   let newH = fun r -> if r = r1 then newVer else c.h r in
-  let newL = fun v -> if v = newVer then c.l v1 else c.l v in
+  let newL = fun v -> if v = newVer then (linearize (List.rev (c.l(c.h(r1)))) (List.rev (c.l(c.h(r2))))) else c.l v in
   let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
              add_edge e (c.h r2) (Merge (r1, r2)) newVer in
   {r = c.r; n = newN; h = newH; l = newL; g = newG; vis = c.vis}
@@ -342,73 +373,6 @@ let print_dag (c:config) =
 let vertices_from_edges (el:edge list) : VerSet.t =
   List.fold_left (fun acc e -> VerSet.add e.src (VerSet.add e.dst acc)) VerSet.empty el
 
-(*let rec collect_events (c:config) (v:ver) : EventSet.t =
-  List.fold_left (fun acc edge ->
-    if edge.dst = v then
-      let src_events = collect_events(c) edge.src in
-      EventSet.union src_events (c.l edge.src)
-    else acc) (c.l v) c.g.edges*)
-
-let is_visible (c:config) (e1:event) (e2:event) : bool =
-  let edge1 = List.find (fun e -> e.label = Apply e1) c.g.edges in
-  let edge2 = List.find (fun e -> e.label = Apply e2) c.g.edges in
-  path_exists c.g.edges edge1.dst edge2.dst
-
-let are_concurrent (c:config) (e1:event) (e2:event) : bool =
-  not (is_visible c e1 e2 || is_visible c e2 e1)
-
-(* Function to collect all Apply events from a dag *)
-let collect_apply_events (d:dag) : event list =
-  List.fold_left (fun acc edge ->
-    match edge.label with
-    | Apply e -> e :: acc
-    | _ -> acc
-  ) [] d.edges
-
-let rec lo (c:config) (e1:event) (e2:event) : bool =
-  let el = collect_apply_events c.g in
-  if not (List.mem e1 el) || not (List.mem e2 el) then failwith "Event not in config";
-  e1 <> e2 &&
-  ((is_visible c e1 e2 && not (commutes_with init_st e1 e2)) ||
-
-   (are_concurrent c e1 e2 && 
-    (rc e1 e2 = Fst_then_snd && not (List.exists (fun e3 -> lo c e2 e3) el)) ||
-    (rc e1 e2 = Snd_then_fst && not (List.exists (fun e3 -> lo c e1 e3) el)) (*||
-    (rc e1 e2 = Either && get_ts e1 <= get_ts e2*)))
-  
-let linearize (c:config) (r:repId) : event list =
-  let rec collect_events (v:ver) (acc:event list) (visited:VerSet.t) : (event list * VerSet.t) =
-    if VerSet.mem v visited then acc, visited
-    else
-      let visited = VerSet.add v visited in
-      let edges_to_v = List.filter (fun e -> e.dst = v) c.g.edges in
-      let new_acc, visited =
-        List.fold_left (fun (acc, visited) e ->
-          let acc = 
-            match e.label with
-            | Apply e -> e :: acc
-            | Merge (_, _) -> acc
-            | CreateBranch (_, _) -> acc
-          in
-          collect_events e.src acc visited
-        ) (acc, visited) edges_to_v
-      in
-      new_acc, visited
-  in
-
-  let event_list, _ = collect_events (c.h r) [] VerSet.empty in
-
-  (* Sort events based on their visibility and the rc relation for concurrent events *)
-    let sort_events (c:config) (event_list:event list) : event list =
-    try
-      List.sort (fun e1 e2 -> if lo c e1 e2 then -1 else 1) event_list
-    with
-    | e ->
-      Printf.eprintf "Exception occurred during sorting: %s\n" (Printexc.to_string e);
-      event_list in
-
-  sort_events c event_list
-
 let print_linearization (el:event list) =
   Printf.printf "\nLinearized Events:\n";
   List.iter (fun e -> Printf.printf "%s\n" (string_of_event e)) el
@@ -417,3 +381,18 @@ let apply_events el =
   let apply_events_aux (acc:state) (el:event list) : state =
     List.fold_left (fun acc e -> mrdt_do acc e) acc el in
   apply_events_aux init_st el
+
+(* change the function linearize that takes two list of events
+as input and outputs a list of events to the following:
+1. first if two list are empty, output is empty
+2. if one of the lists is empty, the result is the other list
+3. If both lists are non-empty, 
+    let e1 and e2 are the last events in l1 and l2.
+    if rc e1 e2 = Fst_then_snd, then e2::(linearize l1 (tail l2)
+    else if rc e1 e2 = Snd_then_fst, then e1::(linearize (tail l1) l2)
+    else (* both are related by Either *)
+       i. find if there exists an e3 in (l2\e2) such that (rc e1 e3 = Fst_then_snd &&
+                  e3 commutes with all the events in the list which is formed
+                  from the events following e3 till the end of l2) then e3::(linearize l1 (place e2 where e3 was present originally in (l2\e2)))
+       ii. if not such e3 exists in l2 check for the same property as given in i for e2 and l1
+       iii. if not such e3 exists in l1 then e1::(linearize (l1\e1) l2) )*)
