@@ -1,0 +1,13 @@
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:0:sanity_check.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: Test Test suite for MRDT:0:sanity_check is successful.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:0:sanity_check.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:2:print_lin.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: Test Test suite for MRDT:2:print_lin is successful.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:2:print_lin.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:4:test_lin.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 E: Test Test suite for MRDT:4:test_lin exited with an error.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 E: File "test.ml", line 29, characters 27-33: Assertion failed in test Test suite for MRDT:4:test_lin.
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 E: Raised at Dune__exe__Test.tests.(fun) in file "test.ml", line 29, characters 27-171
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 E: Called from OUnitRunner.run_one_test.(fun) in file "src/lib/ounit2/advanced/oUnitRunner.ml", line 83, characters 13-26
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 E: 
+2024-09-02T17:07:36+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:4:test_lin.
