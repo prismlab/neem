@@ -242,7 +242,6 @@ let rec insert_at_index lst element index =
   | [], _ -> [element] 
   | _, 0 -> element::lst
   | hd::tl, n -> hd::insert_at_index tl element (n - 1)
-  (*| _,_ -> failwith "Index out of bounds"  (* If the index is negative, raise an error *)*)
 
 let rec linearize (l1:event list) (l2:event list) : event list =
   match (l1, l2) with
@@ -282,7 +281,7 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
   let newR = RepSet.add r1 (RepSet.add r2 c.r) in
   let newN = fun v -> if v = newVer then m else c.n v in
   let newH = fun r -> if r = r1 then newVer else c.h r in
-  let newL = fun v -> if v = newVer then (linearize (List.rev (c.l(c.h(r1)))) (List.rev (c.l(c.h(r2))))) else c.l v in
+  let newL = fun v -> if v = newVer then (linearize ((c.l(c.h(r1)))) ( (c.l(c.h(r2))))) else c.l v in
   let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
              add_edge e (c.h r2) (Merge (r1, r2)) newVer in
   {r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis}

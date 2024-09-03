@@ -259,7 +259,7 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
   let newR = RepSet.add r1 (RepSet.add r2 c.r) in
   let newN = fun v -> if v = newVer then m else c.n v in
   let newH = fun r -> if r = r1 then newVer else c.h r in
-  let newL = fun v -> if v = newVer then (linearize (List.rev (c.l(c.h(r1)))) (List.rev (c.l(c.h(r2))))) else c.l v in
+  let newL = fun v -> if v = newVer then (linearize (c.l(c.h(r1))) (c.l(c.h(r2)))) else c.l v in
   Printf.printf "\nLength of r%d.l after merge: %d" r1 (List.length (newL(newVer)));
   let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
              add_edge e (c.h r2) (Merge (r1, r2)) newVer in

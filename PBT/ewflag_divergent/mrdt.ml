@@ -281,15 +281,10 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
     | None -> failwith "lCA is not found"
     | Some vl -> let sl = c.n vl in  
                  let m = mrdt_merge sl s1 s2 in
-  (*debug_print "merge of c.n(v(%d,%d)) = (%d,%b), c.n(v(%d,%d)) = (%d,%b), c.n(v(%d,%d)) = (%d,%b) is (%d,%b)\n" 
-      (fst vl) (snd vl) (fst sl) (snd sl) 
-      (fst v1) (snd v1) (fst s1) (snd s1) 
-      (fst v2) (snd v2) (fst s2) (snd s2) 
-      (fst m) (snd m);*)
   let newR = RepSet.add r1 (RepSet.add r2 c.r) in
   let newN = fun v -> if v = newVer then m else c.n v in
   let newH = fun r -> if r = r1 then newVer else c.h r in
-  let newL = fun v -> if v = newVer then (linearize (List.rev (c.l(c.h(r1)))) (List.rev (c.l(c.h(r2))))) else c.l v in
+  let newL = fun v -> if v = newVer then (linearize (c.l(c.h(r1))) (c.l(c.h(r2)))) else c.l v in
   let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
              add_edge e (c.h r2) (Merge (r1, r2)) newVer in
   {r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis}

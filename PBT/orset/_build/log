@@ -3,7 +3,7 @@
 # Shared cache: disabled
 # Workspace root: /Users/apple/Documents/IITM/certified-mrdts/PBT/orset
 # Auto-detected concurrency: 8
-$ /Users/apple/.opam/default/bin/ocamlc.opt -config > /var/folders/xj/5506_8p10fgbsr2cvcw1z37m0000gn/T/dune_88609d_output
+$ /Users/apple/.opam/default/bin/ocamlc.opt -config > /var/folders/xj/5506_8p10fgbsr2cvcw1z37m0000gn/T/dune_1aa11c_output
 # Dune context:
 #  { name = "default"
 #  ; kind = "default"
@@ -100,3 +100,9 @@ $ /Users/apple/.opam/default/bin/ocamlc.opt -config > /var/folders/xj/5506_8p10f
 #      }
 #  ; instrument_with = []
 #  }
+$ (cd _build/default && /Users/apple/.opam/default/bin/ocamldep.opt -modules -impl test.ml) > _build/default/.test.eobjs/dune__exe__Test.impl.d
+> File "test.ml", line 18, characters 0-9:
+> 18 | print_dag test_config;
+>      ^^^^^^^^^
+> Error: Syntax error
+[2]
