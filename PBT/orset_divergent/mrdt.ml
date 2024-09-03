@@ -244,14 +244,20 @@ let find_lca (c:config) (v1:ver) (v2:ver) : ver option =
   assert (VerSet.cardinal pa = 1); (* checks if there is only one LCA *)
   if VerSet.is_empty pa then None else Some (VerSet.choose pa) (* LCA *)
 
+(* return value : (index, can_reorder) *)
 let can_reorder (e:event) (l:event list) : (int * bool) =
-let rec can_reorder_aux (e:event) (l:event list) (acc:(int * bool)) : (int * bool) =
-  match l with
-  | [] -> acc
-  | hd::tl -> if rc e hd = Fst_then_snd then (0, true)
-              else if rc e hd = Snd_then_fst then (0, false)
-              else can_reorder_aux e tl (fst (acc) + 1, snd acc) in
-  can_reorder_aux e l (0, false)
+  let rec can_reorder_aux (e:event) (l:event list) (acc:(int * bool)) : (int * bool) =
+    match l with
+    | [] -> acc
+    | hd::tl -> if rc e hd = Fst_then_snd then (0, true)
+                else if rc e hd = Snd_then_fst then (0, false)
+                else 
+                  begin match tl with
+                  | [] -> can_reorder_aux e tl (fst acc + 1, snd acc)
+                  | hd1::_ -> if commutes_with init_st hd hd1 then can_reorder_aux e tl (fst acc + 1, snd acc)
+                              else (0, false)
+                  end in
+    can_reorder_aux e l (0, false)
               
 let rec insert_at_index lst element index =
   match (lst, index) with

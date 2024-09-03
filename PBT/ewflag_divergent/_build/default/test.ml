@@ -2,18 +2,16 @@ open OUnit2
 open Mrdt
 
 let test_config =
-  let c = init_config in
-  let c1 = createBranch c 0 1 in
+  let c1 = createBranch init_config 0 1 in
   let c2 = apply c1 1 (gen_ts (), 1, Enable) in
   let c3 = merge c2 0 1 in 
   let c4 = apply c3 1 (gen_ts (), 1, Disable) in
-  let c5 = merge c4 0 1 in
-  let c6 = apply c5 0 (gen_ts (), 0, Enable) in
-  let c7 = createBranch c6 0 2 in
-  let c8 = merge c7 2 1 in
-  let c9 = apply c8 2 (gen_ts (), 2, Disable) in
-  let c10 = merge c9 1 2 in 
-  let c11 = merge c10 0 1 in c11
+  let c6 = apply c4 2 (gen_ts (), 2, Enable) in
+  let c7 = apply c6 2 (gen_ts (), 2, Disable) in
+  let c8 = merge c7 0 2 in
+  let c10 = merge c8 0 1 in 
+  let c11 = merge c10 2 1 in 
+  c11
  
 let sanity_check (c:config) = 
   assert (VerSet.equal c.g.vertices (vertices_from_edges c.g.edges))

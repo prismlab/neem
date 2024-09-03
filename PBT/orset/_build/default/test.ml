@@ -15,8 +15,6 @@ let test_config =
 let sanity_check (c:config) = 
   assert (VerSet.equal c.g.vertices (vertices_from_edges c.g.edges))
 
-print_dag test_config;
-
 let tests = "Test suite for MRDT" >::: [
   "sanity_check" >:: (fun _ -> sanity_check test_config);
   "print_dag" >:: (fun _ -> print_dag test_config);
