@@ -1,0 +1,43 @@
+ Test run 107
+.E.
+
+Replicas:
+r0
+r1
+r2
+
+Vertices:
+v(0,0) => state:(0,false)
+v(0,957) => state:(1,true)
+v(0,962) => state:(2,true)
+v(0,964) => state:(2,true)
+v(1,956) => state:(0,false)
+v(1,959) => state:(1,true)
+v(1,960) => state:(1,false)
+v(1,963) => state:(1,false)
+v(2,958) => state:(1,true)
+v(2,961) => state:(1,false)
+
+Edges:
+v(0,0) --> [Fork r1 from r0] --> v(1,956)
+v(0,0) --> [(425, 0, Enable)] --> v(0,957)
+v(0,0) --> [Merge r0 into r2] --> v(2,958)
+v(0,957) --> [Merge r0 into r2] --> v(2,958)
+v(1,956) --> [(426, 1, Enable)] --> v(1,959)
+v(1,959) --> [(427, 1, Disable)] --> v(1,960)
+v(2,958) --> [(428, 2, Disable)] --> v(2,961)
+v(0,957) --> [Merge r1 into r0] --> v(0,962)
+v(1,960) --> [Merge r1 into r0] --> v(0,962)
+v(1,960) --> [Merge r1 into r1] --> v(1,963)
+v(1,960) --> [Merge r1 into r1] --> v(1,963)
+v(0,962) --> [Merge r2 into r0] --> v(0,964)
+v(2,961) --> [Merge r2 into r0] --> v(0,964)
+
+Testing linearization for R0
+Linearized Events:
+(425, 0, Enable)
+(428, 2, Disable)
+(426, 1, Enable)
+(427, 1, Disable)
+Lin result = (2,false)
+State = (2,true)

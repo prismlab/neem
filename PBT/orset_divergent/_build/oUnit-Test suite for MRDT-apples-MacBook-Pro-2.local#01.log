@@ -1,9 +1,11 @@
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:0:sanity_check.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: Test Test suite for MRDT:0:sanity_check is successful.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:0:sanity_check.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:2:print_lin.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: Test Test suite for MRDT:2:print_lin is successful.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:2:print_lin.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:5:test_lin2.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: Test Test suite for MRDT:5:test_lin2 is successful.
-2024-09-03T07:03:48+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:5:test_lin2.
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:0:sanity_check.
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 I: Test Test suite for MRDT:0:sanity_check is successful.
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:0:sanity_check.
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 I: Start test Test suite for MRDT:2:test_lin.
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 E: Test Test suite for MRDT:2:test_lin exited with an error.
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 E: File "test.ml", line 23, characters 2-8: Assertion failed in test Test suite for MRDT:2:test_lin.
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 E: Raised at Dune__exe__Test.create_tc in file "test.ml", line 23, characters 2-67
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 E: Called from Stdlib__Set.Make.iter in file "set.ml", line 379, characters 35-38
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 E: Called from OUnitRunner.run_one_test.(fun) in file "src/lib/ounit2/advanced/oUnitRunner.ml", line 83, characters 13-26
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 E: 
+2024-09-04T10:35:59+00:00 apples-MacBook-Pro-2.local#01 I: End test Test suite for MRDT:2:test_lin.

@@ -174,15 +174,12 @@ let path_exists (e:edge list) (v1:ver) (v2:ver) : bool =
   path_exists_aux e VerSet.empty v1 v2
 
 (* Find potential LCAs. ca is candidate LCAs set *)
-let potential_lca (e:edge list) (v1:ver) (v2:ver) (ca:VerSet.t) : VerSet.t =
-  
+let potential_lca (e:edge list) (v1:ver) (v2:ver) (ca:VerSet.t) : VerSet.t = 
   (*Checks if a candidate LCA v' is not reachable to another version in ca *)
   let is_lca (v':ver) : bool = (* Ln 38 of the appendix *)
-    VerSet.for_all (fun v -> 
-      if v = v' then true 
-      else not (path_exists e v v1 && path_exists e v v2 && path_exists e v' v)) ca in 
-
-  VerSet.filter (fun v' -> path_exists e v' v1 && path_exists e v' v2 && is_lca v') ca
+    not (VerSet.exists (fun v -> path_exists e v v1 && path_exists e v v2 && path_exists e v' v) (VerSet.remove v' ca)) in
+  
+    VerSet.filter (fun v' -> path_exists e v' v1 && path_exists e v' v2 && is_lca v') ca
 
 (* Find the ancestors of a given version *)
 let rec find_ancestors (d:dag) (v:ver) : VerSet.t =
@@ -195,16 +192,43 @@ let no_path_exists (vs:VerSet.t) (e:edge list) : bool =
   VerSet.for_all (fun v ->
     VerSet.for_all (fun v' ->
       if v = v' then true else not (path_exists e v v' || path_exists e v' v)) vs) vs
-   
-(* Find the LCA of two versions *)
-let find_lca (c:config) (v1:ver) (v2:ver) : ver option =
+    
+let rec recursive_merge (c:config) (pa:VerSet.t) : (VerSet.t * config) =
+  if VerSet.cardinal pa = 1 then (pa, c)
+  else 
+    let v1 = VerSet.choose pa in
+    let v2 = VerSet.choose (VerSet.remove v1 pa) in
+    let s1 = c.n v1 in let s2 = c.n v2 in
+    let newVer = gen_ver (fst v1) in
+    let (lca, _) = find_lca c v1 v2 in
+    match lca with
+    | None -> failwith "LCA not found"
+    | Some vl -> 
+      let sl = c.n vl in
+      let m = mrdt_merge sl s1 s2 in
+      let newR = c.r in
+      let newN = fun v -> if v = newVer then m else c.n v in
+      let newH = fun r -> if r = fst v1 then newVer else c.h r in
+      let newL = fun v -> c.l v in (* didn't change linearization *)
+      let newG = add_edge (add_edge c.g (c.h (fst v1)) (Merge (fst v1, fst v2)) newVer) (c.h (fst v2)) (Merge (fst v1, fst v2)) newVer in
+      let new_config = {c with r = newR; n = newN; h = newH; l = newL; g = newG} in
+      let new_pa = VerSet.add newVer (VerSet.remove v1 (VerSet.remove v2 pa)) in
+      recursive_merge new_config new_pa
+
+(* Find LCA function *)
+and find_lca (c:config) (v1:ver) (v2:ver) : (ver option * config) =
   let a1 = find_ancestors c.g v1 in
   let a2 = find_ancestors c.g v2 in
   let ca = VerSet.inter a1 a2 in (* common ancestors *)
   let pa = potential_lca c.g.edges v1 v2 ca in (* potential LCAs *)
-  assert (no_path_exists pa c.g.edges); (* checks if not path exists between any 2 distinct vertices in pa *)
-  assert (VerSet.cardinal pa = 1); (* checks if there is only one LCA *)
-  if VerSet.is_empty pa then None else Some (VerSet.choose pa) (* LCA *)
+  if VerSet.is_empty pa then (None, c) 
+  else 
+    (debug_print "\nPotential LCAs of (%d,%d) and (%d,%d) are:" (fst v1) (snd v1) (fst v2) (snd v2);
+    VerSet.iter (fun v -> debug_print "(%d,%d)" (fst v) (snd v)) pa; 
+    assert (no_path_exists pa c.g.edges); (* checks if not path exists between any 2 distinct vertices in pa *)
+    let lca_set, new_config = recursive_merge c pa in
+    assert (VerSet.cardinal lca_set = 1); (* checks if there is only one LCA *)
+    (Some (VerSet.choose lca_set), new_config))
 
 (* return value : (index, can_reorder) *)
 let can_reorder (e:event) (l:event list) : (int * bool) =
@@ -221,11 +245,11 @@ let can_reorder (e:event) (l:event list) : (int * bool) =
                   end in
     can_reorder_aux e l (0, false)
               
-let rec insert_at_index lst element index =
-  match (lst, index) with
-  | [], _ -> [element] 
-  | _, 0 -> element::lst
-  | hd::tl, n -> hd::insert_at_index tl element (n - 1)
+let rec insert_at_index l ele i =
+  match l, i with
+  | [], _ -> [ele] 
+  | _, 0 -> ele::l
+  | hd::tl, n -> hd::insert_at_index tl ele (n - 1)
 
 let rec linearize (l1:event list) (l2:event list) : event list =
   match (l1, l2) with
@@ -238,18 +262,18 @@ let rec linearize (l1:event list) (l2:event list) : event list =
                           (let l1' = linearize tl1 l2 in if not (List.mem e1 l1') then e1::l1' else l1')
                         else 
                           (let (i,b) = can_reorder e1 l2 in
-                           if b = true then 
+                            if b = true then 
                               (let l2' = linearize l1 (insert_at_index tl2 e2 (i-1)) in
-                               if not (List.mem (List.nth l2 i) l2') then (List.nth l2 i)::l2' else l2')
-                           else 
+                                if not (List.mem (List.nth l2 i) l2') then (List.nth l2 i)::l2' else l2')
+                            else 
                             (let (i,b) = can_reorder e2 l1 in
-                             if b = true then 
+                              if b = true then 
                                 (let l1' = linearize (insert_at_index tl1 e1 (i-1)) l2 in
                                   if not (List.mem (List.nth l1 i) l1') then (List.nth l1 i)::l1' else l1')
-                             else 
-                               (let l2' = linearize tl1 l2 in
+                              else 
+                                (let l2' = linearize tl1 l2 in
                                 if not (List.mem e1 l2') then e1::l2' else l2')))
-                        
+                                              
 (* Merge function *)
 let merge (c:config) (r1:repId) (r2:repId) : config =
   let newVer = gen_ver r1 in
@@ -257,18 +281,17 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
 
   let v1 = c.h r1 in let v2 = c.h r2 in
   let s1 = c.n v1 in let s2 = c.n v2 in
-  let lca = find_lca c v1 v2 in
-  match lca with
+  let lca_v, new_config = find_lca c v1 v2 in
+  match lca_v with
     | None -> failwith "lCA is not found"
-    | Some vl -> let sl = c.n vl in  
-                 let m = mrdt_merge sl s1 s2 in
+    | Some vl -> let sl = new_config.n vl in  
+                  let m = mrdt_merge sl s1 s2 in
   let newR = RepSet.add r1 (RepSet.add r2 c.r) in
   let newN = fun v -> if v = newVer then m else c.n v in
   let newH = fun r -> if r = r1 then newVer else c.h r in
   let newL = fun v -> if v = newVer then (linearize (c.l(c.h(r1))) (c.l(c.h(r2)))) else c.l v in
-  Printf.printf "\nLength of r%d.l after merge: %d" r1 (List.length (newL(newVer)));
   let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
-             add_edge e (c.h r2) (Merge (r1, r2)) newVer in
+              add_edge e (c.h r2) (Merge (r1, r2)) newVer in
   {r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis}
 
 (* BEGIN of helper functions to print the graph *)
@@ -283,8 +306,9 @@ let str_of_edge = function
   | Apply e -> string_of_event e
   | Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
 
-let print_edge e = Printf.printf "v(%d,%d) --> [%s] --> v(%d,%d)\n" 
-    (fst e.src) (snd e.src) (str_of_edge e.label) (fst e.dst) (snd e.dst)
+let print_edge e = 
+  Printf.printf "\nv(%d,%d) --> [%s] --> v(%d,%d)" 
+  (fst e.src) (snd e.src) (str_of_edge e.label) (fst e.dst) (snd e.dst)
 
 let print_vertex (c:config) (v:ver) =
   let st = c.n v in
@@ -292,11 +316,11 @@ let print_vertex (c:config) (v:ver) =
   print_st st
 
 let print_dag (c:config) =
-  Printf.printf "\nReplicas:\n";
+  Printf.printf "\n\nReplicas:\n";
   RepSet.iter (fun r -> Printf.printf "r%d\n" r) c.r;
-  Printf.printf "\nVertices:\n";
+  Printf.printf "\nVertices:";
   VerSet.iter (print_vertex c) c.g.vertices;
-  Printf.printf "\nEdges:\n";
+  Printf.printf "\n\nEdges:";
   List.iter print_edge (List.rev c.g.edges)
 
 (* END of helper functions to print the graph *)

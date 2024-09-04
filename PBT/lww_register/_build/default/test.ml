@@ -15,17 +15,22 @@ let test_config =
 let sanity_check (c:config) = 
   assert (VerSet.equal c.g.vertices (vertices_from_edges c.g.edges))
 
+let create_tc (r:repId) (c:config) =
+  Printf.printf "\n\nTesting linearization for R%d" r;
+  print_linearization (List.rev (test_config.l(test_config.h(r))));
+  Printf.printf "Lin result = ";
+  print_st (apply_events (List.rev (test_config.l(test_config.h(r)))));
+  Printf.printf "\nState = ";
+  print_st (test_config.n (test_config.h r));
+  assert (eq (apply_events (List.rev (c.l(c.h(r))))) (c.n (c.h r)))
+
+let gen_tc (c:config) : unit =
+  RepSet.iter (fun r -> create_tc r c) c.r
+  
 let tests = "Test suite for MRDT" >::: [
   "sanity_check" >:: (fun _ -> sanity_check test_config);
   "print_dag" >:: (fun _ -> print_dag test_config);
-  "print_lin" >:: (fun _ -> print_linearization (List.rev (test_config.l(test_config.h(2)))));
-  "print_res" >:: (fun _ -> Printf.printf "\nLin result = ";
-                            print_st (apply_events (List.rev (test_config.l(test_config.h(2)))));
-                            Printf.printf "\nState = ";
-                            print_st (test_config.n (test_config.h 2)));
-  "test_lin1" >:: (fun _ -> assert (eq (apply_events (List.rev (test_config.l(test_config.h(0))))) (test_config.n (test_config.h 0))));
-  "test_lin2" >:: (fun _ -> assert (eq (apply_events (List.rev (test_config.l(test_config.h(1))))) (test_config.n (test_config.h 1))));
-  "test_lin3" >:: (fun _ -> assert (eq (apply_events (List.rev (test_config.l(test_config.h(2))))) (test_config.n (test_config.h 2))));
+  "test_lin" >:: (fun _ -> gen_tc test_config);
 ]
 
 let _ = run_test_tt_main tests
