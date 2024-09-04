@@ -1,7 +1,7 @@
 open OUnit2
 open Mrdt
 
-let max_rep = 2 (* for generating 3 replicas *)
+let max_rep = 4 (* for generating 3 replicas *)
 
 let gen_op = QCheck.Gen.oneof [
   QCheck.Gen.return Enable;
@@ -78,7 +78,7 @@ let gen_tc (c:config) : unit =
   
 let run_tests_multiple_times n =
   for i = 1 to n do
-    Printf.printf "\n\n Test run %d\n" i;
+    Printf.printf "\n\n********** Test run %d **********\n" i;
     let test_config = gen_test_config () in
     let tests = "Test suite for MRDT" >::: [
       "sanity_check" >:: (fun _ -> sanity_check test_config);
@@ -90,8 +90,69 @@ let run_tests_multiple_times n =
 
 let _ =
 let start_time = Unix.gettimeofday () in
-run_tests_multiple_times 200;
+run_tests_multiple_times 1;
 let end_time = Unix.gettimeofday () in
 let total_time = end_time -. start_time in
 Printf.printf "Total execution time: %.6f seconds\n" total_time
-  
+
+let rec explore_configs (cl:config list) (nr:int) (nv:int) (acc:config list): config list =
+  if (List.for_all (fun c -> (VerSet.cardinal c.g.vertices = nv)) cl) then (cl @ acc)
+  else
+    match cl with
+    | [] -> acc
+    | c1::cn -> 
+        if VerSet.cardinal c1.g.vertices = nv then 
+          (Printf.printf "\nDONE!!"; explore_configs cn nr nv (c1::acc))
+        else if VerSet.cardinal c1.g.vertices > nv then explore_configs cn nr nv acc
+        else 
+          let r1 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
+          let op = QCheck.Gen.generate1 gen_op in
+          debug_print "\nAPPLY** r%d %s" r1 (if op = Enable then "Enable" else "Disable");
+          let new_c0 = apply c1 r1 (gen_ts (), r1, op) in
+          if VerSet.cardinal new_c0.g.vertices = nv then 
+            (Printf.printf "\nDONE!!"; explore_configs cn nr nv (new_c0::acc))
+          else
+            (let mr1 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
+            let mr2 = gen_diff_id mr1 in
+            debug_print "\nMERGE** r%d r%d" mr1 mr2;
+            let new_c1 = merge c1 mr1 mr2 in
+            if VerSet.cardinal new_c1.g.vertices = nv then 
+              (Printf.printf "\nDONE!!"; explore_configs (new_c0::cn) nr nv (new_c1::acc))
+            else 
+              (*let mr1 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
+              let mr2 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
+              debug_print "\nMERGE** r%d r%d" mr1 mr2;*)
+              let new_c2 = merge new_c0 mr1 mr2 in 
+              if VerSet.cardinal new_c2.g.vertices = nv then 
+                (Printf.printf "\nDONE!!"; explore_configs (new_c0::new_c1::cn) nr nv (new_c2::acc))
+              else 
+                explore_configs (new_c0::new_c1::new_c2::cn) nr nv acc)
+
+let nr = 2 (* Example: number of replicas [0;1;2]*)    
+
+let run_tests_for_config c =
+  print_dag c;
+    for i = 0 to nr do
+      Printf.printf "\n\n***Testing linearization for R%d" i;
+      Printf.printf "\nNo. of vertices at R%d: %d" i (VerSet.cardinal (c.g.vertices));
+      Printf.printf "\nThe vertices are :";
+      VerSet.iter (fun v -> Printf.printf "(%d,%d), " (fst v) (snd v)) (vertices_from_edges c.g.edges);
+      (*print_linearization (List.rev (c.l(c.h(i))));
+      Printf.printf "Lin result = ";
+      print_st (apply_events (List.rev (c.l(c.h(i)))));
+      Printf.printf "\nState = ";
+      print_st (c.n (c.h i));*)
+      assert (eq (apply_events (List.rev (c.l(c.h(i))))) (c.n (c.h i)));
+    done;
+    Printf.printf "\n******************************************"
+
+let _ =
+  let start_time = Unix.gettimeofday () in
+  let init_config = init_config (* Initialize with your actual initial config *) in
+  let nv = 15 in (* Example: number of versions *)
+  let configs = explore_configs [init_config] nr nv [] in
+  List.iter run_tests_for_config configs;
+  let end_time = Unix.gettimeofday () in
+  let total_time = end_time -. start_time in
+  Printf.printf "\n\nLength of config list: %d" (List.length configs);
+  Printf.printf "\nTotal execution time: %.6f seconds\n" total_time

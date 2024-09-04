@@ -41,3 +41,78 @@ Linearized Events:
 (427, 1, Disable)
 Lin result = (2,false)
 State = (2,true)
+
+
+
+*****************************************************
+NO OF VERSIONS : 11. NO OF REPLICAS : 3
+
+Replicas:
+r0
+r1
+r2
+
+Vertices:
+v(0,0) => state:(0,false)
+v(0,11) => state:(0,false)
+v(0,3121) => state:(1,false)
+v(0,3522) => state:(2,true)
+v(0,3551) => state:(3,true)
+v(1,3114) => state:(1,true)
+v(1,3117) => state:(1,false)
+v(1,3342) => state:(2,true)
+v(2,3340) => state:(1,true)
+v(2,3538) => state:(1,false)
+v(2,3540) => state:(2,true)
+
+Edges:
+v(0,0) --> [Merge r2 into r0] --> v(0,11)
+v(0,0) --> [Merge r2 into r0] --> v(0,11)
+v(0,0) --> [(1687, 1, Enable)] --> v(1,3114)
+v(1,3114) --> [(1688, 1, Disable)] --> v(1,3117)
+v(0,11) --> [Merge r1 into r0] --> v(0,3121)
+v(1,3117) --> [Merge r1 into r0] --> v(0,3121)
+v(0,0) --> [(1809, 2, Enable)] --> v(2,3340)
+v(1,3117) --> [Merge r2 into r1] --> v(1,3342)
+v(2,3340) --> [Merge r2 into r1] --> v(1,3342)
+v(0,3121) --> [Merge r2 into r0] --> v(0,3522)
+v(2,3340) --> [Merge r2 into r0] --> v(0,3522)
+v(2,3340) --> [(1917, 2, Disable)] --> v(2,3538)
+v(2,3538) --> [Merge r1 into r2] --> v(2,3540)
+v(1,3342) --> [Merge r1 into r2] --> v(2,3540)
+v(0,3522) --> [(1924, 0, Enable)] --> v(0,3551)
+
+***Testing linearization for R0
+No. of vertices at R0: 11
+The vertices are :(0,0), (0,11), (0,3121), (0,3522), (0,3551), (1,3114), (1,3117), (1,3342), (2,3340), (2,3538), (2,3540), 
+Linearized Events:
+(1687, 1, Enable)
+(1688, 1, Disable)
+(1809, 2, Enable)
+(1924, 0, Enable)
+Lin result = (3,true)
+State = (3,true)
+
+***Testing linearization for R1
+No. of vertices at R1: 11
+The vertices are :(0,0), (0,11), (0,3121), (0,3522), (0,3551), (1,3114), (1,3117), (1,3342), (2,3340), (2,3538), (2,3540), 
+Linearized Events:
+(1687, 1, Enable)
+(1688, 1, Disable)
+(1809, 2, Enable)
+Lin result = (2,true)
+State = (2,true)
+
+***Testing linearization for R2
+No. of vertices at R2: 11
+The vertices are :(0,0), (0,11), (0,3121), (0,3522), (0,3551), (1,3114), (1,3117), (1,3342), (2,3340), (2,3538), (2,3540), 
+Linearized Events:
+(1687, 1, Enable)
+(1688, 1, Disable)
+(1809, 2, Enable)
+(1917, 2, Disable)
+Lin result = (2,false)
+State = (2,true)Fatal error: exception File "test.ml", line 242, characters 6-12: Assertion failed
+Raised at Dune__exe__Test.run_tests_for_config in file "test.ml", line 242, characters 6-71
+Called from Stdlib__List.iter in file "list.ml", line 112, characters 12-15
+Called from Dune__exe__Test in file "test.ml", line 251, characters 2-40

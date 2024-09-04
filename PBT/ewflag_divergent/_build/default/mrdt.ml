@@ -1,4 +1,4 @@
-let debug_mode = ref false 
+let debug_mode = ref true 
 
 type repId = int (* unique replica ID *)
 

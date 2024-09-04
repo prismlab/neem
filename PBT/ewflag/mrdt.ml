@@ -163,7 +163,7 @@ let commutes_with (s:state) (e1:event) (e2:event) : bool =
 (* Add an edge to the graph *)
 (* assumption : source vertex is already present in the dag *)
 let add_edge (g:dag) (src:ver) (label:edgeType) (dst:ver) : dag = {
-  vertices = VerSet.add dst g.vertices;
+  vertices = VerSet.add src (VerSet.add dst g.vertices);
   edges = {src; label; dst} :: g.edges;
 }
 
@@ -212,12 +212,13 @@ let apply (c:config) (srcRid:repId) (o:event) : config =
   if version_exists c.g.vertices newVer then failwith "Apply: New version already exists in the configuration";
 
   let srcVer = c.h srcRid in
+  let newR = RepSet.add srcRid c.r in
   let newN = fun v -> if v = newVer then (mrdt_do (c.n srcVer) o) else c.n v in
   let newH = fun r -> if r = srcRid then newVer else c.h r in
   let newL = fun v -> if v = newVer then o::c.l srcVer else c.l v in
   let newG = add_edge c.g srcVer (Apply o) newVer in
   let newVis = VisSet.fold (fun (o1,o2) acc -> VisSet.add (o1,o) (VisSet.add (o2,o) acc)) c.vis c.vis in
-  {r = c.r; n = newN; h = newH; l = newL; g = newG; vis = newVis}
+  {r = newR; n = newN; h = newH; l = newL; g = newG; vis = newVis}
 
 (* Check if path exists between v1 and v2 *)
 let path_exists (e:edge list) (v1:ver) (v2:ver) : bool =
