@@ -98,20 +98,20 @@ Printf.printf "Total execution time: %.6f seconds\n" total_time*)
 (*open OUnit2*)
 open Mrdt
 
-let max_rep = 2 (* for generating 3 replicas *)
+(*let max_rep = 2 *)(* for generating 3 replicas *)
 
-let gen_op = QCheck.Gen.oneof [
+(*let gen_op = QCheck.Gen.oneof [
   QCheck.Gen.return Enable;
   QCheck.Gen.return Disable;
-]
+]*)
 
-let gen_rep = QCheck.Gen.int_range 0 max_rep
+(*let gen_rep = QCheck.Gen.int_range 0 max_rep
 
 let rec gen_diff_id id =
   let new_id = QCheck.Gen.generate1 gen_rep in
   if new_id = id then gen_diff_id id else new_id
 
-(*let gen_test_config () =
+let gen_test_config () =
   let ridc1 = QCheck.Gen.generate1 gen_rep in
   let ridc2 = gen_diff_id ridc1 in
   debug_print "\nCB r%d to r%d" ridc1 ridc2;
@@ -192,43 +192,55 @@ let end_time = Unix.gettimeofday () in
 let total_time = end_time -. start_time in
 Printf.printf "Total execution time: %.6f seconds\n" total_time*)
 
-let rec explore_configs_nr (cl:config list) (nr:int) (ns:int) (acc:config list): config list =
-  if (List.for_all (fun c -> c.ns = ns) cl) then (cl @ acc)
-  else
-    match cl with
-    | [] -> acc
-    | c1::cn -> 
-        if c1.ns = ns then 
-          (explore_configs_nr cn nr ns (c1::acc))
-        else if c1.ns > ns then explore_configs_nr cn nr ns acc
-        else 
-          let r1 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
-          let op = QCheck.Gen.generate1 gen_op in
-          debug_print "\nAPPLY** r%d %s" r1 (if op = Enable then "Enable" else "Disable");
-          let new_c0 = apply c1 r1 (gen_ts (), r1, op) in
-          if new_c0.ns = ns then 
-            (explore_configs_nr cn nr ns (new_c0::acc))
-          else
-            (let mr1 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
-            let mr2 = gen_diff_id mr1 in
-            debug_print "\nMERGE** r%d r%d" mr1 mr2;
-            let new_c1 = merge c1 mr1 mr2 in
-            if new_c1.ns = ns then 
-              (explore_configs_nr (new_c0::cn) nr ns (new_c1::acc))
-            else 
-              (*let mr1 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
-              let mr2 = QCheck.Gen.generate1 (QCheck.Gen.int_range 0 nr) in
-              debug_print "\nMERGE** r%d r%d" mr1 mr2;*)
-              let new_c2 = merge new_c0 mr1 mr2 in 
-              if new_c2.ns = ns then 
-                (explore_configs_nr (new_c0::new_c1::cn) nr ns (new_c2::acc))
-              else 
-                explore_configs_nr (new_c0::new_c1::new_c2::cn) nr ns acc)
+(*let gen_rep n = QCheck.Gen.int_bound n (*[0..n]*)
+let rec gen_diff_id id n =
+  let new_id = QCheck.Gen.generate1 (gen_rep n) in
+  if new_id = id then gen_diff_id id n else new_id*)
 
-let explore_configs (cl:config list) (ns:int) (acc:config list): config list = 
-  List.fold_left (fun acc nr -> explore_configs_nr cl nr ns acc) acc (List.init ns (fun i -> i + 1))
+(*let rec gen_fork_id (n:int) (r:RepSet.t) (*no. of replicas *) =
+  let id = QCheck.Gen.generate1 (gen_rep n) in
+  if RepSet.mem id r then gen_fork_id n r else id
+
+let rec gen_diff_fork_id n r id =
+  let new_id = gen_fork_id n r in
+  if new_id = id then gen_diff_fork_id n r id else new_id*)
+
+  (*let explore_configs (cl:config list) (ns:int) : config list =*)
+    let rec explore_configs_nr (cl:config list) (ns:int) (acc:config list) : config list =
+      match cl with
+      | [] -> acc
+      | c1::cn ->
+          if c1.ns = ns then explore_configs_nr cn ns (c1::acc)
+          else if c1.ns > ns then explore_configs_nr cn ns acc
+          else
+            let new_cl = List.fold_left
+              (fun acc r1 ->
+                (*debug_print "\nAPPLY** r%d Enable" r1;*)
+                let new_e = apply c1 r1 (gen_ts (), r1, Enable) in
+                (*debug_print "\nAPPLY** r%d Disable" r1;*)
+                let new_d = apply c1 r1 (gen_ts (), r1, Disable) in
+                new_e::new_d::acc) [] (List.init ns (fun i -> i)) in
+
+            (*if ns = 1 then new_cl@acc
+            else *)
+            let new_cl1 = 
+              List.fold_left (fun acc i ->
+                List.fold_left (fun inner_acc j ->
+                  let new_m = merge c1 i j in
+                  new_m::inner_acc
+               ) acc (RepSet.elements (RepSet.remove i (c1.r))) (*List.init (ns - i) (fun k -> i + k + 1)*)
+             ) [] (RepSet.elements c1.r) (*List.init (ns + 1) (fun i -> i)*) in
+
+
+              (*let mr1 = QCheck.Gen.generate1 (gen_rep (ns)) in
+              let mr2 = gen_diff_id mr1 (ns) in
+              (*debug_print "\nMERGE** r%d r%d" mr1 mr2;*)
+              let new_m1 = merge c1 mr1 mr2 in*)
+              explore_configs_nr (new_cl@(new_cl1@cn)) ns acc (*in
+    List.fold_left (fun acc nr -> explore_configs_nr cl nr ns acc) [] (List.init ns (fun i -> i))*)
   
-let run_tests c =
+  
+(*let run_tests c =
   print_dag c;
     for i = 0 to RepSet.cardinal c.r do
       Printf.printf "\n\n***Testing linearization for R%d" i;
@@ -242,16 +254,21 @@ let run_tests c =
       print_st (c.n (c.h i));
       assert (eq (apply_events (List.rev (c.l(c.h(i))))) (c.n (c.h i)));
     done;
-    Printf.printf "\n******************************************"
+    Printf.printf "\n******************************************"*)
 
 let _ =
   let start_time = Unix.gettimeofday () in
-  let init_config = init_config (* Initialize with your actual initial config *) in
   let ns = 9 in
-  let configs = explore_configs [init_config] ns [] in
-  Printf.printf "\n\nLength of config list: %d" (List.length configs);
-  List.iter run_tests configs;
-  let end_time = Unix.gettimeofday () in
-  let total_time = end_time -. start_time in
-  Printf.printf "\n\nLength of config list: %d" (List.length configs);
-  Printf.printf "\nTotal execution time: %.6f seconds\n" total_time
+  let configs =
+    if ns = 0 then [init_config]
+    else explore_configs_nr [init_config] ns [] in
+    Printf.printf "\n\nLength of config list: %d" (List.length configs);
+    (*List.iter run_tests configs;*)
+    let end_time = Unix.gettimeofday () in
+    let total_time = end_time -. start_time in
+    Printf.printf "\n\nLength of config list: %d" (List.length configs);
+    Printf.printf "\nTotal execution time: %.6f seconds\n" total_time
+
+
+    (* COUNTER EXAMPLE generated with ns = 6 
+       min time = *)

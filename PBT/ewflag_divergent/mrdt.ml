@@ -11,6 +11,7 @@ type rc_res = (* conflict resolution type *)
   | Either
 
 type state = int * bool (* counter, flag *)
+
 type op = 
   | Enable
   | Disable
@@ -47,7 +48,7 @@ let rc e1 e2 =
 
 let eq s1 s2 = s1 = s2
 
-let verNo = ref 0
+let verNo = ref 1
 let ts = ref 1
 
 (* generates unique version numbers *)
@@ -107,7 +108,7 @@ module EdgeSet = Set.Make(Edge)
 
 (* DAG *)
 type dag = { 
-  vertices : VerSet.t;   (* Set of vertices *)
+  vertices : VerSet.t;   (* Set of active vertices *)
   edges : edge list;  (* List of edges *)
 }
 
@@ -132,7 +133,7 @@ let commutes_with (s:state) (e1:event) (e2:event) : bool =
 (* Add an edge to the graph *)
 (* assumption : source vertex is already present in the dag *)
 let add_edge (g:dag) (src:ver) (label:edgeType) (dst:ver) : dag = {
-  vertices = VerSet.add dst g.vertices;
+  vertices = VerSet.add src (VerSet.add dst g.vertices);
   edges = {src; label; dst} :: g.edges;
 }
 
@@ -144,13 +145,16 @@ let edge_exists (g:dag) (src:ver) (dst:ver) : bool =
 let version_exists (vs:VerSet.t) (v:ver) : bool = 
   VerSet.mem v vs
 
-let initR : RepSet.t = RepSet.singleton 0
+let print_st (s:state) =
+  Printf.printf "(%d,%b)" (fst s) (snd s)
+
+let initR : RepSet.t = RepSet.empty
 let initNs : int = 0
 let initN _ : state = init_st
 let initH _ : ver = (0, 0)
 let initL _ : event list = []
 let initG : dag = { 
-  vertices = VerSet.singleton (gen_ver 0); 
+  vertices = VerSet.empty;
   edges = []
 }
 let initVis : VisSet.t = VisSet.empty
@@ -212,8 +216,48 @@ let rec linearize (l1:event list) (l2:event list) : event list =
                                 if not (List.mem e1 l2') then e1::l2' else l2')))
 
 let lin_check (c:config) =
-  RepSet.for_all (fun r -> eq (apply_events (List.rev (c.l(c.h(r))))) (c.n (c.h r))) c.r                              
-                                
+  Printf.printf "\n\nTesting config with ns=%d" c.ns;
+  RepSet.for_all (fun r -> 
+    Printf.printf "\n\n***Testing linearization for R%d" r;
+    Printf.printf "\nLin result = ";
+    print_st (apply_events (List.rev (c.l(c.h(r)))));
+    Printf.printf "\nState = ";
+    print_st (c.n (c.h r));
+    eq (apply_events (List.rev (c.l(c.h(r))))) (c.n (c.h r))) c.r                              
+     
+let is_enable o =
+  match o with
+  | Enable -> true
+  | _ -> false
+
+(* BEGIN of helper functions to print the graph *)
+let string_of_event ((t, r, o):event) =
+  Printf.sprintf "(%d, %d, %s)" t r (if is_enable o then "Enable" else "Disable")
+
+let str_of_edge = function
+  | CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1
+  | Apply e -> string_of_event e
+  | Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
+
+let print_edge e = 
+  Printf.printf "\nv(%d,%d) --> [%s] --> v(%d,%d)" 
+  (fst e.src) (snd e.src) (str_of_edge e.label) (fst e.dst) (snd e.dst)
+
+let print_vertex (c:config) (v:ver) =
+  let st = c.n v in
+  Printf.printf "\nv(%d,%d) => state:" (fst v) (snd v);
+  print_st st
+
+let print_dag (c:config) =
+  Printf.printf "\n\nReplicas:\n";
+  RepSet.iter (fun r -> Printf.printf "r%d\n" r) c.r;
+  Printf.printf "\nVertices:";
+  VerSet.iter (print_vertex c) c.g.vertices;
+  Printf.printf "\n\nEdges:";
+  List.iter print_edge (List.rev c.g.edges)
+
+(* END of helper functions to print the graph *)
+
 (* CreateBranch function *)
 let createBranch (c:config) (srcRid:repId) (dstRid:repId) : config =
   let newVer = gen_ver dstRid in
@@ -227,9 +271,11 @@ let createBranch (c:config) (srcRid:repId) (dstRid:repId) : config =
   let newL = fun v -> if v = newVer then c.l srcVer else c.l v in
   let newG = add_edge c.g srcVer (CreateBranch (srcRid, dstRid)) newVer in
   let new_c = {r = newR; ns = c.ns + 1; n = newN; h = newH; l = newL; g = newG; vis = c.vis} in
-  Printf.printf "\nLinearization check for createBranch started.";
+  (*print_dag new_c;*)
+  (*debug_print "\nLinearization check for createBranch started.";*)
   assert (lin_check new_c); 
-  Printf.printf "\nLinearization check for createBranch successful.";
+  (*debug_print "\nLinearization check for createBranch successful.";*)
+  Printf.printf "\n******************************************";
   new_c
 
 (* Apply function *)
@@ -238,15 +284,18 @@ let apply (c:config) (srcRid:repId) (o:event) : config =
   if version_exists c.g.vertices newVer then failwith "Apply: New version already exists in the configuration";
 
   let srcVer = c.h srcRid in
+  let newR = RepSet.add srcRid c.r in
   let newN = fun v -> if v = newVer then (mrdt_do (c.n srcVer) o) else c.n v in
   let newH = fun r -> if r = srcRid then newVer else c.h r in
   let newL = fun v -> if v = newVer then o::c.l srcVer else c.l v in
   let newG = add_edge c.g srcVer (Apply o) newVer in
   let newVis = VisSet.fold (fun (o1,o2) acc -> VisSet.add (o1,o) (VisSet.add (o2,o) acc)) c.vis c.vis in
-  let new_c = {r = c.r; ns = c.ns + 1; n = newN; h = newH; l = newL; g = newG; vis = newVis} in
-  Printf.printf "\nLinearization check for apply started...";
+  let new_c = {r = newR; ns = c.ns + 1; n = newN; h = newH; l = newL; g = newG; vis = newVis} in
+  (*print_dag new_c;*)
+  (*debug_print "\nLinearization check for apply started...";*)
   assert (lin_check new_c); 
-  Printf.printf "\nLinearization check for apply successful.";
+  (*debug_print "\nLinearization check for apply successful.";*)
+  Printf.printf "\n******************************************";
   new_c
 
 (* Check if path exists between v1 and v2 *)
@@ -270,7 +319,7 @@ let potential_lca (e:edge list) (v1:ver) (v2:ver) (ca:VerSet.t) : VerSet.t =
 
 (* Find the ancestors of a given version *)
 let rec find_ancestors (d:dag) (v:ver) : VerSet.t =
-  if not (version_exists d.vertices v) then failwith "Version does not exist in the graph";
+  (*if not (version_exists d.vertices v) then failwith "Version does not exist in the graph";*)
   List.fold_left (fun acc edge -> 
     if edge.dst = v then VerSet.union acc (VerSet.add edge.src (find_ancestors d edge.src))
     else acc) (VerSet.add v VerSet.empty) d.edges
@@ -316,42 +365,6 @@ and find_lca (c:config) (v1:ver) (v2:ver) : (ver option * config) =
     let lca_set, new_config = recursive_merge c pa in
     assert (VerSet.cardinal lca_set = 1); (* checks if there is only one LCA *)
     (Some (VerSet.choose lca_set), new_config))
-  
-let is_enable o =
-  match o with
-  | Enable -> true
-  | _ -> false
-
-(* BEGIN of helper functions to print the graph *)
-let print_st (s:state) =
-  Printf.printf "(%d,%b)" (fst s) (snd s)
-
-let string_of_event ((t, r, o):event) =
-  Printf.sprintf "(%d, %d, %s)" t r (if is_enable o then "Enable" else "Disable")
-
-let str_of_edge = function
-  | CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1
-  | Apply e -> string_of_event e
-  | Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
-
-let print_edge e = 
-  Printf.printf "\nv(%d,%d) --> [%s] --> v(%d,%d)" 
-  (fst e.src) (snd e.src) (str_of_edge e.label) (fst e.dst) (snd e.dst)
-
-let print_vertex (c:config) (v:ver) =
-  let st = c.n v in
-  Printf.printf "\nv(%d,%d) => state:" (fst v) (snd v);
-  print_st st
-
-let print_dag (c:config) =
-  Printf.printf "\n\nReplicas:\n";
-  RepSet.iter (fun r -> Printf.printf "r%d\n" r) c.r;
-  Printf.printf "\nVertices:";
-  VerSet.iter (print_vertex c) c.g.vertices;
-  Printf.printf "\n\nEdges:";
-  List.iter print_edge (List.rev c.g.edges)
-
-(* END of helper functions to print the graph *)
 
 (* Merge function *)
 let merge (c:config) (r1:repId) (r2:repId) : config =
@@ -372,10 +385,11 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
   let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
               add_edge e (c.h r2) (Merge (r1, r2)) newVer in
   let new_c = {r = newR; ns = c.ns + 1; n = newN; h = newH; l = newL; g = newG; vis = c.vis} in
-  (*print_dag new_c;*)
-  Printf.printf "\nLinearization check for merge started.";
+  print_dag new_c;
+  (*Printf.printf "\nLinearization check for merge started.";*)
   assert (lin_check new_c); 
-  Printf.printf "\nLinearization check for merge successful.";
+  (*Printf.printf "\nLinearization check for merge successful.";*)
+  Printf.printf "\n******************************************";
   new_c
 
 (* Get vertices set from edge list *)
