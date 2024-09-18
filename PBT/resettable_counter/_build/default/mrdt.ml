@@ -1,4 +1,4 @@
-let debug_mode = ref true 
+let debug_mode = ref false 
 let debug_print fmt =
   if !debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
@@ -12,84 +12,74 @@ type rc_res = (* conflict resolution type *)
   | Fst_then_snd
   | Snd_then_fst
   | Either
-  | Single
 
-type state = (int * char) list
+type pnctr = int * int
+module Pn = struct
+  type t = int
+  let compare = compare
+end
+module Pnctr = Map.Make(Pn)
+
+type state = pnctr Pnctr.t
+
+module IntSet = Set.Make(struct
+  type t = int
+  let compare = compare
+end)
 
 type op = 
-  | Enqueue : char -> op
-  | Dequeue : (int * char) option -> op
-
-type ret = (int * char) option
+  | Set
+  | Reset
 
 (* event type *)
 type event = int * repId * op (* timestamp, replicaID, operation *)
 let get_ts ((t,_,_):event) = t
-let init_st : state = []
+let init_st = Pnctr.empty
+let mrdt_do s e =
+  match e with
+  | _, rid, Set -> Pnctr.update rid 
+                                (function
+                                | None -> Some (1, 0)
+                                | Some _ -> let v = Pnctr.find_opt rid s |> Option.value ~default:(0, 0) in
+                                            Some (fst v + 1, snd v)) 
+                                s
+  | _, _, Reset -> Pnctr.map (fun (p,_) -> (p, p)) s
 
-let deq s : (state * ret) =
-    match s with
-    | [] -> ([], None)
-    | _ -> (List.tl s, Some (List.hd s)) 
+let merge_snd (l:pnctr) (a:pnctr) (b:pnctr) : int =
+  let ls,lr = l in
+  let _,ar = a in
+  let _,br = b in
+  let m = min (min (ar - lr) (br - lr)) (ls - lr) in
+  let r = ar + br - lr - m in 
+  r
 
-let mrdt_do s o : (state * ret) = 
-  match o with
-  | ts, _, Enqueue e -> (s @ [(ts,e)], None)
-  | _, _, Dequeue _ -> let res = deq s in
-                        (*assert (r = snd res);*)
-                        res
+let merge_pn (l:pnctr) (a:pnctr) (b:pnctr) : pnctr =
+  (fst a + fst b - fst l, merge_snd l a b)
 
-let print_st (s:state) =
-  debug_print "[";
-  List.iter (fun x -> debug_print "(%d,%c); " (fst x) (snd x)) s;
-  debug_print "]\n"        
+let domain (m:state) : IntSet.t =
+  Pnctr.fold (fun key _ acc -> IntSet.add key acc) m IntSet.empty
 
-let rec intersection l a b =
-  match l, a, b with
-  | x::xs, y::ys, z::zs -> if ((fst x) < (fst y) || (fst x) < (fst z)) then (intersection xs (y::ys) (z::zs)) else (x::(intersection xs ys zs))
-  | _ -> []
- 
-let rec filter f l =
-  match l with
-  | [] -> []
-  | hd::tl -> if f hd then hd::filter f tl else filter f tl
+let mrdt_merge (l:state) (a:state) (b:state) : state =
+  let keys = IntSet.union (domain l) (IntSet.union (domain a) (domain b)) in
+  let u = IntSet.fold (fun k m -> Pnctr.add k (0, 0) m) keys Pnctr.empty in
+  let m = IntSet.fold (fun k u_map ->
+    let l' = Pnctr.find_opt k l |> Option.value ~default:(0, 0) in
+    let a' = Pnctr.find_opt k a |> Option.value ~default:(0, 0) in
+    let b' = Pnctr.find_opt k b |> Option.value ~default:(0, 0) in
+    Pnctr.add k (merge_pn l' a' b') u_map
+  ) keys u in
+  m
 
-let rec diff a l =
-  match a, l with
-  | x::xs, y::ys -> if fst y < fst x then diff a ys else diff xs ys
-  | [], _ -> []
-  | _, [] -> a
+let rc e1 e2 =
+  let _,_,o1 = e1 in let _,_,o2 = e2 in
+  match o1, o2 with
+  |Set, Reset -> Snd_then_fst
+  |Reset, Set -> Fst_then_snd
+  |_ -> Either
 
-let rec sorted_union l1 l2 =
-  match l1, l2 with
-  | [], [] -> []
-  | [], l2 -> l2
-  | l1, [] -> l1
-  | h1::t1, h2::t2 -> if fst h1 < fst h2 then h1::sorted_union t1 l2 else h2::sorted_union l1 t2
-
-let rec union l1 l2 =
-  match l1, l2 with
-    | [], [] -> []
-    | _, [] -> l1
-    | [], _ -> l2
-    | x::xs, _ -> x::union xs l2
-
-let mrdt_merge (l:state) (a:state) (b:state) : state = 
-  let i = intersection l a b in
-  let da = diff a l in
-  let db = diff b l in
-  let u = sorted_union da db in
-  i @ u
-
-let rc e1 e2 = 
-  match e1, e2 with
-  | (t1, _, Enqueue _), (t2, _, Enqueue _) -> if t1 > t2 then Snd_then_fst else Fst_then_snd
-  | (_, _, Enqueue _), (_, _, Dequeue _) -> (*if r = Some (t1,e) then Snd_then_fst else*) Snd_then_fst
-  | (_, _, Dequeue _), (_, _, Enqueue _) -> (*if r = Some (t2,e) then Fst_then_snd else*) Fst_then_snd
-  | (_, _, Dequeue r1), (_, _, Dequeue r2) -> if r1 <> None && r2 <> None && r1 = r2 then Single else Either
-
-let eq s1 s2 = s1 = s2
-
+let eq s1 s2 = 
+  Pnctr.equal (=) s1 s2
+  
 let verNo = ref 1
 let ts = ref 1
 
@@ -167,8 +157,7 @@ type config = {
 }
 
 let commutes_with (s:state) (e1:event) (e2:event) : bool =
-  let r = eq (fst (mrdt_do (fst (mrdt_do s e1)) e2)) 
-             (fst (mrdt_do (fst (mrdt_do s e2)) e1)) in
+  let r = eq (mrdt_do (mrdt_do s e1) e2) (mrdt_do (mrdt_do s e2) e1) in
   assert (if r = true then (if rc e1 e2 = Either then true else false) 
           else (if rc e1 e2 <> Either then true else false));
   r
@@ -188,6 +177,11 @@ let edge_exists (g:dag) (src:ver) (dst:ver) : bool =
 let version_exists (vs:VerSet.t) (v:ver) : bool = 
   VerSet.mem v vs
 
+let print_st (s:state) =
+  debug_print "[";
+  Pnctr.iter (fun k (p,n) -> debug_print "[%d: (%d, %d)]; " k p n) s;
+  debug_print "]"
+
 let initR : RepSet.t = RepSet.empty
 let initNs : int = 0
 let initN _ : state = init_st
@@ -202,26 +196,9 @@ let initVis : VisSet.t = VisSet.empty
 (* Initial configuration *)
 let init_config = {r = initR; ns = initNs; n = initN; h = initH; l = initL; g = initG; vis = initVis}
 
-let is_enq o =
-  match o with
-  | Enqueue _ -> true
-  | _ -> false
-
-let is_deq o = not (is_enq o)
-
-let get_ret o =
-  match o with
-  | Enqueue _ -> None (* this case will not occur *)
-  | Dequeue r -> r
-
-let get_ele o : char =
-  match o with
-  | Enqueue e -> e
-  | Dequeue _ -> 'a' (* This case will not occur *)
-
 let apply_events el =
   let apply_events_aux (acc:state) (el:event list) : state =
-    List.fold_left (fun acc e -> fst (mrdt_do acc e)) acc el in
+    List.fold_left (fun acc e -> mrdt_do acc e) acc el in
   apply_events_aux init_st el
 
 (* return value : (index, can_reorder) *)
@@ -250,12 +227,7 @@ let rec linearize (l1:event list) (l2:event list) : event list =
   | [], [] -> []
   | [], _ -> l2
   | _, [] -> l1
-  | e1::tl1, e2::tl2 -> let _,_,o1 = e1 in let _,_,o2 = e2 in
-                        if is_deq o1 && get_ret o1 = None then linearize tl1 l2
-                        else if is_deq o2 && get_ret o2 = None then linearize l1 tl2
-                        else if rc e1 e2 = Single then
-                          e1::linearize tl1 tl2
-                        else if rc e1 e2 = Fst_then_snd then 
+  | e1::tl1, e2::tl2 -> if rc e1 e2 = Fst_then_snd then 
                           (let l2' = linearize l1 tl2 in if not (List.mem e2 l2') then e2::l2' else l2')
                         else if rc e1 e2 = Snd_then_fst then 
                           (let l1' = linearize tl1 l2 in if not (List.mem e1 l1') then e1::l1' else l1')
@@ -276,24 +248,26 @@ let rec linearize (l1:event list) (l2:event list) : event list =
 let lin_check (c:config) =
   debug_print "\n\nTesting config with ns=%d" c.ns;
   RepSet.for_all (fun r -> 
-   debug_print "\n\n***Testing linearization for R%d" r;
+    debug_print "\n\n***Testing linearization for R%d" r;
     debug_print "\nLin result = ";
     print_st (apply_events (List.rev (c.l(c.h(r)))));
     debug_print "\nState = ";
     print_st (c.n (c.h r));
     eq (apply_events (List.rev (c.l(c.h(r))))) (c.n (c.h r))) c.r                              
+      
+let is_set o =
+  match o with
+  | Set -> true
+  | _ -> false
 
 (* BEGIN of helper functions to print the graph *)
 let string_of_event ((t, r, o):event) =
-  if is_enq o then
-    Printf.sprintf "(%d, %d, (%s %c))" t r "Enq" (get_ele o)
-  else 
-    Printf.sprintf "(%d, %d, %s)" t r "Deq"
+  Printf.sprintf "(%d, %d, %s)" t r (if is_set o then "Set" else "Reset")
 
-  let str_of_edge = function
-  | CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1
-  | Apply e -> string_of_event e
-  | Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
+let str_of_edge = function
+| CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1
+| Apply e -> string_of_event e
+| Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
 
 let print_edge e = 
   debug_print "\nv(%d,%d) --> [%s] --> v(%d,%d)" 
@@ -341,7 +315,7 @@ let apply (c:config) (srcRid:repId) (o:event) : config =
 
   let srcVer = c.h srcRid in
   let newR = RepSet.add srcRid c.r in
-  let newN = fun v -> if v = newVer then (fst (mrdt_do (c.n srcVer) o)) else c.n v in
+  let newN = fun v -> if v = newVer then (mrdt_do (c.n srcVer) o) else c.n v in
   let newH = fun r -> if r = srcRid then newVer else c.h r in
   let newL = fun v -> if v = newVer then o::c.l srcVer else c.l v in
   let newG = add_edge c.g srcVer (Apply o) newVer in
@@ -465,8 +439,8 @@ as input and outputs a list of events to the following:
     if rc e1 e2 = Fst_then_snd, then e2::(linearize l1 (tail l2)
     else if rc e1 e2 = Snd_then_fst, then e1::(linearize (tail l1) l2)
     else (* both are related by Either *)
-       i. find if there exists an e3 in (l2\e2) such that (rc e1 e3 = Fst_then_snd &&
+        i. find if there exists an e3 in (l2\e2) such that (rc e1 e3 = Fst_then_snd &&
                   e3 commutes with all the events in the list which is formed
                   from the events following e3 till the end of l2) then e3::(linearize l1 (place e2 where e3 was present originally in (l2\e2)))
-       ii. if not such e3 exists in l2 check for the same property as given in i for e2 and l1
-       iii. if not such e3 exists in l1 then e1::(linearize (l1\e1) l2) )*)
+        ii. if not such e3 exists in l2 check for the same property as given in i for e2 and l1
+        iii. if not such e3 exists in l1 then e1::(linearize (l1\e1) l2) )*)

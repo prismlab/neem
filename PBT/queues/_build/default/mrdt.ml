@@ -75,22 +75,10 @@ let rec union l1 l2 =
     | x::xs, _ -> x::union xs l2
 
 let mrdt_merge (l:state) (a:state) (b:state) : state = 
-  Printf.printf "\n l a b********\n";
-  print_st l;
-  print_st a;
-  print_st b;
   let i = intersection l a b in
-  Printf.printf "\nmerge inter*********\n";
-  print_st i;
   let da = diff a l in
-  Printf.printf "\nda*********\n";
-  print_st da;
   let db = diff b l in
-  Printf.printf "\ndb*********\n";
-  print_st db;
   let u = sorted_union da db in
-  Printf.printf "\nudadb*********\n";
-  print_st u;
   i @ u
 
 let rc e1 e2 = 
