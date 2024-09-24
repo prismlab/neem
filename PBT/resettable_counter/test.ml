@@ -35,7 +35,7 @@ let rec explore_configs_nr (cl:config list) (ns:int) (acc:config list) : config 
 
 let _ =
   let start_time = Unix.gettimeofday () in
-  let ns = 7 in
+  let ns = 6 in
   try
     let configs =
       if ns = 0 then [init_config]

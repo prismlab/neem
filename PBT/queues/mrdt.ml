@@ -1,6 +1,6 @@
-let debug_mode = ref true 
+let debug_mode = true 
 let debug_print fmt =
-  if !debug_mode then Printf.printf fmt
+  if debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
 
 type repId = int (* unique replica ID *)
@@ -67,13 +67,6 @@ let rec sorted_union l1 l2 =
   | l1, [] -> l1
   | h1::t1, h2::t2 -> if fst h1 < fst h2 then h1::sorted_union t1 l2 else h2::sorted_union l1 t2
 
-let rec union l1 l2 =
-  match l1, l2 with
-    | [], [] -> []
-    | _, [] -> l1
-    | [], _ -> l2
-    | x::xs, _ -> x::union xs l2
-
 let mrdt_merge (l:state) (a:state) (b:state) : state = 
   let i = intersection l a b in
   let da = diff a l in
@@ -84,8 +77,8 @@ let mrdt_merge (l:state) (a:state) (b:state) : state =
 let rc e1 e2 = 
   match e1, e2 with
   | (t1, _, Enqueue _), (t2, _, Enqueue _) -> if t1 > t2 then Snd_then_fst else Fst_then_snd
-  | (_, _, Enqueue _), (_, _, Dequeue _) -> (*if r = Some (t1,e) then Snd_then_fst else*) Snd_then_fst
-  | (_, _, Dequeue _), (_, _, Enqueue _) -> (*if r = Some (t2,e) then Fst_then_snd else*) Fst_then_snd
+  | (_, _, Enqueue _), (_, _, Dequeue _) -> Snd_then_fst
+  | (_, _, Dequeue _), (_, _, Enqueue _) -> Fst_then_snd
   | (_, _, Dequeue r1), (_, _, Dequeue r2) -> if r1 <> None && r2 <> None && r1 = r2 then Single else Either
 
 let eq s1 s2 = s1 = s2
@@ -250,10 +243,10 @@ let rec linearize (l1:event list) (l2:event list) : event list =
   | [], [] -> []
   | [], _ -> l2
   | _, [] -> l1
-  | e1::tl1, e2::tl2 -> let _,_,o1 = e1 in let _,_,o2 = e2 in
+  | e1::tl1, e2::tl2 -> (*let _,_,o1 = e1 in let _,_,o2 = e2 in
                         if is_deq o1 && get_ret o1 = None then linearize tl1 l2
                         else if is_deq o2 && get_ret o2 = None then linearize l1 tl2
-                        else if rc e1 e2 = Single then
+                        else*) if rc e1 e2 = Single then
                           e1::linearize tl1 tl2
                         else if rc e1 e2 = Fst_then_snd then 
                           (let l2' = linearize l1 tl2 in if not (List.mem e2 l2') then e2::l2' else l2')

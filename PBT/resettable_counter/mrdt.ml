@@ -14,11 +14,11 @@ type rc_res = (* conflict resolution type *)
   | Either
 
 type pnctr = int * int
-module Pn = struct
+
+module Pnctr = Map.Make(struct
   type t = int
   let compare = compare
-end
-module Pnctr = Map.Make(Pn)
+end)
 
 type state = pnctr Pnctr.t
 
@@ -37,12 +37,9 @@ let get_ts ((t,_,_):event) = t
 let init_st = Pnctr.empty
 let mrdt_do s e =
   match e with
-  | _, rid, Set -> Pnctr.update rid 
-                                (function
-                                | None -> Some (1, 0)
-                                | Some _ -> let v = Pnctr.find_opt rid s |> Option.value ~default:(0, 0) in
-                                            Some (fst v + 1, snd v)) 
-                                s
+  | _, rid, Set -> Pnctr.update rid (function
+                                     | None -> Some (1, 0)
+                                     | Some (p, n) -> Some (p + 1, n)) s
   | _, _, Reset -> Pnctr.map (fun (p,_) -> (p, p)) s
 
 let merge_snd (l:pnctr) (a:pnctr) (b:pnctr) : int =

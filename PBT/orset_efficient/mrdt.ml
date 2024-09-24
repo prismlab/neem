@@ -1,6 +1,6 @@
-let debug_mode = false 
+let debug_mode = ref false 
 let debug_print fmt =
-  if debug_mode then Printf.printf fmt
+  if !debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
 
 type repId = int (* unique replica ID *)
@@ -13,20 +13,63 @@ type rc_res = (* conflict resolution type *)
   | Snd_then_fst
   | Either
 
-type state = int * bool (* counter, flag *)
+type cf = int * bool
+module Ew = struct
+  type t = int
+  let compare = compare
+end
+module Ewflag = Map.Make(Ew)
+
+type state_ew = cf Ewflag.t
+
+module Ele = struct
+  type t = char
+  let compare = compare
+end
+module Orset = Map.Make(Ele)
+
+type state = state_ew Orset.t
+
+module IntSet = Set.Make(struct
+  type t = int
+  let compare = compare
+end)
+
+module CharSet = Set.Make(struct
+  type t = char
+  let compare = compare
+end)
 
 type op = 
-  | Enable
-  | Disable
+  | Add of char
+  | Rem of char
 
 (* event type *)
 type event = int * repId * op (* timestamp, replicaID, operation *)
 let get_ts ((t,_,_):event) = t
-let init_st = (0, false)
+let init_st = Orset.empty
 let mrdt_do s e =
   match e with
-  | _, _, Enable -> (fst s + 1, true)
-  | _, _, Disable -> (fst s, false)
+  | _, rid, Add elem -> 
+      Orset.update elem
+        (function
+          | None -> Some (Ewflag.update rid 
+                          (function 
+                            | None -> Some (1, true)
+                            | Some _ -> Some (1, true)) 
+                          Ewflag.empty) 
+          | Some ew_map -> Some (Ewflag.update rid 
+                                (function
+                                  | None -> Some (1, true)
+                                  | Some (ctr, _) -> Some (ctr + 1, true)) 
+                                ew_map))
+        s
+  | _, _, Rem elem -> 
+      Orset.update elem
+        (function
+          | None -> None  (* If the element doesn't exist, no need to update *)
+          | Some ew_map -> Some (Ewflag.map (fun (ctr, _) -> (ctr, false)) ew_map))  (* Set all flags to false for this element *)
+        s
 
 let merge_flag l a b =
   let lc = fst l in
@@ -39,18 +82,54 @@ let merge_flag l a b =
       else if af then ac - lc > 0
         else bc - lc > 0
 
-let mrdt_merge (l:state) (a:state) (b:state) : state =
+let merge_cf (l:cf) (a:cf) (b:cf) : cf =
   (fst a + fst b - fst l, merge_flag l a b)
 
+let domain_ew (m:state_ew) : IntSet.t =
+  Ewflag.fold (fun key _ acc -> IntSet.add key acc) m IntSet.empty
+
+let mrdt_merge_ew (l:state_ew) (a:state_ew) (b:state_ew) : state_ew =
+  let keys = IntSet.union (domain_ew l) (IntSet.union (domain_ew a) (domain_ew b)) in
+  let u = IntSet.fold (fun k m -> Ewflag.add k (0, false) m) keys Ewflag.empty in
+  let m = IntSet.fold (fun k u_map ->
+    let l' = Ewflag.find_opt k l |> Option.value ~default:(0, false) in
+    let a' = Ewflag.find_opt k a |> Option.value ~default:(0, false) in
+    let b' = Ewflag.find_opt k b |> Option.value ~default:(0, false) in
+    Ewflag.add k (merge_cf l' a' b') u_map
+  ) keys u in
+  m
+
+let domain_orset (m:state) : CharSet.t =
+  Orset.fold (fun key _ acc -> CharSet.add key acc) m CharSet.empty
+
+let mrdt_merge (l:state) (a:state) (b:state) : state =
+  let keys = CharSet.union (domain_orset l) (CharSet.union (domain_orset a) (domain_orset b)) in
+  let u = CharSet.fold (fun k m -> Orset.add k Ewflag.empty m) keys Orset.empty in
+  let m = CharSet.fold (fun k u_map ->
+    let l' = Orset.find_opt k l |> Option.value ~default:(Ewflag.empty) in
+    let a' = Orset.find_opt k a |> Option.value ~default:(Ewflag.empty) in
+    let b' = Orset.find_opt k b |> Option.value ~default:(Ewflag.empty) in
+    Orset.add k (mrdt_merge_ew l' a' b') u_map
+  ) keys u in
+  m
+
 let rc e1 e2 =
-  let _,_,o1 = e1 in let _,_,o2 = e2 in
-  match o1, o2 with
-  | Enable, Disable -> Snd_then_fst
-  | Disable, Enable -> Fst_then_snd
-  | _ -> Either
+  match e1, e2 with
+  | (_, _, Add ele1), (_, _, Rem ele2) -> if ele1 = ele2 then Snd_then_fst else Either
+  | (_, _, Rem ele1), (_, _, Add ele2) -> if ele1 = ele2 then Fst_then_snd else Either
+  | (_, _, _), (_, _, _) -> Either
 
-let eq s1 s2 = s1 = s2
-
+let eq (a:state) (b:state) : bool =
+  let domain_a = domain_orset a in
+  let domain_b = domain_orset b in
+  if CharSet.equal domain_a domain_b then
+    CharSet.for_all (fun k ->
+      let a_val = Orset.find_opt k a |> Option.value ~default:Ewflag.empty in
+      let b_val = Orset.find_opt k b |> Option.value ~default:Ewflag.empty in
+      Ewflag.equal (=) a_val b_val
+    ) domain_a
+  else false
+  
 let verNo = ref 1
 let ts = ref 1
 
@@ -149,7 +228,16 @@ let version_exists (vs:VerSet.t) (v:ver) : bool =
   VerSet.mem v vs
 
 let print_st (s:state) =
-  debug_print "(%d,%b)" (fst s) (snd s)
+  debug_print "[";
+  Orset.iter (fun e ew_map ->  
+    debug_print "[%c: " e;  
+    Ewflag.iter (fun rid (c, f) -> 
+      debug_print "[%d: (%d, %b)]; " rid c f 
+    ) ew_map;
+    debug_print "]; "
+  ) s;
+  debug_print "]"
+  
 
 let initR : RepSet.t = RepSet.empty
 let initNs : int = 0
@@ -217,26 +305,31 @@ let rec linearize (l1:event list) (l2:event list) : event list =
 let lin_check (c:config) =
   debug_print "\n\nTesting config with ns=%d" c.ns;
   RepSet.for_all (fun r -> 
-   debug_print "\n\n***Testing linearization for R%d" r;
+    debug_print "\n\n***Testing linearization for R%d" r;
     debug_print "\nLin result = ";
     print_st (apply_events (List.rev (c.l(c.h(r)))));
     debug_print "\nState = ";
     print_st (c.n (c.h r));
     eq (apply_events (List.rev (c.l(c.h(r))))) (c.n (c.h r))) c.r                              
-     
-let is_enable o =
+      
+let is_add o =
   match o with
-  | Enable -> true
+  | Add _ -> true
   | _ -> false
+
+let get_ele o : char =
+  match o with
+  | Add e -> e
+  | Rem e -> e
 
 (* BEGIN of helper functions to print the graph *)
 let string_of_event ((t, r, o):event) =
-  Printf.sprintf "(%d, %d, %s)" t r (if is_enable o then "Enable" else "Disable")
+  Printf.sprintf "(%d, %d, (%s %c))" t r (if is_add o then "Add" else "Rem") (get_ele o)
 
-  let str_of_edge = function
-  | CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1
-  | Apply e -> string_of_event e
-  | Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
+let str_of_edge = function
+| CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1
+| Apply e -> string_of_event e
+| Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
 
 let print_edge e = 
   debug_print "\nv(%d,%d) --> [%s] --> v(%d,%d)" 
@@ -408,8 +501,8 @@ as input and outputs a list of events to the following:
     if rc e1 e2 = Fst_then_snd, then e2::(linearize l1 (tail l2)
     else if rc e1 e2 = Snd_then_fst, then e1::(linearize (tail l1) l2)
     else (* both are related by Either *)
-       i. find if there exists an e3 in (l2\e2) such that (rc e1 e3 = Fst_then_snd &&
+        i. find if there exists an e3 in (l2\e2) such that (rc e1 e3 = Fst_then_snd &&
                   e3 commutes with all the events in the list which is formed
                   from the events following e3 till the end of l2) then e3::(linearize l1 (place e2 where e3 was present originally in (l2\e2)))
-       ii. if not such e3 exists in l2 check for the same property as given in i for e2 and l1
-       iii. if not such e3 exists in l1 then e1::(linearize (l1\e1) l2) )*)
+        ii. if not such e3 exists in l2 check for the same property as given in i for e2 and l1
+        iii. if not such e3 exists in l1 then e1::(linearize (l1\e1) l2) )*)

@@ -1,12 +1,5 @@
-open Mrdt
 
-(*let test_config =
-  let c = apply init_config 2 (gen_ts (), 2, Enqueue 'a') in
-  let c1 = apply c 1 (gen_ts (), 1, Enqueue 'a') in
-  let c2 = merge c1 2 1 in
-  let c3 = apply c2 1 (gen_ts (), 1, Enqueue 'a') in
-  let c4 = merge c3 2 1 in
-  c4*)
+open Mrdt
 
 let rec explore_configs_nr (cl:config list) (ns:int) (acc:config list) : config list =
   match cl with
@@ -25,8 +18,8 @@ let rec explore_configs_nr (cl:config list) (ns:int) (acc:config list) : config 
 
         let new_cl = 
           List.fold_left (fun acc r1 ->
-            let new_e = apply c1 r1 (gen_ts (), r1, Enqueue 'a') in
-            let new_d = apply c1 r1 (gen_ts (), r1, Dequeue (snd (deq (c1.n (c1.h r1))))) in
+            let new_e = apply c1 r1 (gen_ts (), r1, Add 'a') in
+            let new_d = apply c1 r1 (gen_ts (), r1, Rem 'a') in
             new_e::new_d::acc
           ) [] (List.init ns (fun i -> i)) in
 
@@ -42,9 +35,8 @@ let rec explore_configs_nr (cl:config list) (ns:int) (acc:config list) : config 
 
 let _ =
   let start_time = Unix.gettimeofday () in
-  let ns = 4 in
+  let ns = 6 in
   try
-    (*let configs = [test_config] in*)
     let configs =
       if ns = 0 then [init_config]
       else explore_configs_nr [init_config] ns [] in
