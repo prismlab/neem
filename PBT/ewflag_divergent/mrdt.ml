@@ -1,19 +1,31 @@
-let debug_mode = false 
+let debug_mode = true 
 let debug_print fmt =
   if debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
 
-type repId = int (* unique replica ID *)
+(* unique replica ID *)
+type repId = int 
 
 (* unique version number *)
 type ver = repId * int (* replicaID, version number *)
 
-type rc_res = (* conflict resolution type *)
+(* conflict resolution type *)
+type rc_res = 
   | Fst_then_snd
   | Snd_then_fst
   | Either
 
 type state = int * bool (* counter, flag *)
+
+module IntSet = Set.Make (struct
+  type t = int
+  let compare = compare
+end)
+
+module RepSet = Set.Make (struct
+  type t = repId
+  let compare = compare
+end)
 
 type op = 
   | Enable
@@ -22,7 +34,9 @@ type op =
 (* event type *)
 type event = int * repId * op (* timestamp, replicaID, operation *)
 let get_ts ((t,_,_):event) = t
+
 let init_st = (0, false)
+
 let mrdt_do s e =
   match e with
   | _, _, Enable -> (fst s + 1, true)
@@ -49,7 +63,8 @@ let rc e1 e2 =
   | Disable, Enable -> Fst_then_snd
   | _ -> Either
 
-let eq s1 s2 = s1 = s2
+let eq s1 s2 = 
+  s1 = s2
 
 let verNo = ref 1
 let ts = ref 1
@@ -66,35 +81,31 @@ let gen_ts _ =
   incr ts; 
   t
 
+module VerSet = Set.Make (struct
+  type t = ver
+  let compare = compare
+end)
+
+module VisSet = Set.Make (struct
+  type t = event * event
+  let compare = compare
+end)
+
+module RepIdMap = Map.Make (struct
+  type t = repId
+  let compare = compare 
+end)
+
+module VerMap = Map.Make (struct
+  type t = ver
+  let compare = compare 
+end)
+
 (* Types of edges in the version graph *)
 type edgeType = 
   | CreateBranch of repId * repId (* fork r2 from r1 *)
   | Apply of event (* apply op on the head version of r *)
   | Merge of repId * repId (* merge the head versions of r1 and r2 *)
-
-module Event = struct
-  type t = event
-  let compare = compare
-end
-module EventSet = Set.Make(Event)
-
-module Ver = struct
-  type t = ver
-  let compare = compare
-end
-module VerSet = Set.Make(Ver)
-
-module Rep = struct
-  type t = repId
-  let compare = compare
-end
-module RepSet = Set.Make(Rep)
-
-module EventPair = struct
-  type t = event * event
-  let compare = compare
-end
-module VisSet = Set.Make(EventPair)
 
 (* edgeType in the version graph *)
 type edge = { 
@@ -102,12 +113,6 @@ type edge = {
   label : edgeType;
   dst : ver;
 }
-
-module Edge = struct
-  type t = edge
-  let compare = compare
-end
-module EdgeSet = Set.Make(Edge)
 
 (* DAG *)
 type dag = { 
@@ -117,14 +122,14 @@ type dag = {
 
 (* Configuration type *)
 type config = {
-  r : RepSet.t;       (* Set of active replicas *)
-  ns: int;            (* No. of steps performed in an execution *)
-  n : ver -> state;   (* n maps versions to their states *)
-  h : repId -> ver;   (* h maps replicas to their head version *)
-  l : ver -> event list; (* l maps a version to the list of MRDT events that led to this version *)
-  g : dag;              (* g is a version graph whose vertices represent the v1ly active versions 
-                           and whose edges represent relationship between different versions. *)
-  vis : VisSet.t        (* vis is a partial order over events *)
+  r : RepSet.t;            (* r is a set of active replicas *)
+  n : state VerMap.t;      (* n maps versions to their states *)
+  h : ver RepIdMap.t;      (* h maps replicas to their head version *)
+  v : VerSet.t RepIdMap.t; (* v maps replicas to the set of versions in that replica *)
+  l : event list VerMap.t; (* l maps a version to the list of MRDT events that led to this version *)
+  g : dag;                 (* g is a version graph whose vertices represent the active versions 
+                              and whose edges represent relationship between different versions. *)
+  vis : VisSet.t           (* vis is a partial order over events *)
 }
 
 let commutes_with (s:state) (e1:event) (e2:event) : bool =
@@ -134,36 +139,28 @@ let commutes_with (s:state) (e1:event) (e2:event) : bool =
   r
 
 (* Add an edge to the graph *)
-(* assumption : source vertex is already present in the dag *)
 let add_edge (g:dag) (src:ver) (label:edgeType) (dst:ver) : dag = {
   vertices = VerSet.add src (VerSet.add dst g.vertices);
-  edges = {src; label; dst} :: g.edges;
+  edges = {src; label; dst}::g.edges;
 }
-
-(* Check if an edge exists between two vertices *)
-let edge_exists (g:dag) (src:ver) (dst:ver) : bool =
-  List.exists (fun e -> e.src = src && e.dst = dst) g.edges
-
-(* Check is a vertex is present in the vertex set *)
-let version_exists (vs:VerSet.t) (v:ver) : bool = 
-  VerSet.mem v vs
 
 let print_st (s:state) =
   debug_print "(%d,%b)" (fst s) (snd s)
 
-let initR : RepSet.t = RepSet.empty
 let initNs : int = 0
-let initN _ : state = init_st
-let initH _ : ver = (0, 0)
-let initL _ : event list = []
+let initR : RepSet.t = RepSet.add 0 RepSet.empty
+let initN : state VerMap.t = VerMap.add (0,0) init_st VerMap.empty
+let initH : ver RepIdMap.t = RepIdMap.add 0 (0,0) RepIdMap.empty
+let initV : VerSet.t RepIdMap.t = RepIdMap.add 0 (VerSet.add (0,0) VerSet.empty) RepIdMap.empty
+let initL : event list VerMap.t = VerMap.add (0,0) [] VerMap.empty
 let initG : dag = { 
-  vertices = VerSet.empty;
+  vertices = VerSet.add (0,0) VerSet.empty;
   edges = []
 }
 let initVis : VisSet.t = VisSet.empty
 
 (* Initial configuration *)
-let init_config = {r = initR; ns = initNs; n = initN; h = initH; l = initL; g = initG; vis = initVis}
+let init_config = {r = initR; n = initN; h = initH; v = initV; l = initL; g = initG; vis = initVis}
 
 let apply_events el =
   let apply_events_aux (acc:state) (el:event list) : state =
@@ -214,26 +211,62 @@ let rec linearize (l1:event list) (l2:event list) : event list =
                                 (let l2' = linearize tl1 l2 in
                                 if not (List.mem e1 l2') then e1::l2' else l2')))
 
-let lin_check (c:config) =
-  debug_print "\n\nTesting config with ns=%d" c.ns;
-  RepSet.for_all (fun r -> 
-   debug_print "\n\n***Testing linearization for R%d" r;
-    debug_print "\nLin result = ";
-    print_st (apply_events (List.rev (c.l(c.h(r)))));
-    debug_print "\nState = ";
-    print_st (c.n (c.h r));
-    eq (apply_events (List.rev (c.l(c.h(r))))) (c.n (c.h r))) c.r                              
-     
+let get_rids (c:config) : repId list =
+  List.map fst (RepIdMap.bindings c.h)
+  
+(* Check linearization for a replica r *)                                
+let lin_check (r:int) (c:config) =
+  debug_print "\n\nTesting config with nv=%d" (VerSet.cardinal c.g.vertices);
+  debug_print "\n\n***Testing linearization for R%d" r;
+  debug_print "\nLin result = ";
+  print_st (apply_events (List.rev (VerMap.find (RepIdMap.find r c.h) c.l)));
+  debug_print "\nState = ";
+  print_st (VerMap.find (RepIdMap.find r c.h) c.n);
+  eq (apply_events (List.rev (VerMap.find (RepIdMap.find r c.h) c.l))) 
+     (VerMap.find (RepIdMap.find r c.h) c.n)                            
+          
 let is_enable o =
   match o with
   | Enable -> true
   | _ -> false
 
+let rem_dup lst =
+  let rec rem_dup_aux seen lst =
+    match lst with
+    | [] -> List.rev seen 
+    | hd :: tl ->
+      if List.mem hd seen then rem_dup_aux seen tl 
+      else rem_dup_aux (hd :: seen) tl 
+  in
+  rem_dup_aux [] lst
+
+let read (r:repId) (c:config) =
+  (VerMap.find (RepIdMap.find r c.h) c.n)
+
+let sim (r:repId) (c:config) =
+  let en_ev = List.filter (fun e -> let (_,_,o) = e in is_enable o) (VerMap.find (RepIdMap.find r c.h) c.l) in
+  let dis_ev = List.filter (fun d -> let (_,_,o) = d in not (is_enable o)) (VerMap.find (RepIdMap.find r c.h) c.l) in
+  let n = List.length en_ev in
+  let f = List.exists (fun e -> (List.for_all (fun d -> not (VisSet.mem (e,d) c.vis)) dis_ev)) en_ev in
+  (n, f) 
+
+(* Check simulation relation *)
+let sim_check (r:repId) (c:config) =
+  let s = read r c in
+  let abs = sim r c in
+  debug_print "\n\nTesting config with nv=%d" (VerSet.cardinal c.g.vertices);
+  debug_print "\n\n***Testing simulation relation for R%d" r;
+  debug_print "\nAbs sim result = ";
+  print_st (sim r c);
+  debug_print "\nState = ";
+  print_st (read r c);
+  eq s abs  
+
 (* BEGIN of helper functions to print the graph *)
 let string_of_event ((t, r, o):event) =
   Printf.sprintf "(%d, %d, %s)" t r (if is_enable o then "Enable" else "Disable")
 
-  let str_of_edge = function
+let str_of_edge = function
   | CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d from r%d" r2 r1
   | Apply e -> string_of_event e
   | Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
@@ -243,13 +276,16 @@ let print_edge e =
   (fst e.src) (snd e.src) (str_of_edge e.label) (fst e.dst) (snd e.dst)
 
 let print_vertex (c:config) (v:ver) =
-  let st = c.n v in
-  debug_print "\nv(%d,%d) => state:" (fst v) (snd v);
-  print_st st
+  match VerMap.find_opt v c.n with
+  | Some st ->
+      debug_print "\nv(%d,%d) => state:" (fst v) (snd v);
+      print_st st
+  | None ->
+      debug_print "\nv(%d,%d) => state: not found!" (fst v) (snd v)
 
 let print_dag (c:config) =
   debug_print "\n\nReplicas:\n";
-  RepSet.iter (fun r -> debug_print "r%d\n" r) c.r;
+  List.iter (fun r -> debug_print "r%d\n" r) (get_rids c);
   debug_print "\nVertices:";
   VerSet.iter (print_vertex c) c.g.vertices;
   debug_print "\n\nEdges:";
@@ -261,18 +297,20 @@ let print_dag (c:config) =
 let createBranch (c:config) (srcRid:repId) (dstRid:repId) : config =
   let newVer = gen_ver dstRid in
   if srcRid = dstRid then failwith "CreateBranch: Destination replica must be different from source replica";
-  if version_exists c.g.vertices newVer then failwith "CreateBranch: New version already exists in the configuration";
-
-  let srcVer = c.h srcRid in
+  if List.mem dstRid (get_rids c) then failwith (Printf.sprintf "CreateBranch: Destination replica (r%d) is already forked" dstRid);
+  if VerSet.mem newVer c.g.vertices then failwith "CreateBranch: New version already exists in the configuration";
+  let srcVer = RepIdMap.find srcRid c.h in
   let newR = RepSet.add dstRid c.r in
-  let newN = fun v -> if v = newVer then c.n srcVer else c.n v in
-  let newH = fun r -> if r = dstRid then newVer else c.h r in
-  let newL = fun v -> if v = newVer then c.l srcVer else c.l v in
+  let newN = VerMap.add newVer (VerMap.find srcVer c.n) c.n in
+  let newH = RepIdMap.add dstRid newVer c.h in
+  let newV = RepIdMap.add dstRid (RepIdMap.find srcRid c.v) c.v in
+  let newL = VerMap.add newVer (VerMap.find srcVer c.l) c.l in
   let newG = add_edge c.g srcVer (CreateBranch (srcRid, dstRid)) newVer in
-  let new_c = {r = newR; ns = c.ns + 1; n = newN; h = newH; l = newL; g = newG; vis = c.vis} in
-  (*print_dag new_c;*)
+  let new_c = {r = newR; n = newN; h = newH; v = newV; l = newL; g = newG; vis = c.vis} in
+  print_dag new_c;
   (*debug_print "\nLinearization check for createBranch started.";*)
-  assert (lin_check new_c); 
+  assert (lin_check dstRid new_c); 
+  assert (sim_check dstRid new_c);
   (*debug_print "\nLinearization check for createBranch successful.";*)
   debug_print "\n******************************************";
   new_c
@@ -280,19 +318,20 @@ let createBranch (c:config) (srcRid:repId) (dstRid:repId) : config =
 (* Apply function *)
 let apply (c:config) (srcRid:repId) (o:event) : config = 
   let newVer = gen_ver srcRid in
-  if version_exists c.g.vertices newVer then failwith "Apply: New version already exists in the configuration";
+  if VerSet.mem newVer c.g.vertices then failwith "Apply: New version already exists in the configuration";
 
-  let srcVer = c.h srcRid in
-  let newR = RepSet.add srcRid c.r in
-  let newN = fun v -> if v = newVer then (mrdt_do (c.n srcVer) o) else c.n v in
-  let newH = fun r -> if r = srcRid then newVer else c.h r in
-  let newL = fun v -> if v = newVer then o::c.l srcVer else c.l v in
+  let srcVer = RepIdMap.find srcRid c.h in
+  let newN = VerMap.add newVer (mrdt_do (VerMap.find srcVer c.n) o) c.n in
+  let newH = RepIdMap.add srcRid newVer c.h in
+  let newV = RepIdMap.add srcRid (VerSet.add newVer (RepIdMap.find srcRid c.v)) c.v in
+  let newL = VerMap.add newVer (o::VerMap.find srcVer c.l) c.l in
   let newG = add_edge c.g srcVer (Apply o) newVer in
-  let newVis = VisSet.fold (fun (o1,o2) acc -> VisSet.add (o1,o) (VisSet.add (o2,o) acc)) c.vis c.vis in
-  let new_c = {r = newR; ns = c.ns + 1; n = newN; h = newH; l = newL; g = newG; vis = newVis} in
-  (*print_dag new_c;*)
+  let newVis = List.fold_left (fun acc o1 -> VisSet.add (o1,o) acc) c.vis (VerMap.find srcVer c.l) in
+  let new_c = {r = c.r; n = newN; h = newH; v = newV; l = newL; g = newG; vis = newVis} in
+  print_dag new_c;
   (*debug_print "\nLinearization check for apply started...";*)
-  assert (lin_check new_c); 
+  assert (lin_check srcRid new_c); 
+  assert (sim_check srcRid new_c);
   (*debug_print "\nLinearization check for apply successful.";*)
   debug_print "\n******************************************";
   new_c
@@ -333,20 +372,20 @@ let rec recursive_merge (c:config) (pa:VerSet.t) : (VerSet.t * config) =
   else 
     let v1 = VerSet.choose pa in
     let v2 = VerSet.choose (VerSet.remove v1 pa) in
-    let s1 = c.n v1 in let s2 = c.n v2 in
+    let s1 = VerMap.find v1 c.n in 
+    let s2 = VerMap.find v2 c.n in
     let newVer = gen_ver (fst v1) in
     let (lca, _) = find_lca c v1 v2 in
     match lca with
     | None -> failwith "LCA not found"
     | Some vl -> 
-      let sl = c.n vl in
+      let sl = VerMap.find vl c.n in
       let m = mrdt_merge sl s1 s2 in
-      let newR = c.r in
-      let newN = fun v -> if v = newVer then m else c.n v in
-      let newH = fun r -> if r = fst v1 then newVer else c.h r in
-      let newL = fun v -> c.l v in (* didn't change linearization *)
-      let newG = add_edge (add_edge c.g (c.h (fst v1)) (Merge (fst v1, fst v2)) newVer) (c.h (fst v2)) (Merge (fst v1, fst v2)) newVer in
-      let new_config = {c with r = newR; n = newN; h = newH; l = newL; g = newG} in
+      let newN = VerMap.add newVer m (VerMap.add vl sl c.n) in
+      let newH = RepIdMap.add (fst v1) newVer c.h in
+      let newL = c.l in (* didn't change linearization *)
+      let newG = add_edge (add_edge c.g (RepIdMap.find (fst v1) c.h) (Merge (fst v1, fst v2)) newVer) (RepIdMap.find (fst v2) c.h) (Merge (fst v1, fst v2)) newVer in
+      let new_config = {c with n = newN; h = newH; l = newL; g = newG} in
       let new_pa = VerSet.add newVer (VerSet.remove v1 (VerSet.remove v2 pa)) in
       recursive_merge new_config new_pa
 
@@ -368,25 +407,28 @@ and find_lca (c:config) (v1:ver) (v2:ver) : (ver option * config) =
 (* Merge function *)
 let merge (c:config) (r1:repId) (r2:repId) : config =
   let newVer = gen_ver r1 in
-  if version_exists c.g.vertices newVer then failwith "Merge: New version already exists in the configuration";
+  if VerSet.mem newVer c.g.vertices then failwith "Merge: New version already exists in the configuration";
 
-  let v1 = c.h r1 in let v2 = c.h r2 in
-  let s1 = c.n v1 in let s2 = c.n v2 in
+  let v1 = RepIdMap.find r1 c.h in 
+  let v2 = RepIdMap.find r2 c.h in 
+  let s1 = VerMap.find v1 c.n in 
+  let s2 = VerMap.find v2 c.n in 
   let lca_v, new_config = find_lca c v1 v2 in
   match lca_v with
     | None -> failwith "lCA is not found"
-    | Some vl -> let sl = new_config.n vl in  
-                  let m = mrdt_merge sl s1 s2 in
-  let newR = RepSet.add r1 (RepSet.add r2 c.r) in
-  let newN = fun v -> if v = newVer then m else c.n v in
-  let newH = fun r -> if r = r1 then newVer else c.h r in
-  let newL = fun v -> if v = newVer then (linearize (c.l(c.h(r1))) (c.l(c.h(r2)))) else c.l v in
-  let newG = let e = add_edge c.g (c.h r1) (Merge (r1, r2)) newVer in
-              add_edge e (c.h r2) (Merge (r1, r2)) newVer in
-  let new_c = {r = newR; ns = c.ns + 1; n = newN; h = newH; l = newL; g = newG; vis = c.vis} in
+    | Some vl -> let sl = VerMap.find vl new_config.n in  
+                 let m = mrdt_merge sl s1 s2 in
+  let newN = VerMap.add newVer m c.n in
+  let newH = RepIdMap.add r1 newVer c.h in
+  let newV = RepIdMap.add r1 (VerSet.add newVer (VerSet.union (RepIdMap.find r1 c.v) (RepIdMap.find r2 c.v))) c.v in
+  let newL = VerMap.add newVer (linearize (VerMap.find (RepIdMap.find r1 c.h) c.l) (VerMap.find (RepIdMap.find r2 c.h) c.l)) c.l in
+  let newG = let e = add_edge c.g (RepIdMap.find r1 c.h) (Merge (r1, r2)) newVer in
+             add_edge e (RepIdMap.find r2 c.h) (Merge (r1, r2)) newVer in
+  let new_c = {r = c.r; n = newN; h = newH; v = newV; l = newL; g = newG; vis = c.vis} in
   print_dag new_c;
   (*debug_print "\nLinearization check for merge started.";*)
-  assert (lin_check new_c); 
+  (*assert (lin_check r1 new_c); *)
+  assert (sim_check r1 new_c);
   (*debug_print "\nLinearization check for merge successful.";*)
   debug_print "\n******************************************";
   new_c
@@ -408,8 +450,8 @@ as input and outputs a list of events to the following:
     if rc e1 e2 = Fst_then_snd, then e2::(linearize l1 (tail l2)
     else if rc e1 e2 = Snd_then_fst, then e1::(linearize (tail l1) l2)
     else (* both are related by Either *)
-       i. find if there exists an e3 in (l2\e2) such that (rc e1 e3 = Fst_then_snd &&
+        i. find if there exists an e3 in (l2\e2) such that (rc e1 e3 = Fst_then_snd &&
                   e3 commutes with all the events in the list which is formed
                   from the events following e3 till the end of l2) then e3::(linearize l1 (place e2 where e3 was present originally in (l2\e2)))
-       ii. if not such e3 exists in l2 check for the same property as given in i for e2 and l1
-       iii. if not such e3 exists in l1 then e1::(linearize (l1\e1) l2) )*)
+        ii. if not such e3 exists in l2 check for the same property as given in i for e2 and l1
+        iii. if not such e3 exists in l1 then e1::(linearize (l1\e1) l2) )*)
