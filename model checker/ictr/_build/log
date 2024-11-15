@@ -1,0 +1,101 @@
+# dune exec ./test.exe
+# OCAMLPARAM: unset
+# Shared cache: disabled
+# Workspace root: "/Users/admin/Documents/IITM/certified-mrdts/model
+# checker/ictr"
+# Auto-detected concurrency: 8
+$ /Users/admin/.opam/4.12.0/bin/ocamlc.opt -config > /var/folders/vs/brj1yj5d2596tl8bfd2qcj640000gn/T/dune_516e6c_output
+# Dune context:
+#  { name = "default"
+#  ; kind = "default"
+#  ; profile = Dev
+#  ; merlin = true
+#  ; for_host = None
+#  ; fdo_target_exe = None
+#  ; build_dir = In_build_dir "default"
+#  ; ocaml_bin = External "/Users/admin/.opam/4.12.0/bin"
+#  ; ocaml = Ok External "/Users/admin/.opam/4.12.0/bin/ocaml"
+#  ; ocamlc = External "/Users/admin/.opam/4.12.0/bin/ocamlc.opt"
+#  ; ocamlopt = Ok External "/Users/admin/.opam/4.12.0/bin/ocamlopt.opt"
+#  ; ocamldep = Ok External "/Users/admin/.opam/4.12.0/bin/ocamldep.opt"
+#  ; ocamlmklib = Ok External "/Users/admin/.opam/4.12.0/bin/ocamlmklib.opt"
+#  ; installed_env =
+#      map
+#        { "INSIDE_DUNE" :
+#            "/Users/admin/Documents/IITM/certified-mrdts/model checker/ictr/_build/default"
+#        ; "OCAML_COLOR" : "always"
+#        ; "OPAMCOLOR" : "always"
+#        }
+#  ; findlib_paths = [ External "/Users/admin/.opam/4.12.0/lib" ]
+#  ; ocaml_config =
+#      { version = "4.12.0"
+#      ; standard_library_default = "/Users/admin/.opam/4.12.0/lib/ocaml"
+#      ; standard_library = "/Users/admin/.opam/4.12.0/lib/ocaml"
+#      ; standard_runtime = "the_standard_runtime_variable_was_deleted"
+#      ; ccomp_type = "cc"
+#      ; c_compiler = "cc"
+#      ; ocamlc_cflags = [ "-O2"; "-fno-strict-aliasing"; "-fwrapv" ]
+#      ; ocamlc_cppflags = [ "-D_FILE_OFFSET_BITS=64"; "-D_REENTRANT" ]
+#      ; ocamlopt_cflags = [ "-O2"; "-fno-strict-aliasing"; "-fwrapv" ]
+#      ; ocamlopt_cppflags = [ "-D_FILE_OFFSET_BITS=64"; "-D_REENTRANT" ]
+#      ; bytecomp_c_compiler =
+#          [ "cc"
+#          ; "-O2"
+#          ; "-fno-strict-aliasing"
+#          ; "-fwrapv"
+#          ; "-D_FILE_OFFSET_BITS=64"
+#          ; "-D_REENTRANT"
+#          ]
+#      ; bytecomp_c_libraries = [ "-lm"; "-lpthread" ]
+#      ; native_c_compiler =
+#          [ "cc"
+#          ; "-O2"
+#          ; "-fno-strict-aliasing"
+#          ; "-fwrapv"
+#          ; "-D_FILE_OFFSET_BITS=64"
+#          ; "-D_REENTRANT"
+#          ]
+#      ; native_c_libraries = [ "-lm" ]
+#      ; native_pack_linker = [ "ld"; "-r"; "-o" ]
+#      ; cc_profile = []
+#      ; architecture = "arm64"
+#      ; model = "default"
+#      ; int_size = 63
+#      ; word_size = 64
+#      ; system = "macosx"
+#      ; asm = [ "clang"; "-c"; "-Wno-trigraphs" ]
+#      ; asm_cfi_supported = true
+#      ; with_frame_pointers = false
+#      ; ext_exe = ""
+#      ; ext_obj = ".o"
+#      ; ext_asm = ".s"
+#      ; ext_lib = ".a"
+#      ; ext_dll = ".so"
+#      ; os_type = "Unix"
+#      ; default_executable_name = "a.out"
+#      ; systhread_supported = true
+#      ; host = "aarch64-apple-darwin22.6.0"
+#      ; target = "aarch64-apple-darwin22.6.0"
+#      ; profiling = false
+#      ; flambda = false
+#      ; spacetime = false
+#      ; safe_string = true
+#      ; exec_magic_number = "Caml1999X029"
+#      ; cmi_magic_number = "Caml1999I029"
+#      ; cmo_magic_number = "Caml1999O029"
+#      ; cma_magic_number = "Caml1999A029"
+#      ; cmx_magic_number = "Caml1999Y029"
+#      ; cmxa_magic_number = "Caml1999Z029"
+#      ; ast_impl_magic_number = "Caml1999M029"
+#      ; ast_intf_magic_number = "Caml1999N029"
+#      ; cmxs_magic_number = "Caml1999D029"
+#      ; cmt_magic_number = "Caml1999T029"
+#      ; natdynlink_supported = true
+#      ; supports_shared_libraries = true
+#      ; windows_unicode = false
+#      }
+#  ; instrument_with = []
+#  }
+$ (cd _build/default && /Users/admin/.opam/4.12.0/bin/ocamldep.opt -modules -impl test.ml) > _build/default/.test.eobjs/dune__exe__Test.impl.d
+$ (cd _build/default && /Users/admin/.opam/4.12.0/bin/ocamlopt.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -I .test.eobjs/byte -I .test.eobjs/native -I /Users/admin/.opam/4.12.0/lib/ounit2 -I /Users/admin/.opam/4.12.0/lib/ounit2/advanced -I /Users/admin/.opam/4.12.0/lib/seq -I /Users/admin/.opam/4.12.0/lib/stdlib-shims -intf-suffix .ml -no-alias-deps -opaque -open Dune__exe -o .test.eobjs/native/dune__exe__Test.cmx -c -impl test.ml)
+$ (cd _build/default && /Users/admin/.opam/4.12.0/bin/ocamlopt.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -o test.exe /Users/admin/.opam/4.12.0/lib/ocaml/unix.cmxa -I /Users/admin/.opam/4.12.0/lib/ocaml /Users/admin/.opam/4.12.0/lib/stdlib-shims/stdlib_shims.cmxa /Users/admin/.opam/4.12.0/lib/ounit2/advanced/oUnitAdvanced.cmxa /Users/admin/.opam/4.12.0/lib/ounit2/oUnit.cmxa .test.eobjs/native/dune__exe.cmx .test.eobjs/native/dune__exe__Mrdt.cmx .test.eobjs/native/dune__exe__Test.cmx)
