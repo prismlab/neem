@@ -1,1 +1,1 @@
-test.ml: List Mrdt Printf Unix VerSet
+test.ml: IntPairSet IntSet List Mrdt Printf Unix VerSet

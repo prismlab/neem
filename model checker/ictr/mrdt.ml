@@ -1,7 +1,9 @@
-let debug_mode = false 
+let debug_mode = true 
 let debug_print fmt =
   if debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
+
+let nv = 4
 
 (* unique replica ID *)
 type repId = int 
@@ -83,6 +85,16 @@ module VerMap = Map.Make (struct
   let compare = compare 
 end)
 
+module IntSet = Set.Make (struct
+  type t = int
+  let compare = compare
+end)
+
+module IntPairSet = Set.Make (struct
+  type t = int * int
+  let compare = compare
+end)
+
 (* Types of edges in the version graph *)
 type edgeType = 
   | CreateBranch of repId * repId (* fork r2 from r1 *)
@@ -102,6 +114,12 @@ type dag = {
   edges : edge list;  (* List of edges *)
 }
 
+type t = {
+  f : IntPairSet.t;
+  a : IntSet.t;
+  m : IntPairSet.t;
+}
+
 (* Configuration type *)
 type config = {
   i : int;                 (* i is unique config ID *)
@@ -111,7 +129,9 @@ type config = {
   l : event list VerMap.t; (* l maps a version to the list of MRDT events that led to this version *)
   g : dag;                 (* g is a version graph whose vertices represent the active versions 
                               and whose edges represent relationship between different versions. *)
-  vis : VisSet.t           (* vis is a partial order over events *)
+  vis : VisSet.t;          (* vis is a partial order over events *)
+  es : t;                  (* es is the set of enabled transitions *)
+  ss : t                   (* ss is the sleep set *)
 }
 
 let domain_v (m:'a VerMap.t) : VerSet.t =
@@ -153,9 +173,18 @@ let initG : dag = {
   edges = []
 }
 let initVis : VisSet.t = VisSet.empty
-
+let initEs : t = {
+  f = IntPairSet.add (0,1) IntPairSet.empty;
+  a = IntSet.add 0 IntSet.empty;
+  m = IntPairSet.empty
+}
+let initSs : t = {
+  f = IntPairSet.empty;
+  a = IntSet.empty;
+  m = IntPairSet.empty
+}
 (* Initial configuration *)
-let init_config = {i = initI; r = initR; n = initN; h = initH; l = initL; g = initG; vis = initVis}
+let init_config = {i = initI; r = initR; n = initN; h = initH; l = initL; g = initG; vis = initVis; es = initEs; ss = initSs}
 
 let apply_events el =
   let apply_events_aux (acc:state) (el:event list) : state =
@@ -215,16 +244,18 @@ let rec linearize (l1:event list) (l2:event list) : event list =
   
 (* Check linearization for a replica r *)                                
 let lin_check (r:int) (c:config) =
-  let h = RepIdMap.find r c.h in
-  let st = VerMap.find h c.n in
-  let l = VerMap.find h c.l in
-  debug_print "\n\nTesting config with nv=%d" (VerSet.cardinal c.g.vertices);
-  debug_print "\n\n***Testing linearization for R%d" r;
-  debug_print "\nLin result = ";
-  print_st (apply_events (List.rev l));
-  debug_print "\nState = ";
-  print_st st;
-  eq (apply_events (List.rev l)) st        
+  if nv = VerSet.cardinal c.g.vertices then 
+    let h = RepIdMap.find r c.h in
+    let st = VerMap.find h c.n in
+    let l = VerMap.find h c.l in
+    debug_print "\n\nTesting config with nv=%d" (VerSet.cardinal c.g.vertices);
+    debug_print "\n\n***Testing linearization for R%d" r;
+    debug_print "\nLin result = ";
+    print_st (apply_events (List.rev l));
+    debug_print "\nState = ";
+    print_st st;
+    eq (apply_events (List.rev l)) st        
+  else true
 
 let rem_dup lst =
   let rec rem_dup_aux seen lst =
@@ -307,8 +338,16 @@ let createBranch (c:config) (srcRid:repId) (dstRid:repId) : config =
   let newH = RepIdMap.add dstRid newVer c.h in
   let newL = VerMap.add newVer (VerMap.find srcVer c.l) c.l in
   let newG = add_edge c.g srcVer (CreateBranch (srcRid, dstRid)) newVer in
-  let new_c = {i = newI; r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis} in
-  (*print_dag new_c;*)
+  let newEs = {
+    f = List.fold_left (fun acc x -> IntPairSet.add (x, List.length newR) acc) IntPairSet.empty newR;
+    a = IntSet.of_list newR;
+    m = List.fold_left (fun acc x ->
+          List.fold_left (fun acc' y -> if x <> y then IntPairSet.add (x, y) acc' else acc'
+          ) acc newR
+        ) IntPairSet.empty newR
+  } in
+  let new_c = {i = newI; r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = c.ss} in
+  print_dag new_c;
   (*debug_print "\nLinearization check for createBranch started.";*)
   assert (lin_check dstRid new_c); 
   (*debug_print "\nLinearization check for createBranch successful.";*)
@@ -328,7 +367,15 @@ let apply (c:config) (srcRid:repId) (o:event) : config =
   let newL = VerMap.add newVer (o::VerMap.find srcVer c.l) c.l in
   let newG = add_edge c.g srcVer (Apply o) newVer in
   let newVis = List.fold_left (fun acc o1 -> VisSet.add (o1,o) acc) c.vis (VerMap.find srcVer c.l) in
-  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = newVis} in
+  let newEs = {
+    f = List.fold_left (fun acc x -> IntPairSet.add (x, List.length c.r) acc) IntPairSet.empty c.r;
+    a = IntSet.of_list c.r;
+    m = List.fold_left (fun acc x ->
+          List.fold_left (fun acc' y -> if x <> y then IntPairSet.add (x, y) acc' else acc'
+          ) acc c.r
+        ) IntPairSet.empty c.r
+  } in
+  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = newVis; es = newEs; ss = c.ss} in
   print_dag new_c;
   (*debug_print "\nLinearization check for apply started...";*)
   assert (lin_check srcRid new_c); 
@@ -444,7 +491,15 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
   let newL = VerMap.add newVer (linearize (VerMap.find (RepIdMap.find r1 c.h) c.l) (VerMap.find (RepIdMap.find r2 c.h) c.l)) c.l in
   let newG = let e = add_edge c.g (RepIdMap.find r1 c.h) (Merge (r1, r2)) newVer in
               add_edge e (RepIdMap.find r2 c.h) (Merge (r1, r2)) newVer in
-  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = c.vis} in
+  let newEs = {
+    f = List.fold_left (fun acc x -> IntPairSet.add (x, List.length c.r) acc) IntPairSet.empty c.r;
+    a = IntSet.of_list c.r;
+    m = List.fold_left (fun acc x ->
+          List.fold_left (fun acc' y -> if x <> y then IntPairSet.add (x, y) acc' else acc'
+          ) acc c.r
+        ) IntPairSet.empty c.r
+  } in
+  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = c.ss} in
   print_dag new_c;
   debug_print "\n****Head after merge of r%d and r%d is (%d,%d) " r1 r2 (fst newVer) (snd newVer);
   (*debug_print "\nLinearization check for merge started.";*)

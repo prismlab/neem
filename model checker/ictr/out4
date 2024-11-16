@@ -1,0 +1,1855 @@
+
+
+Config ID:c1
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+******************************************
+
+Config ID:c2
+
+Replicas:
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+******************************************
+
+Config ID:c3
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+******************************************
+
+Config ID:c4
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,4) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [(2, r1, Incr)] --> v(1,4)
+******************************************
+
+Config ID:c5
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,5) => state:1
+v(1,1) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [(3, r0, Incr)] --> v(0,5)
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (1,1) and (0,0) are:(0,0)
+Actual LCAs of (1,1) and (0,0) is (0,0):
+
+Config ID:c6
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,6) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r1 and r0] --> v(1,6)
+****Head after merge of r1 and r0 is (1,6) 
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (0,0) and (1,1) are:(0,0)
+Actual LCAs of (0,0) and (1,1) is (0,0):
+
+Config ID:c7
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,7) => state:0
+v(1,1) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r0 and r1] --> v(0,7)
+****Head after merge of r0 and r1 is (0,7) 
+******************************************
+
+Config ID:c8
+
+Replicas:
+r3
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(3,8) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Fork r1 to r3] --> v(3,8)
+
+Testing config with nv=4
+
+***Testing linearization for R3
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c9
+
+Replicas:
+r3
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(3,9) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Fork r0 to r3] --> v(3,9)
+
+Testing config with nv=4
+
+***Testing linearization for R3
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c10
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,10) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [(4, r2, Incr)] --> v(2,10)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c11
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,11) => state:1
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [(5, r1, Incr)] --> v(1,11)
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c12
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,12) => state:1
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [(6, r0, Incr)] --> v(0,12)
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 1
+State = 1
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (2,3) and (1,1) are:(0,0)
+Actual LCAs of (2,3) and (1,1) is (0,0):
+
+Config ID:c13
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,13) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r1] --> v(2,13)
+v(1,1) --> [Merge r2 and r1] --> v(2,13)
+****Head after merge of r2 and r1 is (2,13) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (2,3) and (0,0) are:(0,0)
+Actual LCAs of (2,3) and (0,0) is (0,0):
+
+Config ID:c14
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,14) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r0] --> v(2,14)
+v(0,0) --> [Merge r2 and r0] --> v(2,14)
+****Head after merge of r2 and r0 is (2,14) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (2,3) and (0,0) are:(0,0)
+Actual LCAs of (2,3) and (0,0) is (0,0):
+
+Config ID:c15
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,15) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r0] --> v(2,15)
+v(0,0) --> [Merge r2 and r0] --> v(2,15)
+****Head after merge of r2 and r0 is (2,15) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (2,3) and (1,1) are:(0,0)
+Actual LCAs of (2,3) and (1,1) is (0,0):
+
+Config ID:c16
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,16) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r1] --> v(2,16)
+v(1,1) --> [Merge r2 and r1] --> v(2,16)
+****Head after merge of r2 and r1 is (2,16) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (2,3) and (1,1) are:(0,0)
+Actual LCAs of (2,3) and (1,1) is (0,0):
+
+Config ID:c17
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,17) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r1] --> v(2,17)
+v(1,1) --> [Merge r2 and r1] --> v(2,17)
+****Head after merge of r2 and r1 is (2,17) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (2,3) and (0,0) are:(0,0)
+Actual LCAs of (2,3) and (0,0) is (0,0):
+
+Config ID:c18
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,18) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r0] --> v(2,18)
+v(0,0) --> [Merge r2 and r0] --> v(2,18)
+****Head after merge of r2 and r0 is (2,18) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (2,3) and (0,0) are:(0,0)
+Actual LCAs of (2,3) and (0,0) is (0,0):
+
+Config ID:c19
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,19) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r0] --> v(2,19)
+v(0,0) --> [Merge r2 and r0] --> v(2,19)
+****Head after merge of r2 and r0 is (2,19) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (2,3) are:(0,0)(2,3)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (2,3) and (1,1) are:(0,0)
+Actual LCAs of (2,3) and (1,1) is (0,0):
+
+Config ID:c20
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+v(2,20) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(2,3) --> [Merge r2 and r1] --> v(2,20)
+v(1,1) --> [Merge r2 and r1] --> v(2,20)
+****Head after merge of r2 and r1 is (2,20) 
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (1,1) and (0,0) are:(0,0)
+Actual LCAs of (1,1) and (0,0) is (0,0):
+
+Config ID:c21
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,21) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r0] --> v(1,21)
+v(0,0) --> [Merge r1 and r0] --> v(1,21)
+****Head after merge of r1 and r0 is (1,21) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (1,1) and (2,3) are:(0,0)
+Actual LCAs of (1,1) and (2,3) is (0,0):
+
+Config ID:c22
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,22) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r2] --> v(1,22)
+v(2,3) --> [Merge r1 and r2] --> v(1,22)
+****Head after merge of r1 and r2 is (1,22) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (1,1) and (0,0) are:(0,0)
+Actual LCAs of (1,1) and (0,0) is (0,0):
+
+Config ID:c23
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,23) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r0] --> v(1,23)
+v(0,0) --> [Merge r1 and r0] --> v(1,23)
+****Head after merge of r1 and r0 is (1,23) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (1,1) and (2,3) are:(0,0)
+Actual LCAs of (1,1) and (2,3) is (0,0):
+
+Config ID:c24
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,24) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r2] --> v(1,24)
+v(2,3) --> [Merge r1 and r2] --> v(1,24)
+****Head after merge of r1 and r2 is (1,24) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (1,1) and (0,0) are:(0,0)
+Actual LCAs of (1,1) and (0,0) is (0,0):
+
+Config ID:c25
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,25) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r0] --> v(1,25)
+v(0,0) --> [Merge r1 and r0] --> v(1,25)
+****Head after merge of r1 and r0 is (1,25) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (1,1) and (2,3) are:(0,0)
+Actual LCAs of (1,1) and (2,3) is (0,0):
+
+Config ID:c26
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,26) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r2] --> v(1,26)
+v(2,3) --> [Merge r1 and r2] --> v(1,26)
+****Head after merge of r1 and r2 is (1,26) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (1,1) and (0,0) are:(0,0)
+Actual LCAs of (1,1) and (0,0) is (0,0):
+
+Config ID:c27
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,27) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r0] --> v(1,27)
+v(0,0) --> [Merge r1 and r0] --> v(1,27)
+****Head after merge of r1 and r0 is (1,27) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (1,1) and (2,3) are:(0,0)
+Actual LCAs of (1,1) and (2,3) is (0,0):
+
+Config ID:c28
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,28) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(1,1) --> [Merge r1 and r2] --> v(1,28)
+v(2,3) --> [Merge r1 and r2] --> v(1,28)
+****Head after merge of r1 and r2 is (1,28) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (0,0) and (1,1) are:(0,0)
+Actual LCAs of (0,0) and (1,1) is (0,0):
+
+Config ID:c29
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,29) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r1] --> v(0,29)
+v(1,1) --> [Merge r0 and r1] --> v(0,29)
+****Head after merge of r0 and r1 is (0,29) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (0,0) and (2,3) are:(0,0)
+Actual LCAs of (0,0) and (2,3) is (0,0):
+
+Config ID:c30
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,30) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r2] --> v(0,30)
+v(2,3) --> [Merge r0 and r2] --> v(0,30)
+****Head after merge of r0 and r2 is (0,30) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (0,0) and (2,3) are:(0,0)
+Actual LCAs of (0,0) and (2,3) is (0,0):
+
+Config ID:c31
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,31) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r2] --> v(0,31)
+v(2,3) --> [Merge r0 and r2] --> v(0,31)
+****Head after merge of r0 and r2 is (0,31) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (0,0) and (1,1) are:(0,0)
+Actual LCAs of (0,0) and (1,1) is (0,0):
+
+Config ID:c32
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,32) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r1] --> v(0,32)
+v(1,1) --> [Merge r0 and r1] --> v(0,32)
+****Head after merge of r0 and r1 is (0,32) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (0,0) and (1,1) are:(0,0)
+Actual LCAs of (0,0) and (1,1) is (0,0):
+
+Config ID:c33
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,33) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r1] --> v(0,33)
+v(1,1) --> [Merge r0 and r1] --> v(0,33)
+****Head after merge of r0 and r1 is (0,33) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (0,0) and (2,3) are:(0,0)
+Actual LCAs of (0,0) and (2,3) is (0,0):
+
+Config ID:c34
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,34) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r2] --> v(0,34)
+v(2,3) --> [Merge r0 and r2] --> v(0,34)
+****Head after merge of r0 and r2 is (0,34) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (2,3) are:(0,0)(2,3)
+Potential LCAs of (0,0) and (2,3) are:(0,0)
+Actual LCAs of (0,0) and (2,3) is (0,0):
+
+Config ID:c35
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,35) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r2] --> v(0,35)
+v(2,3) --> [Merge r0 and r2] --> v(0,35)
+****Head after merge of r0 and r2 is (0,35) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (0,0) and (1,1) are:(0,0)
+Actual LCAs of (0,0) and (1,1) is (0,0):
+
+Config ID:c36
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,36) => state:0
+v(1,1) => state:0
+v(2,3) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Fork r0 to r2] --> v(2,3)
+v(0,0) --> [Merge r0 and r1] --> v(0,36)
+v(1,1) --> [Merge r0 and r1] --> v(0,36)
+****Head after merge of r0 and r1 is (0,36) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c37
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,5) => state:1
+v(1,1) => state:0
+v(2,37) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [(3, r0, Incr)] --> v(0,5)
+v(1,1) --> [Fork r1 to r2] --> v(2,37)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c38
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,5) => state:1
+v(1,1) => state:0
+v(2,38) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [(3, r0, Incr)] --> v(0,5)
+v(0,5) --> [Fork r0 to r2] --> v(2,38)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c39
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,5) => state:1
+v(1,1) => state:0
+v(1,39) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [(3, r0, Incr)] --> v(0,5)
+v(1,1) --> [(7, r1, Incr)] --> v(1,39)
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c40
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,5) => state:1
+v(0,40) => state:2
+v(1,1) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [(3, r0, Incr)] --> v(0,5)
+v(0,5) --> [(8, r0, Incr)] --> v(0,40)
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 2
+State = 2
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (0,5) are:(0,0)(0,5)
+Potential LCAs of (1,1) and (0,5) are:(0,0)
+Actual LCAs of (1,1) and (0,5) is (0,0):
+
+Config ID:c41
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,5) => state:1
+v(1,1) => state:0
+v(1,41) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [(3, r0, Incr)] --> v(0,5)
+v(1,1) --> [Merge r1 and r0] --> v(1,41)
+v(0,5) --> [Merge r1 and r0] --> v(1,41)
+****Head after merge of r1 and r0 is (1,41) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 1
+State = 1
+******************************************
+Ancestors of (0,5) are:(0,0)(0,5)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (0,5) and (1,1) are:(0,0)
+Actual LCAs of (0,5) and (1,1) is (0,0):
+
+Config ID:c42
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,5) => state:1
+v(0,42) => state:1
+v(1,1) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [(3, r0, Incr)] --> v(0,5)
+v(0,5) --> [Merge r0 and r1] --> v(0,42)
+v(1,1) --> [Merge r0 and r1] --> v(0,42)
+****Head after merge of r0 and r1 is (0,42) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c43
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,4) => state:1
+v(2,43) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [(2, r1, Incr)] --> v(1,4)
+v(1,4) --> [Fork r1 to r2] --> v(2,43)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c44
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,4) => state:1
+v(2,44) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [(2, r1, Incr)] --> v(1,4)
+v(0,0) --> [Fork r0 to r2] --> v(2,44)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c45
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,4) => state:1
+v(1,45) => state:2
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [(2, r1, Incr)] --> v(1,4)
+v(1,4) --> [(9, r1, Incr)] --> v(1,45)
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 2
+State = 2
+******************************************
+
+Config ID:c46
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,46) => state:1
+v(1,1) => state:0
+v(1,4) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [(2, r1, Incr)] --> v(1,4)
+v(0,0) --> [(10, r0, Incr)] --> v(0,46)
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 1
+State = 1
+******************************************
+Ancestors of (1,4) are:(0,0)(1,1)(1,4)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (1,4) and (0,0) are:(0,0)
+Actual LCAs of (1,4) and (0,0) is (0,0):
+
+Config ID:c47
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,4) => state:1
+v(1,47) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [(2, r1, Incr)] --> v(1,4)
+v(1,4) --> [Merge r1 and r0] --> v(1,47)
+v(0,0) --> [Merge r1 and r0] --> v(1,47)
+****Head after merge of r1 and r0 is (1,47) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 1
+State = 1
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (1,4) are:(0,0)(1,1)(1,4)
+Potential LCAs of (0,0) and (1,4) are:(0,0)
+Actual LCAs of (0,0) and (1,4) is (0,0):
+
+Config ID:c48
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,48) => state:1
+v(1,1) => state:0
+v(1,4) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [(2, r1, Incr)] --> v(1,4)
+v(0,0) --> [Merge r0 and r1] --> v(0,48)
+v(1,4) --> [Merge r0 and r1] --> v(0,48)
+****Head after merge of r0 and r1 is (0,48) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c49
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,7) => state:0
+v(1,1) => state:0
+v(2,49) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Fork r1 to r2] --> v(2,49)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c50
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,7) => state:0
+v(1,1) => state:0
+v(2,50) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r0 and r1] --> v(0,7)
+v(0,7) --> [Fork r0 to r2] --> v(2,50)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c51
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,7) => state:0
+v(1,1) => state:0
+v(1,51) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [(11, r1, Incr)] --> v(1,51)
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c52
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,7) => state:0
+v(0,52) => state:1
+v(1,1) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r0 and r1] --> v(0,7)
+v(0,7) --> [(12, r0, Incr)] --> v(0,52)
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 1
+State = 1
+******************************************
+Ancestors of (1,1) are:(0,0)(1,1)
+Ancestors of (0,7) are:(0,0)(0,7)(1,1)
+Potential LCAs of (1,1) and (0,7) are:(1,1)
+Actual LCAs of (1,1) and (0,7) is (1,1):
+
+Config ID:c53
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,7) => state:0
+v(1,1) => state:0
+v(1,53) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r1 and r0] --> v(1,53)
+v(0,7) --> [Merge r1 and r0] --> v(1,53)
+****Head after merge of r1 and r0 is (1,53) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,7) are:(0,0)(0,7)(1,1)
+Ancestors of (1,1) are:(0,0)(1,1)
+Potential LCAs of (0,7) and (1,1) are:(1,1)
+Actual LCAs of (0,7) and (1,1) is (1,1):
+
+Config ID:c54
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,7) => state:0
+v(0,54) => state:0
+v(1,1) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(0,0) --> [Merge r0 and r1] --> v(0,7)
+v(1,1) --> [Merge r0 and r1] --> v(0,7)
+v(0,7) --> [Merge r0 and r1] --> v(0,54)
+v(1,1) --> [Merge r0 and r1] --> v(0,54)
+****Head after merge of r0 and r1 is (0,54) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c55
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,6) => state:0
+v(2,55) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r1 and r0] --> v(1,6)
+v(1,6) --> [Fork r1 to r2] --> v(2,55)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c56
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,6) => state:0
+v(2,56) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Fork r0 to r2] --> v(2,56)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c57
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,6) => state:0
+v(1,57) => state:1
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r1 and r0] --> v(1,6)
+v(1,6) --> [(13, r1, Incr)] --> v(1,57)
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c58
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,58) => state:1
+v(1,1) => state:0
+v(1,6) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [(14, r0, Incr)] --> v(0,58)
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 1
+State = 1
+******************************************
+Ancestors of (1,6) are:(0,0)(1,1)(1,6)
+Ancestors of (0,0) are:(0,0)
+Potential LCAs of (1,6) and (0,0) are:(0,0)
+Actual LCAs of (1,6) and (0,0) is (0,0):
+
+Config ID:c59
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(1,1) => state:0
+v(1,6) => state:0
+v(1,59) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r1 and r0] --> v(1,6)
+v(1,6) --> [Merge r1 and r0] --> v(1,59)
+v(0,0) --> [Merge r1 and r0] --> v(1,59)
+****Head after merge of r1 and r0 is (1,59) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 0
+State = 0
+******************************************
+Ancestors of (0,0) are:(0,0)
+Ancestors of (1,6) are:(0,0)(1,1)(1,6)
+Potential LCAs of (0,0) and (1,6) are:(0,0)
+Actual LCAs of (0,0) and (1,6) is (0,0):
+
+Config ID:c60
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,60) => state:0
+v(1,1) => state:0
+v(1,6) => state:0
+
+Edges:
+v(0,0) --> [Fork r0 to r1] --> v(1,1)
+v(1,1) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r1 and r0] --> v(1,6)
+v(0,0) --> [Merge r0 and r1] --> v(0,60)
+v(1,6) --> [Merge r0 and r1] --> v(0,60)
+****Head after merge of r0 and r1 is (0,60) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 0
+State = 0
+******************************************
+
+Config ID:c61
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(1,61) => state:1
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [Fork r0 to r1] --> v(1,61)
+******************************************
+
+Config ID:c62
+
+Replicas:
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(0,62) => state:2
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [(15, r0, Incr)] --> v(0,62)
+******************************************
+
+Config ID:c63
+
+Replicas:
+r2
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(1,61) => state:1
+v(2,63) => state:1
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [Fork r0 to r1] --> v(1,61)
+v(0,2) --> [Fork r0 to r2] --> v(2,63)
+
+Testing config with nv=4
+
+***Testing linearization for R2
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c64
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(1,61) => state:1
+v(1,64) => state:2
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [Fork r0 to r1] --> v(1,61)
+v(1,61) --> [(16, r1, Incr)] --> v(1,64)
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 2
+State = 2
+******************************************
+
+Config ID:c65
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(0,65) => state:2
+v(1,61) => state:1
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [Fork r0 to r1] --> v(1,61)
+v(0,2) --> [(17, r0, Incr)] --> v(0,65)
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 2
+State = 2
+******************************************
+Ancestors of (1,61) are:(0,0)(0,2)(1,61)
+Ancestors of (0,2) are:(0,0)(0,2)
+Potential LCAs of (1,61) and (0,2) are:(0,2)
+Actual LCAs of (1,61) and (0,2) is (0,2):
+
+Config ID:c66
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(1,61) => state:1
+v(1,66) => state:1
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [Fork r0 to r1] --> v(1,61)
+v(1,61) --> [Merge r1 and r0] --> v(1,66)
+v(0,2) --> [Merge r1 and r0] --> v(1,66)
+****Head after merge of r1 and r0 is (1,66) 
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 1
+State = 1
+******************************************
+Ancestors of (0,2) are:(0,0)(0,2)
+Ancestors of (1,61) are:(0,0)(0,2)(1,61)
+Potential LCAs of (0,2) and (1,61) are:(0,2)
+Actual LCAs of (0,2) and (1,61) is (0,2):
+
+Config ID:c67
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(0,67) => state:1
+v(1,61) => state:1
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [Fork r0 to r1] --> v(1,61)
+v(0,2) --> [Merge r0 and r1] --> v(0,67)
+v(1,61) --> [Merge r0 and r1] --> v(0,67)
+****Head after merge of r0 and r1 is (0,67) 
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 1
+State = 1
+******************************************
+
+Config ID:c68
+
+Replicas:
+r1
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(0,62) => state:2
+v(1,68) => state:2
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [(15, r0, Incr)] --> v(0,62)
+v(0,62) --> [Fork r0 to r1] --> v(1,68)
+
+Testing config with nv=4
+
+***Testing linearization for R1
+Lin result = 2
+State = 2
+******************************************
+
+Config ID:c69
+
+Replicas:
+r0
+
+Vertices:
+v(0,0) => state:0
+v(0,2) => state:1
+v(0,62) => state:2
+v(0,69) => state:3
+
+Edges:
+v(0,0) --> [(1, r0, Incr)] --> v(0,2)
+v(0,2) --> [(15, r0, Incr)] --> v(0,62)
+v(0,62) --> [(18, r0, Incr)] --> v(0,69)
+
+Testing config with nv=4
+
+***Testing linearization for R0
+Lin result = 3
+State = 3
+******************************************
+
+No. of possible executions: 60
+No. of unique executions after reduction: 60
+
+Unique exec after reduction:
+c69, c68, c66, c67, c64, c65, c63, c59, c60, c57, c58, c55, c56, c53, c54, c51, c52, c49, c50, c47, c48, c45, c46, c43, c44, c41, c42, c39, c40, c37, c38, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c10, c11, c12, c8, c9, 
+
+Total execution time: 0.001448 seconds

@@ -9,32 +9,35 @@ let rec explore_configs_nr (cl:config list) (nv:int) (acc:config list) (n:int) :
       if VerSet.cardinal c1.g.vertices = nv then explore_configs_nr cn nv (c1::acc) (n+1)
       else if VerSet.cardinal c1.g.vertices > nv then (explore_configs_nr cn nv acc n)
       else
-        let rids = List.rev c1.r in
+        let rids_f = List.map fst (IntPairSet.elements (IntPairSet.diff c1.es.f c1.ss.f)) in
+        let nr = List.length c1.r in
         let new_f = 
-          List.fold_left (fun acc r1 ->
-              let new_f = createBranch c1 r1 (List.length rids) in 
-              new_f::acc
-          ) [] rids in
+          List.fold_right (fun r1 acc ->
+              let new_f = createBranch c1 r1 nr in 
+              new_f::acc 
+          ) rids_f [] in
 
+        let rids_d = IntSet.elements (IntSet.diff c1.es.a c1.ss.a) in
         let new_do = 
-          List.fold_left (fun acc r1 ->
+          List.fold_right (fun r1 acc ->
             let new_d = apply c1 r1 (gen_ts (), r1, Incr) in
             new_d::acc
-          ) [] rids in
+          ) rids_d [] in
 
+        let rid_m1 = rem_dup (List.map fst (IntPairSet.elements (IntPairSet.diff c1.es.m c1.ss.m))) in
+        let rid_m2 = rem_dup (List.map snd (IntPairSet.elements (IntPairSet.diff c1.es.m c1.ss.m))) in
         let new_m = 
-          List.fold_left (fun acc r1 ->
-            List.fold_left (fun acc' r2 ->
+          List.fold_right (fun r1 acc ->
+            List.fold_right (fun r2 acc' ->
               let new_m = merge c1 r1 r2 in
               new_m::acc'
-            ) acc (List.filter (fun r2 -> r2 <> r1) rids)
-          ) [] rids in
+            ) (List.filter (fun r2 -> r2 <> r1) rid_m2) acc
+          ) rid_m1 [] in
         
         explore_configs_nr (new_f @ new_do @ new_m @ cn) nv acc n
 
 let _ =
   let start_time = Unix.gettimeofday () in
-  let nv = 9 in (* nv >= 1*) (* no. of versions *)
   try
     let (configs, n) = explore_configs_nr [init_config] nv [] 0 in
     let end_time = Unix.gettimeofday () in
