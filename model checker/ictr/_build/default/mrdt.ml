@@ -3,7 +3,7 @@ let debug_print fmt =
   if debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
 
-let nv = 4
+let nv = 9
 
 (* unique replica ID *)
 type repId = int 

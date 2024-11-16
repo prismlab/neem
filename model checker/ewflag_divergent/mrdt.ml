@@ -3,7 +3,7 @@ let debug_print fmt =
   if debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
 
-let nv = 9
+let nv = 8
 
 (* unique replica ID *)
 type repId = int 
@@ -17,7 +17,7 @@ type rc_res =
   | Snd_then_fst
   | Either
 
-type state = int
+type state = int * bool (* counter, flag *)
 
 module RepSet = Set.Make (struct
   type t = repId
@@ -25,20 +25,40 @@ module RepSet = Set.Make (struct
 end)
 
 type op = 
-  | Incr
+  | Enable
+  | Disable
 
 (* event type *)
 type event = int * repId * op (* timestamp, replicaID, operation *)
 let get_ts ((t,_,_):event) = t
 
-let init_st = 0
+let init_st = (0, false)
 
-let mrdt_do s _ = s + 1
+let mrdt_do s e =
+  match e with
+  | _, _, Enable -> (fst s + 1, true)
+  | _, _, Disable -> (fst s, false)
+
+let merge_flag l a b =
+  let lc = fst l in
+  let ac = fst a in
+  let bc = fst b in
+  let af = snd a in
+  let bf = snd b in
+  if af && bf then true
+    else if not af && not bf then false
+      else if af then ac - lc > 0
+        else bc - lc > 0
 
 let mrdt_merge (l:state) (a:state) (b:state) : state =
-  a + b - l
+  (fst a + fst b - fst l, merge_flag l a b)
 
-let rc _ _ = Either
+let rc e1 e2 =
+  let _,_,o1 = e1 in let _,_,o2 = e2 in
+  match o1, o2 with
+  | Enable, Disable -> Snd_then_fst
+  | Disable, Enable -> Fst_then_snd
+  | _ -> Either
 
 let eq s1 s2 = 
   s1 = s2
@@ -160,7 +180,7 @@ let add_edge (g:dag) (src:ver) (label:edgeType) (dst:ver) : dag = {
 }
 
 let print_st (s:state) =
-  debug_print "%d" s
+  debug_print "(%d,%b)" (fst s) (snd s)
 
 let initI : int = 1
 let initNs : int = 0
@@ -257,6 +277,11 @@ let lin_check (r:int) (c:config) =
     eq (apply_events (List.rev l)) st        
   else true
 
+let is_enable o =
+  match o with
+  | Enable -> true
+  | _ -> false
+
 let rem_dup lst =
   let rec rem_dup_aux seen lst =
     match lst with
@@ -271,8 +296,12 @@ let read (r:repId) (c:config) =
   VerMap.find (RepIdMap.find r c.h) c.n
 
 let sim (r:repId) (c:config) =
-  List.length (VerMap.find (RepIdMap.find r c.h) c.l)
-  
+  let en_ev = List.filter (fun e -> let (_,_,o) = e in is_enable o) (VerMap.find (RepIdMap.find r c.h) c.l) in
+  let dis_ev = List.filter (fun d -> let (_,_,o) = d in not (is_enable o)) (VerMap.find (RepIdMap.find r c.h) c.l) in
+  let n = List.length en_ev in
+  let f = List.exists (fun e -> (List.for_all (fun d -> not (VisSet.mem (e,d) c.vis)) dis_ev)) en_ev in
+  (n, f) 
+
 (* Check simulation relation *)
 let sim_check (r:repId) (c:config) =
   let s = read r c in
@@ -289,8 +318,8 @@ let sim_check (r:repId) (c:config) =
 (*let string_of_event ((t, r, o):event) =
   Printf.sprintf "(%d, %d, %s)" t r (if is_enable o then "Enable" else "Disable")*)
 
-let string_of_event ((t, r, _):event) =
-  Printf.sprintf "(%d, r%d, %s)" t r "Incr"
+let string_of_event ((t, r, o):event) =
+  Printf.sprintf "(%d, %d, %s)" t r (if is_enable o then "Enable" else "Disable")
 
 let str_of_edge = function
   | CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d to r%d" r1 r2
