@@ -44,8 +44,8 @@ let _ =
     let total_time = end_time -. start_time in
     Printf.printf "\n\nNo. of possible executions: %d" n;
     Printf.printf "\nNo. of unique executions after reduction: %d" (List.length configs);
-    Printf.printf "\n\nUnique exec after reduction:\n";
-    List.iter (fun c -> Printf.printf "c%d, " c.i) configs;
+    (*Printf.printf "\n\nUnique exec after reduction:\n";
+    List.iter (fun c -> Printf.printf "c%d, " c.i) configs;*)
     Printf.printf "\n\nTotal execution time: %.6f seconds\n" total_time
   with
   | exn ->

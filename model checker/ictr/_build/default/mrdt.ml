@@ -1,4 +1,4 @@
-let debug_mode = true 
+let debug_mode = false
 let debug_print fmt =
   if debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
@@ -346,7 +346,12 @@ let createBranch (c:config) (srcRid:repId) (dstRid:repId) : config =
           ) acc newR
         ) IntPairSet.empty newR
   } in
-  let new_c = {i = newI; r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = c.ss} in
+  let newSs = {
+    f = IntPairSet.filter (fun (i,j) -> i < srcRid || (i = srcRid && j < dstRid)) c.es.f;
+    a = IntSet.filter (fun i -> i < srcRid && i <> dstRid) c.es.a;
+    m = IntPairSet.filter (fun (i,j) -> i < srcRid || (i = srcRid && j < dstRid)) c.es.m
+  } in
+  let new_c = {i = newI; r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = newSs} in
   print_dag new_c;
   (*debug_print "\nLinearization check for createBranch started.";*)
   assert (lin_check dstRid new_c); 
@@ -375,7 +380,12 @@ let apply (c:config) (srcRid:repId) (o:event) : config =
           ) acc c.r
         ) IntPairSet.empty c.r
   } in
-  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = newVis; es = newEs; ss = c.ss} in
+  let newSs = {
+    f = IntPairSet.filter (fun (i,_) -> i < srcRid) c.es.f;
+    a = IntSet.filter (fun i -> i < srcRid) c.es.a;
+    m = IntPairSet.filter (fun (i,j) -> i < srcRid && srcRid <> j) c.es.m;
+  } in
+  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = newVis; es = newEs; ss = newSs} in
   print_dag new_c;
   (*debug_print "\nLinearization check for apply started...";*)
   assert (lin_check srcRid new_c); 
@@ -499,7 +509,12 @@ let merge (c:config) (r1:repId) (r2:repId) : config =
           ) acc c.r
         ) IntPairSet.empty c.r
   } in
-  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = c.ss} in
+  let newSs = {
+    f = IntPairSet.filter (fun (i,j) -> i < r1 && j <> r2) c.es.f;
+    a = IntSet.filter (fun i -> i < r1) c.es.a;
+    m = IntPairSet.filter (fun (i,j) -> i < r1 && j = r2) c.es.m
+  } in
+  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = newSs} in
   print_dag new_c;
   debug_print "\n****Head after merge of r%d and r%d is (%d,%d) " r1 r2 (fst newVer) (snd newVer);
   (*debug_print "\nLinearization check for merge started.";*)
