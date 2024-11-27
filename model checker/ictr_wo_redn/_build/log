@@ -1,0 +1,21 @@
+# dune exec ./test.exe
+# OCAMLPARAM: unset
+# Shared cache: disabled
+# Shared cache location: /Users/vimcy/.cache/dune/db
+# Workspace root: "/Users/vimcy/Documents/IITM/certified-mrdts/model
+# checker/ictr_wo_redn"
+# Auto-detected concurrency: 10
+# Dune context:
+#  { name = "default"
+#  ; kind = "default"
+#  ; profile = Dev
+#  ; merlin = true
+#  ; fdo_target_exe = None
+#  ; build_dir = In_build_dir "default"
+#  ; instrument_with = []
+#  }
+$ /Users/vimcy/.opam/default/bin/ocamlc.opt -config > /var/folders/tx/814xvkwd2zqbzjpmk7273ygh0000gn/T/dune_35798d_output
+$ (cd _build/default && /Users/vimcy/.opam/default/bin/ocamldep.opt -modules -impl mrdt.ml) > _build/default/.test.eobjs/dune__exe__Mrdt.impl.d
+$ (cd _build/default && /Users/vimcy/.opam/default/bin/ocamlc.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -bin-annot -bin-annot-occurrences -I .test.eobjs/byte -I /Users/vimcy/.opam/default/lib/ocaml/unix -I /Users/vimcy/.opam/default/lib/ounit2 -I /Users/vimcy/.opam/default/lib/ounit2/advanced -I /Users/vimcy/.opam/default/lib/seq -I /Users/vimcy/.opam/default/lib/stdlib-shims -no-alias-deps -opaque -open Dune__exe -o .test.eobjs/byte/dune__exe__Mrdt.cmo -c -impl mrdt.ml)
+$ (cd _build/default && /Users/vimcy/.opam/default/bin/ocamlopt.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -I .test.eobjs/byte -I .test.eobjs/native -I /Users/vimcy/.opam/default/lib/ocaml/unix -I /Users/vimcy/.opam/default/lib/ounit2 -I /Users/vimcy/.opam/default/lib/ounit2/advanced -I /Users/vimcy/.opam/default/lib/seq -I /Users/vimcy/.opam/default/lib/stdlib-shims -intf-suffix .ml -no-alias-deps -opaque -open Dune__exe -o .test.eobjs/native/dune__exe__Mrdt.cmx -c -impl mrdt.ml)
+$ (cd _build/default && /Users/vimcy/.opam/default/bin/ocamlopt.opt -w @1..3@5..28@30..39@43@46..47@49..57@61..62@67@69-40 -strict-sequence -strict-formats -short-paths -keep-locs -g -o test.exe /Users/vimcy/.opam/default/lib/ocaml/unix/unix.cmxa /Users/vimcy/.opam/default/lib/stdlib-shims/stdlib_shims.cmxa /Users/vimcy/.opam/default/lib/ounit2/advanced/oUnitAdvanced.cmxa /Users/vimcy/.opam/default/lib/ounit2/oUnit.cmxa .test.eobjs/native/dune__exe.cmx .test.eobjs/native/dune__exe__Mrdt.cmx .test.eobjs/native/dune__exe__Test.cmx)
