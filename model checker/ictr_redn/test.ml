@@ -1,53 +1,53 @@
 open Mrdt
 (*open Mrdt_nofork_merge2sides*)
 
-let rec explore_configs_nr (cl:config list) (nv:int) (n:int) : int =
+let n = ref 0 
+
+let rec explore_configs_nr (cl:config list) (nv:int) =
   match cl with
-  | [] -> n
+  | [] -> ()
   | c1::cn ->
-    if VerSet.cardinal c1.g.vertices = nv then explore_configs_nr cn nv (n+1)
-    else if VerSet.cardinal c1.g.vertices > nv then (explore_configs_nr cn nv n)
+    if VerSet.cardinal c1.g.vertices = nv then 
+      (n := !n + 1;
+       explore_configs_nr cn nv)
+    else if VerSet.cardinal c1.g.vertices > nv then (explore_configs_nr cn nv)
     else
-      let rids_f = IntForkSet.diff c1.es.f c1.ss.f in
+      let rids_f = List.map fst (IntPairSet.elements (IntPairSet.diff c1.es.f c1.ss.f)) in
       let nr = List.length c1.r in
       let new_f = 
-        IntForkSet.fold (fun (r1, _, _) acc ->
-          List.fold_right (fun v1 acc' ->
-            let new_f = createBranch c1 r1 v1 nr in 
-            new_f::acc'
-          ) (RepIdMap.find r1 c1.v) acc
+        List.fold_right (fun r1 acc ->
+            let new_f = createBranch c1 r1 nr in 
+            new_f::acc
         ) rids_f [] in
 
       let rids_d = IntSet.diff c1.es.a c1.ss.a in
       let new_do = 
         IntSet.fold (fun r1 acc ->
-          let new_d = apply c1 r1 (gen_ts r1, r1, Incr) in
+          let new_d = apply c1 r1 (gen_ts r1, Incr) in
           new_d::acc
         ) rids_d [] in
 
-      let rid_m1 = IntMergeSet.fold (fun (x, _, _) acc -> IntSet.add x acc) (IntMergeSet.diff c1.es.m c1.ss.m) IntSet.empty in
-      let rid_m2 = IntMergeSet.fold (fun (_, x, _) acc -> IntSet.add x acc) (IntMergeSet.diff c1.es.m c1.ss.m) IntSet.empty in
+      let rid_m1 = IntPairSet.fold (fun (x, _) acc -> IntSet.add x acc) (IntPairSet.diff c1.es.m c1.ss.m) IntSet.empty in
+      let rid_m2 = IntPairSet.fold (fun (_, x) acc -> IntSet.add x acc) (IntPairSet.diff c1.es.m c1.ss.m) IntSet.empty in
       let new_m = 
         IntSet.fold (fun r1 acc ->
           IntSet.fold (fun r2 acc' ->
-            List.fold_right (fun v2 acc'' -> 
-              if r1 = r2 then acc''
+              if r1 = r2 then acc'
               else 
-                let new_m = merge c1 r1 r2 v2 in
+                let new_m = merge c1 r1 r2 in
                 new_m::acc'
-              ) (RepIdMap.find r2 c1.v) acc'
           ) rid_m2 acc
         ) rid_m1 [] in
       
-      explore_configs_nr (new_f @ new_do @ new_m @ cn) nv n
+      explore_configs_nr (new_f @ new_do @ new_m @ cn) nv
 
 let _ =
   let start_time = Unix.gettimeofday () in
   try
-    let n = explore_configs_nr [init_config] nv 0 in
+    let _ = explore_configs_nr [init_config] nv in
     let end_time = Unix.gettimeofday () in
     let total_time = end_time -. start_time in
-    Printf.printf "\n\nNo. of possible executions: %d" n;
+    Printf.printf "\n\nNo. of possible executions: %d" !n;
     (*Printf.printf "\nNo. of unique executions after reduction: %d" (List.length configs);*)
     (*Printf.printf "\n\nUnique exec after reduction:\n";
     List.iter (fun c -> Printf.printf "c%d, " c.i) configs;*)

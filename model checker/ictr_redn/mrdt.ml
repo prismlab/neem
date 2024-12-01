@@ -3,7 +3,7 @@ let debug_print fmt =
   if debug_mode then Printf.printf fmt
   else Printf.ifprintf stdout fmt
 
-let nv = 3
+let nv = 4
 
 (* unique replica ID *)
 type repId = int 
@@ -28,8 +28,8 @@ type op =
   | Incr
 
 (* event type *)
-type event = int * repId * op (* timestamp, replicaID, operation *)
-let get_ts ((t,_,_):event) = t
+type event = int * op (* timestamp, operation *)
+let get_ts ((t,_):event) = t
 
 let init_st = 0
 
@@ -113,21 +113,16 @@ module IntSet = Set.Make (struct
   let compare = compare
 end)
 
-module IntForkSet = Set.Make (struct
-  type t = int * ver * int
-  let compare = compare
-end)
-
-module IntMergeSet = Set.Make (struct
-  type t = int * int * ver
+module IntPairSet = Set.Make (struct
+  type t = int * int
   let compare = compare
 end)
 
 (* Types of edges in the version graph *)
 type edgeType = 
-  | CreateBranch of repId * ver * repId (* fork r2 from a version of r1  *)
-  | Apply of event (* apply op on the head version of r *)
-  | Merge of repId * repId * ver (* merge the a version v of r2 into r1 *)
+  | CreateBranch of repId * repId (* fork r2 from r1  *)
+  | Apply of repId * event (* apply op on the head version of r *)
+  | Merge of repId * repId (* merge r2 into r1 *)
 
 (* edgeType in the version graph *)
 type edge = { 
@@ -143,9 +138,9 @@ type dag = {
 }
 
 type tr = {
-  f : IntForkSet.t;
+  f : IntPairSet.t;
   a : IntSet.t;
-  m : IntMergeSet.t;
+  m : IntPairSet.t;
 }
 
 (* Configuration type *)
@@ -154,7 +149,6 @@ type config = {
   r : int list;            (* r is a list of active replicas *)
   n : state VerMap.t;      (* n maps versions to their states *)
   h : ver RepIdMap.t;      (* h maps replicas to their head version *)
-  v : ver list RepIdMap.t; (* v maps a replica to the list of versions generated at that replica *)
   l : event list VerMap.t; (* l maps a version to the list of MRDT events that led to this version *)
   g : dag;                 (* g is a version graph whose vertices represent the active versions 
                               and whose edges represent relationship between different versions. *)
@@ -191,18 +185,18 @@ let initG : dag = {
 }
 let initVis : VisSet.t = VisSet.empty
 let initEs : tr = {
-  f = IntForkSet.add (0, (0,0), 1) IntForkSet.empty;
+  f = IntPairSet.add (0, 1) IntPairSet.empty;
   a = IntSet.add 0 IntSet.empty;
-  m = IntMergeSet.empty
+  m = IntPairSet.empty
 }
 let initSs : tr = {
-  f = IntForkSet.empty;
+  f = IntPairSet.empty;
   a = IntSet.empty;
-  m = IntMergeSet.empty
+  m = IntPairSet.empty
 }
 
 (* Initial configuration *)
-let init_config = {i = initI; r = initR; n = initN; h = initH; v = initV; l = initL; g = initG; vis = initVis; es = initEs; ss = initSs}
+let init_config = {i = initI; r = initR; n = initN; h = initH; l = initL; g = initG; vis = initVis; es = initEs; ss = initSs}
 
 let apply_events el =
   let apply_events_aux (acc:state) (el:event list) : state =
@@ -314,13 +308,13 @@ let sim_check (r:repId) (c:config) =
   eq s abs  
 
 (* BEGIN of helper functions to print the graph *)
-let string_of_event ((t, r, _):event) =
-  Printf.sprintf "(%d, r%d, %s)" t r "Incr"
+let string_of_event ((t, _):event) =
+  Printf.sprintf "(%d, %s)" t "Incr"
 
 let str_of_edge = function
-| CreateBranch (r1, v1, r2) -> Printf.sprintf "Fork v(%d,%d) of r%d to r%d" (fst v1) (snd v1) r1 r2
-| Apply e -> string_of_event e
-| Merge (r1, r2, v2) -> Printf.sprintf "Merge v(%d,%d) of r%d into r%d" (fst v2) (snd v2) r2 r1
+| CreateBranch (r1, r2) -> Printf.sprintf "Fork r%d to r%d" r1 r2
+| Apply (r, e) -> Printf.sprintf "Apply %s on r%d" (string_of_event e) r
+| Merge (r1, r2) -> Printf.sprintf "Merge r%d into r%d" r2 r1
 
 let print_edge e = 
   debug_print "\nv(%d,%d) --> [%s] --> v(%d,%d)" 
@@ -350,41 +344,36 @@ let print_dag (c:config) =
 (* END of helper functions to print the graph *)
 
 (* CreateBranch function *)
-let createBranch (c:config) (srcRid:repId) (srcVer:ver) (dstRid:repId) : config =
+let createBranch (c:config) (srcRid:repId) (dstRid:repId) : config =
   let newVer = gen_ver dstRid in
   if srcRid = dstRid then failwith "CreateBranch: Destination replica must be different from source replica";
   if List.mem dstRid c.r then failwith (Printf.sprintf "CreateBranch: Destination replica (r%d) is already forked" dstRid);
   if VerSet.mem newVer c.g.vertices then failwith "CreateBranch: New version already exists in the configuration";
 
-  (*let srcVer = RepIdMap.find srcRid c.h in*)
+  let srcVer = RepIdMap.find srcRid c.h in
   let newI = gen_cid () in
   let newR = dstRid::c.r in
   let newN = VerMap.add newVer (VerMap.find srcVer c.n) c.n in
   let newH = RepIdMap.add dstRid newVer c.h in
-  let newV = RepIdMap.add dstRid [newVer] c.v in
   let newL = VerMap.add newVer (VerMap.find srcVer c.l) c.l in
-  let newG = add_edge c.g srcVer (CreateBranch (srcRid, srcVer, dstRid)) newVer in
+  let newG = add_edge c.g srcVer (CreateBranch (srcRid, dstRid)) newVer in
   let newEs = {
     f = List.fold_left (fun acc x -> 
-          List.fold_right (fun v acc' ->
-            IntForkSet.add (x, v, List.length newR) acc'
-          ) (RepIdMap.find x newV) acc
-        ) IntForkSet.empty newR;
+            IntPairSet.add (x, List.length newR) acc
+        ) IntPairSet.empty newR;
     a = IntSet.of_list newR;
     m = List.fold_left (fun acc x ->
           List.fold_left (fun acc' y -> 
-            List.fold_right (fun v acc'' ->
-              if x <> y then IntMergeSet.add (x, y, v) acc'' else acc''
-            ) (RepIdMap.find y newV) acc'
+              if x <> y then IntPairSet.add (x, y) acc' else acc'
           ) acc newR
-        ) IntMergeSet.empty newR
+        ) IntPairSet.empty newR
   } in
   let newSs = {
     f = c.ss.f; (*IntPairSet.filter (fun (i,j) -> i < srcRid || (i = srcRid && j < dstRid)) c.es.f;*)
     a = IntSet.filter (fun i -> i < srcRid && i <> dstRid) c.es.a;
-    m = IntMergeSet.filter (fun (i,j,_) -> i < srcRid || (i = srcRid && j < dstRid)) c.es.m
+    m = IntPairSet.filter (fun (i,j) -> i < srcRid || (i = srcRid && j < dstRid)) c.es.m
   } in
-  let new_c = {i = newI; r = newR; n = newN; h = newH; v = newV; l = newL; g = newG; vis = c.vis; es = newEs; ss = newSs} in
+  let new_c = {i = newI; r = newR; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = newSs} in
   print_dag new_c;
   (*debug_print "\nLinearization check for createBranch started.";*)
   assert (lin_check dstRid new_c);
@@ -403,24 +392,23 @@ let apply (c:config) (srcRid:repId) (o:event) : config =
   (*let newR = srcRid::c.r in*)
   let newN = VerMap.add newVer (mrdt_do (VerMap.find srcVer c.n) o) c.n in
   let newH = RepIdMap.add srcRid newVer c.h in
-  let newV = RepIdMap.add srcRid (newVer::RepIdMap.find srcRid c.v) c.v in
   let newL = VerMap.add newVer (o::VerMap.find srcVer c.l) c.l in
-  let newG = add_edge c.g srcVer (Apply o) newVer in
+  let newG = add_edge c.g srcVer (Apply (srcRid, o)) newVer in
   let newVis = List.fold_left (fun acc o1 -> VisSet.add (o1,o) acc) c.vis (VerMap.find srcVer c.l) in
   let newEs = {
-    f = List.fold_left (fun acc x -> IntForkSet.add (x, RepIdMap.find x newH, List.length c.r) acc) IntForkSet.empty c.r;
+    f = List.fold_left (fun acc x -> IntPairSet.add (x, List.length c.r) acc) IntPairSet.empty c.r;
     a = IntSet.of_list c.r;
     m = List.fold_left (fun acc x ->
-          List.fold_left (fun acc' y -> if x <> y then IntMergeSet.add (x, y, RepIdMap.find y newH) acc' else acc'
+          List.fold_left (fun acc' y -> if x <> y then IntPairSet.add (x, y) acc' else acc'
           ) acc c.r
-        ) IntMergeSet.empty c.r
+        ) IntPairSet.empty c.r
   } in
   let newSs = {
-    f = IntForkSet.filter (fun (i,_,_) -> i < srcRid) c.es.f;
+    f = IntPairSet.filter (fun (i,_) -> i < srcRid) c.es.f;
     a = IntSet.filter (fun i -> i < srcRid) c.es.a;
-    m = IntMergeSet.filter (fun (i,j,_) -> i < srcRid && srcRid <> j) c.es.m;
+    m = IntPairSet.filter (fun (i,j) -> i < srcRid && srcRid <> j) c.es.m;
   } in
-  let new_c = {i = newI; r = c.r; n = newN; h = newH; v = newV; l = newL; g = newG; vis = newVis; es = newEs; ss = newSs} in
+  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = newVis; es = newEs; ss = newSs} in
   print_dag new_c;
   (*debug_print "\nLinearization check for apply started...";*)
   assert (lin_check srcRid new_c); 
@@ -470,7 +458,7 @@ let rec recursive_merge (c:config) (pa:VerSet.t) : (VerSet.t * config) =
     match List.find_opt (fun e1 -> 
         e1.src = v1 &&
         List.exists (fun e2 ->
-          e2.src = v2 && e2.dst = e1.dst && e1.label = Merge (r1, r2, v2) && e2.label = Merge (r1, r2, v2)) 
+          e2.src = v2 && e2.dst = e1.dst && e1.label = Merge (r1, r2) && e2.label = Merge (r1, r2)) 
         c.g.edges
       ) c.g.edges with
       | Some e1 ->
@@ -489,8 +477,8 @@ let rec recursive_merge (c:config) (pa:VerSet.t) : (VerSet.t * config) =
             let newN = VerMap.add newVer m (VerMap.add vl sl c.n) in
             let newH = RepIdMap.add (fst v1) newVer c.h in
             let newL = c.l in (* didn't change linearization *)
-            let newG = let e = add_edge c.g (RepIdMap.find r1 c.h) (Merge (r1, r2, v2)) newVer in
-                      add_edge e (RepIdMap.find r2 c.h) (Merge (r1, r2, v2)) newVer in
+            let newG = let e = add_edge c.g (RepIdMap.find r1 c.h) (Merge (r1, r2)) newVer in
+                      add_edge e (RepIdMap.find r2 c.h) (Merge (r1, r2)) newVer in
             let new_config = {c with n = newN; h = newH; l = newL; g = newG} in
             let new_pa = VerSet.add newVer (VerSet.remove v1 (VerSet.remove v2 pa)) in
             recursive_merge new_config new_pa)
@@ -517,12 +505,12 @@ and find_lca (c:config) (v1:ver) (v2:ver) : (ver option * config) =
     (Some (VerSet.choose lca_set), new_config))
 
 (* Merge function *)
-let merge (c:config) (r1:repId) (r2:repId) (v2:ver) : config =
+let merge (c:config) (r1:repId) (r2:repId) : config =
   let newVer = gen_ver r1 in
   if VerSet.mem newVer c.g.vertices then failwith "Merge: New version already exists in the configuration";
 
   let v1 = RepIdMap.find r1 c.h in 
-  (*let v2 = RepIdMap.find r2 c.h in *)
+  let v2 = RepIdMap.find r2 c.h in
   let s1 = VerMap.find v1 c.n in 
   let s2 = VerMap.find v2 c.n in 
   let lca_v, new_config = find_lca c v1 v2 in
@@ -534,31 +522,26 @@ let merge (c:config) (r1:repId) (r2:repId) (v2:ver) : config =
   (*let newR = RepSet.add r1 (RepSet.add r2 c.r) in*)
   let newN = VerMap.add newVer m c.n in
   let newH = RepIdMap.add r1 newVer c.h in
-  let newV = RepIdMap.add r1 (newVer::RepIdMap.find r1 c.v) c.v in
-  let newL = VerMap.add newVer (linearize (VerMap.find (RepIdMap.find r1 c.h) c.l) (VerMap.find v2 c.l)) c.l in
-  let newG = let e = add_edge c.g (RepIdMap.find r1 c.h) (Merge (r1, r2, v2)) newVer in
-              add_edge e v2 (Merge (r1, r2, v2)) newVer in
+  let newL = VerMap.add newVer (linearize (VerMap.find (RepIdMap.find r1 c.h) c.l) (VerMap.find (RepIdMap.find r2 c.h) c.l)) c.l in
+  let newG = let e = add_edge c.g (RepIdMap.find r1 c.h) (Merge (r1, r2)) newVer in
+              add_edge e v2 (Merge (r1, r2)) newVer in
   let newEs = {
     f = List.fold_left (fun acc x -> 
-          List.fold_right (fun v acc' -> 
-            IntForkSet.add (x, v, List.length c.r) acc'
-          ) (RepIdMap.find x newV) acc
-        ) IntForkSet.empty c.r;
+      IntPairSet.add (x, List.length c.r) acc
+        ) IntPairSet.empty c.r;
     a = IntSet.of_list c.r;
     m = List.fold_left (fun acc x ->
           List.fold_left (fun acc' y -> 
-            List.fold_right (fun v acc'' -> 
-              if x <> y then IntMergeSet.add (x, y, v) acc'' else acc''
-            ) (RepIdMap.find y newV) acc'
+              if x <> y then IntPairSet.add (x, y) acc' else acc'
           ) acc c.r
-        ) IntMergeSet.empty c.r
+        ) IntPairSet.empty c.r
   } in
   let newSs = {
-    f = IntForkSet.filter (fun (i,_,j) -> i < r1 && j <> r2) c.es.f;
+    f = IntPairSet.filter (fun (i,j) -> i < r1 && j <> r2) c.es.f;
     a = IntSet.filter (fun i -> i < r1) c.es.a;
-    m = IntMergeSet.filter (fun (i,j,_) -> i < r1 && j = r2) c.es.m
+    m = IntPairSet.filter (fun (i,j) -> i < r1 && j = r2) c.es.m
   } in
-  let new_c = {i = newI; r = c.r; n = newN; h = newH; v = newV; l = newL; g = newG; vis = c.vis; es = newEs; ss = newSs} in
+  let new_c = {i = newI; r = c.r; n = newN; h = newH; l = newL; g = newG; vis = c.vis; es = newEs; ss = newSs} in
   print_dag new_c;
   debug_print "\n****Head after merge of r%d and r%d is (%d,%d) " r1 r2 (fst newVer) (snd newVer);
   (*debug_print "\nLinearization check for merge started.";*)
