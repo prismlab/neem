@@ -1,0 +1,106 @@
+Verified i'face (or impl+i'face): App_mrdt
+All verification conditions discharged successfully
+
+
+Verified i'face (or impl+i'face): Set_extended
+All verification conditions discharged successfully
+
+
+Verified module: Set_extended
+All verification conditions discharged successfully
+
+
+Verified i'face (or impl+i'face): Map_extended
+All verification conditions discharged successfully
+
+
+Verified module: Map_extended
+All verification conditions discharged successfully
+
+
+Verified i'face (or impl+i'face): Dependent_map
+All verification conditions discharged successfully
+
+
+Verified module: Dependent_map
+All verification conditions discharged successfully
+
+
+
+Verifying MRDTs..
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Increment-only_counter 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for PN_counter 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Enable-wins_flag 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Disable-wins_flag 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Grow-only_set 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Grow-only_map 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for OR-set 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for OR-set-efficient 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Remove-wins_set 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Set-wins_map 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Replicated-Growable-Array 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Optional_register 
+
+Verified module: App_mrdt
+All verification conditions discharged successfully
+Completed verification for Multi-valued_register 
+
+Verified i'face (or impl+i'face): Json
+All verification conditions discharged successfully
+Verified module: Json
+All verification conditions discharged successfully
+Completed verification for JSON-style MRDT
+
+Verification Results:
+MRDT                           Verification Time (s)
+------------------------------ --------------------
+Increment-only_counter         1                   
+PN_counter                     2                   
+Enable-wins_flag               11                  
+Disable-wins_flag              14                  
+Grow-only_set                  2                   
+Grow-only_map                  3                   
+OR-set                         3                   
+OR-set-efficient               357                 
+Remove-wins_set                3                   
+Set-wins_map                   3                   
+Replicated-Growable-Array      3                   
+Optional_register              69                  
+Multi-valued_register          1                   
+Json-style_MRDT                134                 

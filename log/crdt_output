@@ -1,0 +1,70 @@
+Verified i'face (or impl+i'face): App_crdt
+All verification conditions discharged successfully
+
+
+Verified i'face (or impl+i'face): Set_extended
+All verification conditions discharged successfully
+
+
+Verified module: Set_extended
+All verification conditions discharged successfully
+
+
+Verified i'face (or impl+i'face): Map_extended
+All verification conditions discharged successfully
+
+
+Verified module: Map_extended
+All verification conditions discharged successfully
+
+
+Verified i'face (or impl+i'face): Dependent_map
+All verification conditions discharged successfully
+
+
+Verified module: Dependent_map
+All verification conditions discharged successfully
+
+
+
+Verifying CRDTs..
+
+Verified module: App_crdt
+All verification conditions discharged successfully
+Completed verification for Increment-only_counter 
+
+Verified module: App_crdt
+All verification conditions discharged successfully
+Completed verification for PN_counter 
+
+Verified module: App_crdt
+All verification conditions discharged successfully
+Completed verification for Grow-only_set 
+
+Verified module: App_crdt
+All verification conditions discharged successfully
+Completed verification for Grow-only_map 
+
+Verified module: App_crdt
+All verification conditions discharged successfully
+Completed verification for OR-Set 
+
+Verified module: App_crdt
+All verification conditions discharged successfully
+Completed verification for 2P-Set 
+
+Verified module: App_crdt
+All verification conditions discharged successfully
+Completed verification for Multi-valued_register 
+
+
+Verification Results:
+CRDT                           Verification Time (s)
+------------------------------ --------------------
+Increment-only_counter         2                   
+PN_counter                     5                   
+Grow-only_set                  2                   
+Grow-only_map                  5                   
+OR-Set                         3                   
+2P-Set                         3                   
+Multi-valued_register          2                   
