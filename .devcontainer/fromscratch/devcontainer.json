@@ -1,6 +1,8 @@
 {
-  "name": "CS6225 F* devcontainer (from DockerHub)",
-  "image": "kayceesrk/fstar-devcontainer:latest",
+  "name": "CS6225 F* devcontainer (build from scratch)",
+  "build": {
+    "dockerfile": "Dockerfile.pinned"
+  },
   "customizations": {
     "vscode": {
       "extensions": [
