@@ -1,0 +1,19 @@
+{
+  "name": "FStar Development Container",
+  "dockerFile": "Dockerfile",
+  "context": "..",  // The context is typically the root of the repository
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/python:3": "latest"
+  },
+  "postCreateCommand": "echo 'source ~/.bashrc' >> ~/.bash_profile && source ~/.bashrc",
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "extensions": [
+    "ocaml.oci",
+    "vscodevim.vim",
+    "ms-vscode.cpptools"
+  ]
+}
+
