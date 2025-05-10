@@ -1,10 +1,10 @@
 {
 	"fstar_exe": "fstar.exe",
 	"options": [
-		"--z3version", "4.8.5"
+		"--z3version", "4.13.3"
 	],
 	"include_dirs": [
-		"/home/opam/.opam/4.14/lib/pulse"
+    	"code/interface"
 	]
 }
 

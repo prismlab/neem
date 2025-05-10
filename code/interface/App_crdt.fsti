@@ -11,7 +11,7 @@ val init_st : concrete_st
 // equivalence between 2 concrete states
 val eq (a b:concrete_st) : Type0
 
-val symmetric (a b:concrete_st) 
+val symmetric (a b:concrete_st)
   : Lemma (requires eq a b)
           (ensures eq b a)
 
@@ -25,7 +25,7 @@ val eq_is_equiv (a b:concrete_st)
 
 // operation type
 [@@ must_erase_for_extraction]
-val app_op_t : eqtype 
+val app_op_t : eqtype
 
 type op_t = pos (*timestamp*) & (nat (*replica ID*) & app_op_t)
 
@@ -45,8 +45,8 @@ let commutes_with (o1 o2:op_t) =
 let rec apply_log (x:concrete_st) (l:log) : Tot concrete_st (decreases length l) =
   match length l with
   |0 -> x
-  |_ -> apply_log (do x (head l)) (tail l)  
-  
+  |_ -> apply_log (do x (head l)) (tail l)
+
 //conflict resolution type
 type rc_res =
   |Fst_then_snd //o1 -> o2
@@ -69,27 +69,27 @@ val no_rc_chain (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3)
           (ensures ~ (Fst_then_snd? (rc o1 o2) /\ Fst_then_snd? (rc o2 o3)))
 
-val cond_comm_base (s:concrete_st) (o1 o2 o3:op_t) 
+val cond_comm_base (s:concrete_st) (o1 o2 o3:op_t)
   : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o2 o3 /\ distinct_ops o1 o3 /\
                     Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)))
           (ensures eq (do (do (do s o1) o2) o3) (do (do (do s o2) o1) o3))
 
 val cond_comm_ind (s:concrete_st) (o1 o2 o3 o:op_t) (l:seq op_t)
-  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\ 
+  : Lemma (requires distinct_ops o1 o2 /\ distinct_ops o1 o3 /\ distinct_ops o2 o3 /\
                     Fst_then_snd? (rc o1 o2) /\ ~ (Either? (rc o2 o3)) /\
                     eq (do (apply_log (do (do s o1) o2) l) o3) (do (apply_log (do (do s o2) o1) l) o3))
           (ensures eq (do (do (apply_log (do (do s o1) o2) l) o) o3) (do (do (apply_log (do (do s o2) o1) l) o) o3))
-                  
+
 /////////////////////////////////// Verification Conditions //////////////////////////////////////////
 
 val merge_comm (a b:concrete_st)
   : Lemma (ensures (eq (merge a b) (merge b a)))
-                       
+
 val merge_idem (s:concrete_st)
   : Lemma (ensures eq (merge s s) s)
 
 (*Two OP*)
-//////////////// 
+////////////////
 val base_2op (o1 o2:op_t)
   : Lemma (requires (Fst_then_snd? (rc o2 o1) \/ Either? (rc o2 o1)) /\ get_rid o1 <> get_rid o2 /\
                     distinct_ops o1 o2)
@@ -114,8 +114,8 @@ val inter_left_base_2op (a b:concrete_st) (o1 o2 ob ol:op_t)
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o2 ob /\ distinct_ops o2 ol /\ distinct_ops ob ol /\
                     eq (merge (do (do a ol) o1) (do (do b ol) o2)) (do (merge (do a ol) (do (do b ol) o2)) o1))
           (ensures eq (merge (do (do (do a ob) ol) o1) (do (do b ol) o2)) (do (merge (do (do a ob) ol) (do (do b ol) o2)) o1))
-          
-val inter_right_2op (a b:concrete_st) (o1 o2 ob ol o:op_t) 
+
+val inter_right_2op (a b:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires (Fst_then_snd? (rc o2 o1) \/ Either? (rc o2 o1)) /\ get_rid o1 <> get_rid o2 /\ Fst_then_snd? (rc ob ol) /\ get_rid ob <> get_rid ol /\
                     (~ (Either? (rc o ob)) \/ Fst_then_snd? (rc o ol)) /\
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o1 o /\ distinct_ops o2 ob /\ distinct_ops o2 ol /\ distinct_ops o2 o /\ distinct_ops ob ol /\ distinct_ops ob o /\ distinct_ops ol o /\
@@ -123,7 +123,7 @@ val inter_right_2op (a b:concrete_st) (o1 o2 ob ol o:op_t)
                     eq (merge (do (do a ol) o1) (do (do (do b ob) ol) o2)) (do (merge (do a ol) (do (do (do b ob) ol) o2)) o1))
           (ensures eq (merge (do (do a ol) o1) (do (do (do (do b o) ob) ol) o2)) (do (merge (do a ol) (do (do (do (do b o) ob) ol) o2)) o1))
 
-val inter_left_2op (a b:concrete_st) (o1 o2 ob ol o:op_t) 
+val inter_left_2op (a b:concrete_st) (o1 o2 ob ol o:op_t)
   : Lemma (requires Fst_then_snd? (rc o2 o1) /\ Fst_then_snd? (rc ob ol) /\ get_rid o2 <> get_rid o1 /\ get_rid ob <> get_rid ol /\
                     (~ (Either? (rc o ob)) \/ Fst_then_snd? (rc o ol)) /\
                     distinct_ops o1 o2 /\ distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o1 o /\ distinct_ops o2 ob /\ distinct_ops o2 ol /\ distinct_ops o2 o /\ distinct_ops ob ol /\ distinct_ops ob o /\ distinct_ops ol o /\
@@ -134,7 +134,7 @@ val inter_left_2op (a b:concrete_st) (o1 o2 ob ol o:op_t)
 val inter_lca_2op (a b:concrete_st) (o1 o2 ol:op_t)
   : Lemma (requires (Fst_then_snd? (rc o2 o1) \/ Either? (rc o2 o1)) /\ get_rid o1 <> get_rid o2 /\
                     distinct_ops o1 o2 /\ distinct_ops o1 ol /\ distinct_ops o2 ol /\
-                    (exists o. Fst_then_snd? (rc o ol)) /\ 
+                    (exists o. Fst_then_snd? (rc o ol)) /\
                     eq (merge (do (do a ol) o1) (do b ol)) (do (merge (do a ol) (do b ol)) o1) /\ //1op
                     eq (merge (do a o1) (do b o2)) (do (merge a (do b o2)) o1))
           (ensures eq (merge (do (do a ol) o1) (do (do b ol) o2)) (do (merge (do a ol) (do (do b ol) o2)) o1))
@@ -144,7 +144,7 @@ val ind_right_2op (a b:concrete_st) (o1 o2 o2':op_t)
                     distinct_ops o1 o2 /\ distinct_ops o1 o2' /\ distinct_ops o2 o2' /\
                     eq (merge (do a o1) (do b o2)) (do (merge a (do b o2)) o1))
           (ensures eq (merge (do a o1) (do (do b o2') o2)) (do (merge a (do (do b o2') o2)) o1))
-          
+
 val ind_left_2op (a b:concrete_st) (o1 o2 o1':op_t)
   : Lemma (requires (Fst_then_snd? (rc o2 o1) \/ Either? (rc o2 o1)) /\ get_rid o1 <> get_rid o2 /\
                     distinct_ops o1 o2 /\ distinct_ops o1 o1' /\ distinct_ops o2 o1' /\
@@ -152,7 +152,7 @@ val ind_left_2op (a b:concrete_st) (o1 o2 o1':op_t)
           (ensures eq (merge (do (do a o1') o1) (do b o2)) (do (merge (do a o1') (do b o2)) o1))
 
 (*One OP*)
-//////////////// 
+////////////////
 val base_1op (o1:op_t)
   : Lemma (ensures eq (merge (do init_st o1) init_st) (do (merge init_st init_st) o1))
 
@@ -173,8 +173,8 @@ val inter_left_base_1op (a b:concrete_st) (o1 ob ol:op_t)
                     distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops ob ol /\
                     eq (merge (do (do a ol) o1) (do b ol)) (do (merge (do a ol) (do b ol)) o1))
           (ensures eq (merge (do (do (do a ob) ol) o1) (do b ol)) (do (merge (do (do a ob) ol) (do b ol)) o1))
-          
-val inter_right_1op (a b:concrete_st) (o1 ob ol o:op_t) 
+
+val inter_right_1op (a b:concrete_st) (o1 ob ol o:op_t)
   : Lemma (requires Fst_then_snd? (rc ob ol) /\ get_rid ob <> get_rid ol /\
                     (~ (Either? (rc o ob)) \/ Fst_then_snd? (rc o ol)) /\
                     distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o1 o /\ distinct_ops ob ol /\ distinct_ops ob o /\ distinct_ops ol o /\
@@ -182,7 +182,7 @@ val inter_right_1op (a b:concrete_st) (o1 ob ol o:op_t)
                     eq (merge (do (do a ol) o1) (do (do b ob) ol)) (do (merge (do a ol) (do (do b ob) ol)) o1))
           (ensures eq (merge (do (do a ol) o1) (do (do (do b o) ob) ol)) (do (merge (do a ol) (do (do (do b o) ob) ol)) o1))
 
-val inter_left_1op (a b:concrete_st) (o1 ob ol o:op_t) 
+val inter_left_1op (a b:concrete_st) (o1 ob ol o:op_t)
   : Lemma (requires Fst_then_snd? (rc ob ol) /\ get_rid ob <> get_rid ol /\
                     (~ (Either? (rc o ob)) \/ Fst_then_snd? (rc o ol)) /\
                     distinct_ops o1 ob /\ distinct_ops o1 ol /\ distinct_ops o1 o /\ distinct_ops ob ol /\ distinct_ops ob o /\ distinct_ops ol o /\
@@ -192,26 +192,26 @@ val inter_left_1op (a b:concrete_st) (o1 ob ol o:op_t)
 
 val inter_lca_1op (a b:concrete_st) (o1 ol oi:op_t)
   : Lemma (requires distinct_ops o1 ol /\ distinct_ops o1 oi /\ distinct_ops ol oi /\
-                    (exists o. Fst_then_snd? (rc o ol)) /\ 
-                    (exists o. Fst_then_snd? (rc o oi)) /\ 
+                    (exists o. Fst_then_snd? (rc o ol)) /\
+                    (exists o. Fst_then_snd? (rc o oi)) /\
                     eq (merge (do (do a oi) o1) (do b oi)) (do (merge (do a oi) (do b oi)) o1) /\
                     eq (merge (do (do a ol) o1) (do b ol)) (do (merge (do a ol) (do b ol)) o1))
-          (ensures eq (merge (do (do (do a oi) ol) o1) (do (do b oi) ol)) 
+          (ensures eq (merge (do (do (do a oi) ol) o1) (do (do b oi) ol))
                       (do (merge (do (do a oi) ol) (do (do b oi) ol)) o1))
 
 val ind_left_1op (a b:concrete_st) (o1 o1' ol:op_t)
   : Lemma (requires distinct_ops o1 o1' /\ distinct_ops o1 ol /\ distinct_ops o1' ol /\
                     eq (merge (do a o1) (do b ol)) (do (merge a (do b ol)) o1))
           (ensures eq (merge (do (do a o1') o1) (do b ol)) (do (merge (do a o1') (do b ol)) o1))
-          
+
 val ind_right_1op (a b:concrete_st) (o2 o2' ol:op_t)
   : Lemma (requires distinct_ops o2 o2' /\ distinct_ops o2 ol /\ distinct_ops o2' ol /\
                     eq (merge (do a ol) (do b o2)) (do (merge (do a ol) b) o2))
           (ensures eq (merge (do a ol) (do (do b o2') o2)) (do (merge (do a ol) (do b o2')) o2))
-          
+
 (*Zero OP*)
 (* All BottomUp-0-OP VCs are combined into a single VC *)
-////////////////  
-  
+////////////////
+
 val lem_0op (a b:concrete_st) (ol:op_t)
   : Lemma (ensures eq (merge (do a ol) (do b ol)) (do (merge a b) ol))

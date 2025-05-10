@@ -1,17 +1,17 @@
 #!/bin/bash
-fstar.exe --cache_checked_modules code/interface/App_crdt.fsti
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/App_crdt.fsti
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Set_extended.fsti
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Set_extended.fsti
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Set_extended.fst --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Set_extended.fst --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Map_extended.fsti --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Map_extended.fsti --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Map_extended.fst --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Map_extended.fst --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Dependent_map.fsti --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Dependent_map.fsti --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Dependent_map.fst --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Dependent_map.fst --include code/interface
 echo -e "\n"
 
 echo -e "\nVerifying CRDTs..\n"
@@ -27,7 +27,7 @@ files=(
 )
 for file in "${files[@]}"; do
   start_time=$(date +%s)
-  if fstar.exe code/crdts/$file/App_crdt.fst \
+  if fstar.exe --z3version 4.13.3 code/crdts/$file/App_crdt.fst \
       --include code/interface; then
     end_time=$(date +%s)
     time=$((end_time - start_time))

@@ -21,14 +21,14 @@ open FStar.FunctionalExtensionality
 
 module F = FStar.FunctionalExtensionality
 noeq
-type t (key: eqtype) (value: (key -> Type)) = 
+type t (key: eqtype) (value: (key -> Type)) =
   { mappings:F.restricted_t key value;
     domain:S.t key
   }
 
 let domain (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) : Tot (S.t key) =
   m.domain
-  
+
 let contains (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k: key) : Tot bool =
   S.mem k m.domain
 
@@ -46,12 +46,12 @@ let del(#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k: key) : t 
     domain = S.remove (domain m) k
   }
 
-let iter_upd (#key:eqtype) (#value1 #value2: (key -> Tot Type)) (f : (k:key) -> value1 k -> value2 k) (m : t key value1) : t key value2 = 
+let iter_upd (#key:eqtype) (#value1 #value2: (key -> Tot Type)) (f : (k:key) -> value1 k -> value2 k) (m : t key value1) : t key value2 =
   { mappings = F.on_domain key (fun x -> f x (m.mappings x));
     domain =   m.domain
   }
 
-let create (#key: eqtype) (#value: (key -> Tot Type)) (f: (k: key -> Tot (value k))) : Tot (t key value) = 
+let create (#key: eqtype) (#value: (key -> Tot Type)) (f: (k: key -> Tot (value k))) : Tot (t key value) =
   { mappings = F.on_domain key f;
     domain = complement empty
   }
@@ -67,12 +67,12 @@ let sel_restrict
       (s:S.t key)
       (m: t key value)
       (k: key) = ()
-     
+
 let sel_create (#key: eqtype) (#value: (key -> Tot Type)) (f: (k: key -> Tot (value k))) (k: key)
     : Lemma (requires True)
       (ensures (sel #key #value (create f) k == f k))
       [SMTPat (sel #key #value (create f) k)] = ()
-      
+
 let sel_upd_same (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k: key) (v: value k) = ()
 
 let sel_upd_other
@@ -120,7 +120,7 @@ let map
       (#value1 #value2: (key -> Tot Type))
       (f: (k: key -> value1 k -> Tot (value2 k)))
       (m: t key value1)
-    : Tot (t key value2) = 
+    : Tot (t key value2) =
     { mappings = F.on_domain key (fun k -> f k (sel m k));
       domain = m.domain }
 

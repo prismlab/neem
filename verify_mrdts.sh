@@ -1,17 +1,17 @@
 #!/bin/bash
-fstar.exe --cache_checked_modules code/interface/App_mrdt.fsti
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/App_mrdt.fsti
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Set_extended.fsti
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Set_extended.fsti
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Set_extended.fst --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Set_extended.fst --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Map_extended.fsti --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Map_extended.fsti --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Map_extended.fst --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Map_extended.fst --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Dependent_map.fsti --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Dependent_map.fsti --include code/interface
 echo -e "\n"
-fstar.exe --cache_checked_modules code/interface/Dependent_map.fst --include code/interface
+fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Dependent_map.fst --include code/interface
 echo -e "\n"
 
 echo -e "\nVerifying MRDTs..\n"
@@ -33,7 +33,7 @@ files=(
 )
 for file in "${files[@]}"; do
   start_time=$(date +%s)
-  if fstar.exe code/mrdts/$file/App_mrdt.fst \
+  if fstar.exe --z3version 4.13.3 code/mrdts/$file/App_mrdt.fst \
       --include code/interface; then
     end_time=$(date +%s)
     time=$((end_time - start_time))
@@ -46,8 +46,8 @@ for file in "${files[@]}"; do
 done
 
 json_start_time=$(date +%s)
-if fstar.exe --cache_checked_modules code/interface/Json.fsti --include code/interface && \
-   fstar.exe code/mrdts/Json/Json.fst --include code/interface; then
+if fstar.exe --z3version 4.13.3 --cache_checked_modules code/interface/Json.fsti --include code/interface && \
+   fstar.exe --z3version 4.13.3 code/mrdts/Json/Json.fst --include code/interface; then
   json_end_time=$(date +%s)
   json_time=$((json_end_time - json_start_time))
   echo "Completed verification for JSON-style MRDT"

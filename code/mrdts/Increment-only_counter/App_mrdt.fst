@@ -27,17 +27,17 @@ let rc (o1 o2:op_t) = Either
 // concrete merge operation
 let merge (l a b:concrete_st) : concrete_st =
   a + b - l
-   
+
 /////////////////////////////////////////////////////////////////////////////
 
 let rc_non_comm o1 o2 = ()
-          
+
 let no_rc_chain o1 o2 o3 = ()
 
 let cond_comm_base s o1 o2 o3 = ()
 
 let cond_comm_ind s o1 o2 o3 o l = ()
- 
+
 /////////////////////////////////// Verification Conditions //////////////////////////////////////////
 
 let merge_comm l a b = ()
@@ -49,7 +49,7 @@ let base_2op o1 o2 = ()
 let ind_lca_2op l o1 o2 ol = ()
 
 let inter_right_base_2op l a b o1 o2 ob ol = ()
-     
+
 let inter_left_base_2op l a b o1 o2 ob ol = ()
 
 let inter_right_2op l a b o1 o2 ob ol o = ()
@@ -67,7 +67,7 @@ let base_1op o1 = ()
 let ind_lca_1op l o1 ol = ()
 
 let inter_right_base_1op l a b o1 ob ol = ()
-     
+
 let inter_left_base_1op l a b o1 ob ol = ()
 
 let inter_right_1op l a b o1 ob ol o = ()

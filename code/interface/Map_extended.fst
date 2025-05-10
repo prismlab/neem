@@ -16,7 +16,7 @@
 (**
  * Implementation of partial maps with extensional equality
  *)
- 
+
 module Map_extended
 open Set_extended
 open FStar.FunctionalExtensionality
@@ -56,7 +56,7 @@ let domain #key #value m = m.domain
 
 let del #key #value m k = {
   mappings = F.on key (fun x -> m.mappings x);
-  domain = S.remove (domain m) k 
+  domain = S.remove (domain m) k
 }
 
 let contains #key #value m k = mem k m.domain

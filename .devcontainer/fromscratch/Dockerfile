@@ -5,10 +5,7 @@ RUN sudo apt update
 RUN sudo apt install -y wget unzip pkg-config libgmp-dev libssl-dev \
     python3 python3-pip python3-distutils-extra
 
-RUN opam install z3.4.8.5 -y
-
-ENV PATH="/home/opam/.opam/default/bin:$PATH"
-ENV Z3_EXE="/home/opam/.opam/default/bin/z3"
+RUN opam install z3.4.13.3 -y
 
 RUN git clone https://github.com/FStarLang/FStar --depth 1 --branch master && \
     cd FStar && \

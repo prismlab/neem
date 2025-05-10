@@ -77,11 +77,11 @@ val sel_restrict
 
 let const_on (#key:eqtype) (#value: (key -> Tot Type)) (dom:S.t key) (f: (k:key) -> value k) : t key value
   = restrict dom (create f)
-  
+
 (** Relating [create] to [sel] *)
 val sel_create (#key: eqtype) (#value: (key -> Tot Type)) (f: (k: key -> Tot (value k))) (k: key)
     : Lemma (ensures (sel #key #value (create f) k == f k)) [SMTPat (sel #key #value (create f) k)]
-    
+
 (** The action of selecting a key [k] a map with an updated value [v]
     at [k]
 
@@ -113,17 +113,17 @@ val sel_IterUpd (#key:eqtype) (#value1 #value2: (key -> Tot Type)) (f : (k:key) 
           [SMTPat (sel (iter_upd f m) k)]
 
 val dom_create (#key: eqtype) (#value: (key -> Tot Type)) (f: (k: key -> Tot (value k))) (k: key)
-  : Lemma (requires True) 
+  : Lemma (requires True)
           (ensures (contains (create f) k))
           [SMTPat (contains (create f) k)]
-                         
+
 val dom_upd_same (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k1 k2: key) (v: value k1)
-  : Lemma (requires True) 
+  : Lemma (requires True)
           (ensures (contains (upd m k1 v) k2 == (k1=k2 || contains m k2)))
           [SMTPat (contains (upd m k1 v) k2)]
 
 val dom_upd_other (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k1 k2: key) (v: value k2)
-  : Lemma (requires True) 
+  : Lemma (requires True)
           (ensures (k2=!=k1 ==> contains (upd m k2 v) k1 == contains m k1))
           [SMTPat (contains (upd m k2 v) k1)]
 
@@ -132,7 +132,7 @@ val dom_IterUpd (#key:eqtype) (#value1 #value2: (key -> Tot Type)) (f : (k:key) 
           [SMTPat (contains (iter_upd f m) k)]
 
 val dom_contains (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value) (k: key)
-  : Lemma (requires True) 
+  : Lemma (requires True)
           (ensures (contains m k = S.mem k (domain m)))
           [SMTPatOr[[SMTPat (contains m k)]; [SMTPat (S.mem k (domain m))]]]
 
@@ -150,10 +150,10 @@ val dom_restrict (#key: eqtype)
               [SMTPat (contains (restrict s m) k)]
 
 val dom_const_on (#key: eqtype) (#value: (key -> Tot Type)) (k:key) (dom:S.t key) (f: (k:key) -> value k)
-  : Lemma (requires True) 
+  : Lemma (requires True)
           (ensures (contains (const_on dom f) k = S.mem k dom))
           [SMTPat (contains (const_on dom f) k)]
-          
+
 (** Extensional propositional equality on maps *)
 val equal (#key: eqtype) (#value: (key -> Tot Type)) (m1 m2: t key value) : prop
 
@@ -166,7 +166,7 @@ val equal_intro (#key: eqtype) (#value: (key -> Tot Type)) (m1 m2: t key value)
 val equal_elim (#key: eqtype) (#value: (key -> Tot Type)) (m1 m2: t key value)
   : Lemma (ensures (equal m1 m2 <==> m1 == m2))
           [SMTPat (m1 == m2)]
-                            
+
 (** [equal] is reflexive *)
 val equal_refl (#key: eqtype) (#value: (key -> Tot Type)) (m: t key value)
     : Lemma (ensures (equal m m)) [SMTPat (equal m m)]
@@ -175,7 +175,7 @@ val equal_intro' (#key: eqtype) (#value: (key -> Tot Type)) (m1 m2: t key value)
   : Lemma (requires (equal m1 m2))
           (ensures (forall k. sel m1 k == sel m2 k /\ contains m1 k = contains m2 k))
           [SMTPat (equal m1 m2)]
-                                            
+
 (** [equal] can be eliminated into standard propositional equality
     (==), also proving that it is an equivalence relation *)
 //val equal_elim (#key: eqtype) (#value: (key -> Tot Type)) (m1 m2: t key value)

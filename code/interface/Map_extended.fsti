@@ -128,7 +128,7 @@ val lemma_SelMapVal: #val1:Type -> #val2:Type -> f:(val1 -> val2) -> #key:eqtype
 val lemma_IterUpd: #key:eqtype -> #val1:Type -> #val2:Type -> f:(key -> val1 -> val2) -> m:t key val1 -> k:key ->
                    Lemma (ensures (sel (iter_upd f m) k == f k (sel m k)))
                    [SMTPat (sel (iter_upd f m) k)]
-                   
+
 val lemma_InDomUpd1: #key:eqtype -> #value:Type -> m:t key value -> k1:key -> k2:key -> v:value ->
                      Lemma (requires True) (ensures (contains (upd m k1 v) k2 == (k1=k2 || contains m k2)))
                      [SMTPat (contains (upd m k1 v) k2)]
@@ -152,7 +152,7 @@ val lemma_InMapVal: #val1:Type -> #val2:Type -> f:(val1 -> val2) -> #key:eqtype 
 val lemma_InIterUpd: #key:eqtype -> #val1:Type -> #val2:Type -> f:(key -> val1 -> val2) -> m:t key val1 -> k:key ->
                    Lemma (ensures (contains (iter_upd f m) k == contains m k))
                    [SMTPat (contains (iter_upd f m) k)]
-                   
+
 val lemma_InDomRestrict: #key:eqtype -> #value:Type -> m:t key value -> ks:S.t key -> k:key ->
                          Lemma (requires True) (ensures (contains (restrict ks m) k == (S.mem k ks && contains m k)))
                          [SMTPat (contains (restrict ks m) k)]
@@ -196,12 +196,12 @@ val lemma_equal_intro': #key:eqtype -> #value:Type -> m1:t key value -> m2:t key
                              (ensures (forall k. sel m1 k == sel m2 k /\
                                             contains m1 k = contains m2 k))
                              [SMTPat (equal m1 m2)]
-                             
+
 let equal_refl (#key:eqtype) (#value:Type) (m1:t key value) (m2:t key value) :
     Lemma (requires m1 == m2)
           (ensures (forall k. sel m1 k == sel m2 k /\ contains m1 k = contains m2 k))
           [SMTPat (m1 == m2)] = ()
-          
+
 (*[@@(deprecated "Use lemma_equal_elim instead")]
 val lemma_equal_refl: #key:eqtype -> #value:Type -> m1:t key value -> m2:t key value ->
                       Lemma  (requires (m1 == m2))
