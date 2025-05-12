@@ -9,7 +9,9 @@ type timestamp : eqtype = pos
 
 // the concrete state type
 type concrete_st = S.t (replica_id & timestamp & element)
-  // replica_id -> element -> timestamp
+  // Behaves as a [replica_id -> element -> timestamp]. That is, for each
+  // [replica_id], every [element] occurs uniquely.
+  //
   // Uses [O(n * r)] space where
   //    n = number of elements in the set
   //    r = number of replicas
