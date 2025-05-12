@@ -37,8 +37,8 @@ let get_ele (o:op_t) : nat =
 // apply an operation to a state
 let do (s:concrete_st) (o:op_t) : concrete_st =
   match o with
-  |(ts, (rid, Add e)) -> S.add (ts, e) s
-  |(_, (rid, Rem e)) -> S.filter s (fun ele -> snd ele <> e)
+  | (ts, (rid, Add e)) -> S.add (ts, e) s
+  | (_, (rid, Rem e)) -> S.filter s (fun ele -> snd ele <> e)
 
 //conflict resolution
 let rc (o1 o2:op_t) =

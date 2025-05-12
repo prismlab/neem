@@ -3,24 +3,25 @@ module App_mrdt
 module S = Set_extended
 module M = Map_extended
 
-let cf = (int * bool)
+let enable_wins_flag = (int * bool)
 
 // the concrete state type
-type concrete_st = M.t nat (M.t nat cf)
+type concrete_st = M.t nat (M.t nat enable_wins_flag)
   // element -> replica ID -> enable-wins flag
   // Uses [O(n * r)] space where
   //    n = number of elements in the set
   //    r = number of replicas
+  // Has Tombstones
 
 // init state
 let init_st : concrete_st = M.const (M.const (0, false))
 
-let sel_id (s:M.t nat cf) id = if M.contains s id then M.sel s id else (0, false)
+let sel_id (s:M.t nat enable_wins_flag) id = if M.contains s id then M.sel s id else (0, false)
 
 let sel (s:concrete_st) e = if M.contains s e then M.sel s e else (M.const (0, false))
 
 // equivalence relation of ew flag
-let eq_e (a b:M.t nat cf) =
+let eq_e (a b:M.t nat enable_wins_flag) =
   (forall id. M.contains a id = M.contains b id /\ sel_id a id = sel_id b id)
 
 // equivalence between 2 concrete states
@@ -29,7 +30,7 @@ let eq (a b:concrete_st) =
 
 let symmetric a b = ()
 
-let transitive a b c = ()
+let transitive a b enable_wins_flag = ()
 
 let eq_is_equiv a b = ()
 
@@ -47,7 +48,7 @@ let get_ele (o:op_t) : nat =
 let do (s:concrete_st) (o:op_t) : concrete_st =
  match o with
   |(_, (rid, Add e)) -> M.upd s e (M.upd (sel s e) rid (fst (sel_id (sel s e) rid) + 1, true))
-  |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = e then ((M.map_val (fun (c,f) -> (c, false))) v) else v) s
+  |(_, (rid, Rem e)) -> M.iter_upd (fun k v -> if k = e then ((M.map_val (fun (enable_wins_flag,f) -> (enable_wins_flag, false))) v) else v) s
 
 //conflict resolution
 let rc (o1 o2:op_t) =
@@ -56,7 +57,7 @@ let rc (o1 o2:op_t) =
   |Rem e1, Add e2 -> if e1 = e2 then Fst_then_snd else Either
   |_ -> Either
 
-let merge_flag (l a b:cf) : bool =
+let merge_flag (l a b:enable_wins_flag) : bool =
   let lc = fst l in
   let ac = fst a in
   let bc = fst b in
@@ -68,11 +69,11 @@ let merge_flag (l a b:cf) : bool =
           else bc > lc
 
 // concrete merge operation
-let merge_cf (l a b:cf) : cf =
+let merge_cf (l a b:enable_wins_flag) : enable_wins_flag =
   (fst a + fst b - fst l, merge_flag l a b)
 
 // concrete merge operation
-let merge_ew (l a b:(M.t nat cf)) : (M.t nat cf) =
+let merge_ew (l a b:(M.t nat enable_wins_flag)) : (M.t nat enable_wins_flag) =
   let keys = S.union (M.domain l) (S.union (M.domain a) (M.domain b)) in
   let u = M.const_on keys (0, false) in
   M.iter_upd (fun k v -> merge_cf (sel_id l k) (sel_id a k) (sel_id b k)) u
