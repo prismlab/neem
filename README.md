@@ -20,7 +20,7 @@ Click "Reopen in Container".
 
 <img width="624" alt="image" src="https://github.com/user-attachments/assets/12b9d66d-827c-4099-9a1f-de527fe3f2cf" />
 
-Choose "from DockerHub" option. The repo will be opened in a devcontainer.
+Choose "from DockerHub" option. The repo will be opened in a devcontainer. This will take a while when you do it for the first time to download the Docker image. 
 
 You can check whether everything works correctly by running 
 
